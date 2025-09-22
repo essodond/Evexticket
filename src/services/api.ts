@@ -117,13 +117,31 @@ class ApiService {
         ...defaultHeaders,
         ...options.headers,
       },
+      // Permet d'envoyer les cookies si SessionAuthentication est utilisée
+      credentials: 'include',
     };
 
     try {
       const response = await fetch(url, config);
-      
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // essayer de parser le body pour obtenir un message d'erreur
+        let errorData: any = null;
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          try {
+            errorData = await response.text();
+          } catch (e2) {
+            errorData = null;
+          }
+        }
+
+        const message = (errorData && (errorData.detail || errorData.error || JSON.stringify(errorData))) || `HTTP error! status: ${response.status}`;
+        const err: any = new Error(message);
+        err.status = response.status;
+        err.data = errorData;
+        throw err;
       }
 
       const data = await response.json();

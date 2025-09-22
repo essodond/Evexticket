@@ -118,7 +118,12 @@ const AdminDashboard: React.FC = () => {
         setUsers([]);
       } catch (err: any) {
         console.error('Failed loading admin data', err);
-        setError(err.message || 'Erreur lors du chargement des données');
+        // Si erreur 403 -> accès non autorisé
+        if (err && err.status === 403) {
+          setError('Accès non autorisé. Veuillez vous connecter avec un compte administrateur.');
+        } else {
+          setError(err.message || 'Erreur lors du chargement des données');
+        }
       } finally {
         setLoading(false);
       }
@@ -229,7 +234,7 @@ const AdminDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Utilisateurs</p>
-              <p className="text-3xl font-bold text-gray-900">{stats.totalUsers.toLocaleString()}</p>
+              <p className="text-3xl font-bold text-gray-900">{(stats?.totalUsers ?? 0).toLocaleString()}</p>
             </div>
             <Users className="w-8 h-8 text-blue-600" />
           </div>
@@ -239,7 +244,7 @@ const AdminDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Compagnies</p>
-              <p className="text-3xl font-bold text-gray-900">{stats.totalCompanies}</p>
+              <p className="text-3xl font-bold text-gray-900">{stats?.totalCompanies ?? 0}</p>
             </div>
             <Building className="w-8 h-8 text-green-600" />
           </div>
@@ -249,7 +254,7 @@ const AdminDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Trajets</p>
-              <p className="text-3xl font-bold text-gray-900">{stats.totalTrips}</p>
+              <p className="text-3xl font-bold text-gray-900">{stats?.totalTrips ?? 0}</p>
             </div>
             <Bus className="w-8 h-8 text-purple-600" />
           </div>
@@ -259,7 +264,7 @@ const AdminDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Réservations</p>
-              <p className="text-3xl font-bold text-gray-900">{stats.totalBookings.toLocaleString()}</p>
+              <p className="text-3xl font-bold text-gray-900">{(stats?.totalBookings ?? 0).toLocaleString()}</p>
             </div>
             <FileText className="w-8 h-8 text-orange-600" />
           </div>
@@ -271,8 +276,8 @@ const AdminDashboard: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-blue-100">Revenus totaux</p>
-            <p className="text-3xl font-bold">{stats.totalRevenue.toLocaleString()} FCFA</p>
-            <p className="text-blue-100 text-sm">+{stats.monthlyGrowth}% ce mois</p>
+            <p className="text-3xl font-bold">{(stats?.totalRevenue ?? 0).toLocaleString()} FCFA</p>
+            <p className="text-blue-100 text-sm">+{stats?.monthlyGrowth ?? 0}% ce mois</p>
           </div>
           <DollarSign className="w-12 h-12 text-blue-200" />
         </div>
@@ -668,7 +673,14 @@ const AdminDashboard: React.FC = () => {
         {activeTab === 'overview' && (loading ? (
           <div className="p-6 text-center">Chargement...</div>
         ) : error ? (
-          <div className="p-6 text-center text-red-600">{error}</div>
+          <div className="p-6 text-center text-red-600">
+            <div>{error}</div>
+            {error.includes('connecter') && (
+              <div className="mt-4">
+                <a href="/login" className="text-blue-600 underline">Aller à la connexion</a>
+              </div>
+            )}
+          </div>
         ) : (
           renderOverview()
         ))}
