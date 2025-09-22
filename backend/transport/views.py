@@ -41,6 +41,23 @@ from .serializers import (
     CompanyStatsSerializer
 )
 
+class CurrentUserView(APIView):
+    """Retourne les informations de l'utilisateur connecté et son rôle"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        # Importer le serializer local pour éviter les dépendances circulaires
+        from .serializers import UserSerializer
+        data = UserSerializer(user).data
+        # Indiquer si c'est un admin de compagnie
+        is_company_admin = Company.objects.filter(admin_user=user).exists()
+        data['is_company_admin'] = is_company_admin
+        if is_company_admin:
+            comp = Company.objects.filter(admin_user=user).first()
+            data['company_id'] = comp.id
+        return Response(data)
+
 
 class CityViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet pour les villes (lecture seule)"""

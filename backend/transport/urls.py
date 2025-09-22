@@ -14,4 +14,5 @@ urlpatterns = [
     path('dashboard/stats/', views.DashboardStatsView.as_view(), name='dashboard-stats'),
     path('register/', views.RegisterView.as_view(), name='register'),
     path('login/', obtain_auth_token, name='api-token-auth'),
+    path('me/', views.CurrentUserView.as_view(), name='current-user'),
 ]

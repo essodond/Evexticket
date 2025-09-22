@@ -17,6 +17,7 @@ function App() {
   const [currentView, setCurrentView] = useState<ViewType>('landing');
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
   const [searchData, setSearchData] = useState<any>(null);
   const [selectedTrip, setSelectedTrip] = useState<any>(null);
   const [bookingData, setBookingData] = useState<any>(null);
@@ -61,8 +62,23 @@ function App() {
     localStorage.setItem('currentView', 'auth');
   };
 
-  const handleAuthSuccess = () => {
+  const handleAuthSuccess = (user?: any) => {
     setIsAuthenticated(true);
+    if (user) {
+      setCurrentUser(user);
+      try { localStorage.setItem('user', JSON.stringify(user)); } catch (e) {}
+      // Rediriger selon le rôle
+      if (user.is_staff) {
+        setCurrentView('admin-dashboard');
+        localStorage.setItem('currentView', 'admin-dashboard');
+        return;
+      }
+      if (user.is_company_admin) {
+        setCurrentView('company-dashboard');
+        localStorage.setItem('currentView', 'company-dashboard');
+        return;
+      }
+    }
     setCurrentView('home');
     localStorage.setItem('currentView', 'home');
   };

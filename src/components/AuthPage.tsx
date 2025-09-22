@@ -5,7 +5,7 @@ import { Bus, ArrowLeft, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-re
 interface AuthPageProps {
   mode: 'login' | 'register';
   onBack: () => void;
-  onSuccess: () => void;
+  onSuccess: (user?: any) => void;
   onSwitchMode: (mode: 'login' | 'register') => void;
 }
 
@@ -86,16 +86,16 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode, onBack, onSuccess, onSwitchMo
           last_name: formData.lastName,
         });
         setIsLoading(false);
-        onSuccess();
+  onSuccess(user);
       } catch (error: any) {
         setIsLoading(false);
         setErrors({ email: error.message || 'Erreur lors de la création du compte' });
       }
     } else {
       try {
-        await apiService.login(formData.email, formData.password);
-        setIsLoading(false);
-        onSuccess();
+  const resp = await apiService.login(formData.email, formData.password);
+  setIsLoading(false);
+  onSuccess(resp.user);
       } catch (error: any) {
         setIsLoading(false);
         setErrors({ email: error.message || 'Erreur lors de la connexion' });

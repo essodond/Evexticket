@@ -288,7 +288,8 @@ class ApiService {
 
   // Authentification (pour l'instant, simulation)
   async login(username: string, password: string): Promise<{ token: string; user: any }> {
-    const response = await fetch(`${API_BASE_URL}/login/`, {
+    // Obtenir token via endpoint DRF authtoken
+    const tokenResp = await fetch(`${API_BASE_URL}/login/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -296,24 +297,29 @@ class ApiService {
       body: JSON.stringify({ username, password }),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+    if (!tokenResp.ok) {
+      const errorData = await tokenResp.json().catch(() => ({}));
       throw new Error(errorData.detail || 'Erreur lors de la connexion');
     }
 
-    const data = await response.json();
-    // endpoint DRF authtoken retourne {"token": "..."}
-    const token = data.token;
+    const tokenData = await tokenResp.json();
+    const token = tokenData.token;
     this.setAuthToken(token);
-    // Persist username for UI (profile initial)
+
+    // Récupérer les informations utilisateur
+    let user = { username };
     try {
-      localStorage.setItem('username', username);
+      const me = await this.request<any>('/me/');
+      user = me;
+      try { localStorage.setItem('user', JSON.stringify(user)); } catch (e) {}
     } catch (e) {
-      // ignore
+      // fallback
     }
-    // Optionnel : récupérer les informations utilisateur après connexion
-    // Ici on retourne juste le token et un champ user minimal
-    return { token, user: { username } };
+
+    // Persist username for UI (profile initial)
+    try { localStorage.setItem('username', username); } catch (e) {}
+
+    return { token, user };
   }
 
   async register(userData: {
