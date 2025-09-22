@@ -52,7 +52,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateT
   ];
 
   const destinations = [
-    { name: "Lomé", image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=300&h=200&fit=crop" },
+    { name: "Lomé", image: "https://i.pinimg.com/736x/9c/cd/6e/9ccd6e29dc537fc53e9a08ee54e9b3a3.jpg" },
     { name: "Kara", image: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=300&h=200&fit=crop" },
     { name: "Kpalimé", image: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=300&h=200&fit=crop" },
     { name: "Sokodé", image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=300&h=200&fit=crop" }
@@ -66,7 +66,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateT
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
               <Bus className="w-10 h-10 text-blue-600 mr-3" />
-              <h1 className="text-2xl font-bold text-gray-900">TogoTrans</h1>
+              <h1 className="text-2xl font-bold text-gray-900">EvexTicket</h1>
             </div>
             <div className="flex space-x-4">
               <button
@@ -98,7 +98,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateT
               </h2>
               <p className="text-xl text-gray-600 mb-8">
                 Réservez vos billets de bus en ligne, découvrez les plus belles destinations du Togo 
-                et voyagez confortablement avec TogoTrans, votre partenaire de transport de confiance.
+                et voyagez confortablement avec Evexticket, votre partenaire de transport de confiance.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <button
@@ -137,7 +137,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateT
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h3 className="text-4xl font-bold text-gray-900 mb-4">
-              Pourquoi choisir TogoTrans ?
+              Pourquoi choisir EvexTicket ?
             </h3>
             <p className="text-xl text-gray-600">
               Nous nous engageons à vous offrir la meilleure expérience de voyage
@@ -216,7 +216,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateT
             <div>
               <div className="flex items-center mb-4">
                 <Bus className="w-8 h-8 text-blue-400 mr-2" />
-                <span className="text-xl font-bold">TogoTrans</span>
+                <span className="text-xl font-bold"> EvexTicket</span>
               </div>
               <p className="text-gray-400">
                 Votre partenaire de transport de confiance au Togo
@@ -243,14 +243,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateT
             <div>
               <h4 className="text-lg font-semibold mb-4">Contact</h4>
               <ul className="space-y-2 text-gray-400">
-                <li>+228 XX XX XX XX</li>
-                <li>contact@togotrans.tg</li>
+                <li>+228 71 60 80 97</li>
+                <li>contact@evexTicket.tg</li>
                 <li>Lomé, Togo</li>
               </ul>
             </div>
           </div>
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2024 TogoTrans. Tous droits réservés.</p>
+            <p>&copy; 2024  EvexTicket. Tous droits réservés.</p>
           </div>
         </div>
       </footer>

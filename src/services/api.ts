@@ -1,5 +1,5 @@
 // Configuration de l'API
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = 'http://127.0.0.1:8000/api';
 
 // Types pour les données
 export interface City {
@@ -272,25 +272,23 @@ class ApiService {
     username: string;
     email: string;
     password: string;
+    password2: string;
     first_name: string;
     last_name: string;
   }): Promise<{ token: string; user: any }> {
-    // Simulation d'inscription
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          token: 'mock-token-' + Date.now(),
-          user: {
-            id: Date.now(),
-            username: userData.username,
-            email: userData.email,
-            first_name: userData.first_name,
-            last_name: userData.last_name,
-            is_staff: false
-          }
-        });
-      }, 1000);
+    // Appel réel à l'API Django pour l'inscription
+    const response = await fetch(`${API_BASE_URL}/register/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(userData),
     });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || 'Erreur lors de la création du compte');
+    }
+    return response.json();
   }
 }
 

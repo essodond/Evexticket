@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiService } from '../services/api';
 import { Bus, ArrowLeft, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface AuthPageProps {
@@ -72,16 +73,31 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode, onBack, onSuccess, onSwitchMo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!validateForm()) return;
-
     setIsLoading(true);
-    
-    // Simuler une requête API
-    setTimeout(() => {
-      setIsLoading(false);
-      onSuccess();
-    }, 1500);
+    if (mode === 'register') {
+      try {
+        await apiService.register({
+          username: formData.email, // ou un champ username si vous en avez un
+          email: formData.email,
+          password: formData.password,
+          password2: formData.confirmPassword,
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+        });
+        setIsLoading(false);
+        onSuccess();
+      } catch (error: any) {
+        setIsLoading(false);
+        setErrors({ email: error.message || 'Erreur lors de la création du compte' });
+      }
+    } else {
+      // Ici, la logique de connexion peut rester inchangée ou être adaptée
+      setTimeout(() => {
+        setIsLoading(false);
+        onSuccess();
+      }, 1500);
+    }
   };
 
   return (

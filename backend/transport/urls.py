@@ -11,4 +11,5 @@ router.register(r'bookings', views.BookingViewSet, basename='booking')  # âœ… dÃ
 urlpatterns = [
     path('', include(router.urls)),
     path('dashboard/stats/', views.DashboardStatsView.as_view(), name='dashboard-stats'),
+    path('register/', views.RegisterView.as_view(), name='register'),
 ]
