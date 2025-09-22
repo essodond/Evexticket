@@ -140,6 +140,11 @@ class ApiService {
       localStorage.setItem('authToken', token);
     } else {
       localStorage.removeItem('authToken');
+      try {
+        localStorage.removeItem('username');
+      } catch (e) {
+        // ignore
+      }
     }
   }
 
@@ -282,6 +287,12 @@ class ApiService {
     // endpoint DRF authtoken retourne {"token": "..."}
     const token = data.token;
     this.setAuthToken(token);
+    // Persist username for UI (profile initial)
+    try {
+      localStorage.setItem('username', username);
+    } catch (e) {
+      // ignore
+    }
     // Optionnel : récupérer les informations utilisateur après connexion
     // Ici on retourne juste le token et un champ user minimal
     return { token, user: { username } };

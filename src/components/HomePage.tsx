@@ -3,14 +3,28 @@ import { Search, MapPin, Calendar, ArrowRight } from 'lucide-react';
 
 interface HomePageProps {
   onSearch: (searchData: any) => void;
+  isAuthenticated?: boolean;
+  onNavigateToAuth?: (mode: 'login' | 'register') => void;
+  onLogout?: () => void;
 }
 
-const HomePage: React.FC<HomePageProps> = ({ onSearch }) => {
+const HomePage: React.FC<HomePageProps> = ({ onSearch, isAuthenticated = false, onNavigateToAuth, onLogout }) => {
   const [departure, setDeparture] = useState('');
   const [arrival, setArrival] = useState('');
   const [date, setDate] = useState('');
+  const [username, setUsername] = useState<string | null>(null);
 
   const cities = ['Lomé', 'Sokodé', 'Kara', 'Atakpamé', 'Kpalimé', 'Dapaong', 'Tsévié', 'Aného'];
+
+  // load username from localStorage for avatar initial
+  React.useEffect(() => {
+    try {
+      const u = typeof localStorage !== 'undefined' ? localStorage.getItem('username') : null;
+      setUsername(u);
+    } catch (e) {
+      setUsername(null);
+    }
+  }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,9 +48,20 @@ const HomePage: React.FC<HomePageProps> = ({ onSearch }) => {
             <nav className="hidden md:flex items-center space-x-8">
               <a href="#" className="text-gray-600 hover:text-blue-600 transition-colors">Mes Réservations</a>
               <a href="#" className="text-gray-600 hover:text-blue-600 transition-colors">Aide</a>
-              <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                Connexion
-              </button>
+              {isAuthenticated ? (
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold">
+                    {username ? username.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                  <button onClick={() => onLogout && onLogout()} className="text-gray-600 hover:text-red-600 transition-colors text-sm">
+                    Déconnexion
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => onNavigateToAuth && onNavigateToAuth('login')} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                  Connexion
+                </button>
+              )}
             </nav>
           </div>
         </div>

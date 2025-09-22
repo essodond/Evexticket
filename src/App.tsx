@@ -150,7 +150,12 @@ function App() {
       )}
       
       {currentView === 'home' && (
-        <HomePage onSearch={handleSearch} />
+        <HomePage 
+          onSearch={handleSearch} 
+          isAuthenticated={isAuthenticated}
+          onNavigateToAuth={handleNavigateToAuth}
+          onLogout={handleLogout}
+        />
       )}
       
       {currentView === 'results' && (
