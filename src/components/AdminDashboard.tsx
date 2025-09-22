@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import apiService from '../services/api';
 import { Users, Building, DollarSign, Plus, Edit, Trash2, Eye, Download, Filter, Bus, FileText, BarChart3 } from 'lucide-react';
 import AddCompanyModal from './AddCompanyModal';
 import AddTripModal from './AddTripModal';
@@ -52,100 +53,113 @@ const AdminDashboard: React.FC = () => {
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
 
-  // Mock data
-  const stats = {
-    totalUsers: 1250,
-    totalCompanies: 12,
-    totalTrips: 89,
-    totalBookings: 1456,
-    totalRevenue: 5248000,
-    monthlyGrowth: 18.5
-  };
+  // State pour données réelles
+  const [stats, setStats] = useState<{
+    totalUsers: number;
+    totalCompanies: number;
+    totalTrips: number;
+    totalBookings: number;
+    totalRevenue: number;
+    monthlyGrowth: number;
+  } | null>(null);
 
-  const companies: Company[] = [
-    {
-      id: '1',
-      name: 'TogoBus Express',
-      description: 'Service de transport premium au Togo',
-      address: 'Avenue de la Paix, Lomé',
-      phone: '+228 22 22 22 22',
-      email: 'contact@togobus.tg',
-      website: 'https://togobus.tg',
-      logo: '',
-      isActive: true,
-      createdAt: '2024-01-15'
-    },
-    {
-      id: '2',
-      name: 'Lomé Transport',
-      description: 'Transport urbain et interurbain',
-      address: 'Boulevard du 13 Janvier, Lomé',
-      phone: '+228 22 33 44 55',
-      email: 'info@lometrans.tg',
-      website: 'https://lometrans.tg',
-      logo: '',
-      isActive: true,
-      createdAt: '2024-02-10'
-    }
-  ];
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const trips: Trip[] = [
-    {
-      id: '1',
-      companyId: '1',
-      companyName: 'TogoBus Express',
-      departureCity: 'Lomé',
-      arrivalCity: 'Kara',
-      departureTime: '08:00',
-      arrivalTime: '12:00',
-      price: 5000,
-      duration: 4,
-      busType: 'Premium',
-      capacity: 50,
-      isActive: true
-    },
-    {
-      id: '2',
-      companyId: '1',
-      companyName: 'TogoBus Express',
-      departureCity: 'Kara',
-      arrivalCity: 'Lomé',
-      departureTime: '14:00',
-      arrivalTime: '18:00',
-      price: 5000,
-      duration: 4,
-      busType: 'Premium',
-      capacity: 50,
-      isActive: true
-    }
-  ];
+  useEffect(() => {
+    let mounted = true;
 
-  const users: User[] = [
-    {
-      id: '1',
-      firstName: 'Jean',
-      lastName: 'Doe',
-      email: 'jean.doe@email.com',
-      phone: '+228 90 12 34 56',
-      role: 'user',
-      isActive: true,
-      createdAt: '2024-01-20'
-    },
-    {
-      id: '2',
-      firstName: 'Marie',
-      lastName: 'Smith',
-      email: 'marie.smith@email.com',
-      phone: '+228 91 23 45 67',
-      role: 'company',
-      isActive: true,
-      createdAt: '2024-02-15'
+    async function loadData() {
+      setLoading(true);
+      setError(null);
+      try {
+        const [statsData, companiesData, tripsData] = await Promise.all([
+          apiService.getDashboardStats(),
+          apiService.getCompanies(),
+          apiService.getTrips(),
+        ]);
+
+        if (!mounted) return;
+
+        setStats(statsData as any);
+        // Adapter les données pour les types locaux si nécessaire
+        setCompanies((companiesData as any[]).map(c => ({
+          id: String(c.id),
+          name: c.name,
+          description: c.description || '',
+          address: c.address || '',
+          phone: c.phone || '',
+          email: c.email || '',
+          website: c.website || '',
+          logo: c.logo || '',
+          isActive: c.is_active,
+          createdAt: c.created_at,
+        })));
+
+        setTrips((tripsData as any[]).map(t => ({
+          id: String(t.id),
+          companyId: String(t.company),
+          companyName: t.company_name || '',
+          departureCity: t.departure_city_name || String(t.departure_city),
+          arrivalCity: t.arrival_city_name || String(t.arrival_city),
+          departureTime: t.departure_time,
+          arrivalTime: t.arrival_time,
+          price: t.price,
+          duration: t.duration,
+          busType: t.bus_type,
+          capacity: t.capacity,
+          isActive: t.is_active,
+        })));
+
+        // Users: l'API n'a pas d'endpoint users explicite; on peut réutiliser totalUsers pour le chiffre
+        setUsers([]);
+      } catch (err: any) {
+        console.error('Failed loading admin data', err);
+        setError(err.message || 'Erreur lors du chargement des données');
+      } finally {
+        setLoading(false);
+      }
     }
-  ];
+
+    loadData();
+
+    return () => { mounted = false };
+  }, []);
 
   const handleAddCompany = (companyData: Omit<Company, 'id' | 'createdAt'>) => {
-    console.log('Adding company:', companyData);
-    // Ici on ferait l'appel API pour créer la compagnie
+    // Appel API pour créer la compagnie
+    (async () => {
+      try {
+        const created = await apiService.createCompany({
+          name: companyData.name,
+          description: companyData.description,
+          address: companyData.address,
+          phone: companyData.phone,
+          email: companyData.email,
+          website: companyData.website,
+          logo: companyData.logo,
+          is_active: companyData.isActive,
+        } as any);
+        setCompanies(prev => [{
+          id: String(created.id),
+          name: created.name,
+          description: created.description || '',
+          address: created.address || '',
+          phone: created.phone || '',
+          email: created.email || '',
+          website: created.website || '',
+          logo: created.logo || '',
+          isActive: created.is_active,
+          createdAt: created.created_at,
+        }, ...prev]);
+      } catch (err) {
+        console.error('Erreur création compagnie', err);
+        alert('Erreur lors de la création de la compagnie');
+      }
+    })();
   };
 
   const handleEditCompany = (company: Company) => {
@@ -154,8 +168,39 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleAddTrip = (tripData: Omit<Trip, 'id' | 'companyName'>) => {
-    console.log('Adding trip:', tripData);
-    // Ici on ferait l'appel API pour créer le trajet
+    (async () => {
+      try {
+        const created = await apiService.createTrip({
+          company: Number(tripData.companyId),
+          departure_city: tripData.departureCity,
+          arrival_city: tripData.arrivalCity,
+          departure_time: tripData.departureTime,
+          arrival_time: tripData.arrivalTime,
+          price: tripData.price,
+          duration: tripData.duration,
+          bus_type: tripData.busType,
+          capacity: tripData.capacity,
+          is_active: tripData.isActive,
+        } as any);
+        setTrips(prev => [{
+          id: String(created.id),
+          companyId: String(created.company),
+          companyName: created.company_name || '',
+          departureCity: created.departure_city_name || String(created.departure_city),
+          arrivalCity: created.arrival_city_name || String(created.arrival_city),
+          departureTime: created.departure_time,
+          arrivalTime: created.arrival_time,
+          price: created.price,
+          duration: created.duration,
+          busType: created.bus_type,
+          capacity: created.capacity,
+          isActive: created.is_active,
+        }, ...prev]);
+      } catch (err) {
+        console.error('Erreur création trajet', err);
+        alert('Erreur lors de la création du trajet');
+      }
+    })();
   };
 
   const handleEditTrip = (trip: Trip) => {
@@ -620,7 +665,13 @@ const AdminDashboard: React.FC = () => {
         </div>
 
         {/* Content */}
-        {activeTab === 'overview' && renderOverview()}
+        {activeTab === 'overview' && (loading ? (
+          <div className="p-6 text-center">Chargement...</div>
+        ) : error ? (
+          <div className="p-6 text-center text-red-600">{error}</div>
+        ) : (
+          renderOverview()
+        ))}
         {activeTab === 'companies' && renderCompanies()}
         {activeTab === 'trips' && renderTrips()}
         {activeTab === 'users' && renderUsers()}
