@@ -92,11 +92,14 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode, onBack, onSuccess, onSwitchMo
         setErrors({ email: error.message || 'Erreur lors de la création du compte' });
       }
     } else {
-      // Ici, la logique de connexion peut rester inchangée ou être adaptée
-      setTimeout(() => {
+      try {
+        await apiService.login(formData.email, formData.password);
         setIsLoading(false);
         onSuccess();
-      }, 1500);
+      } catch (error: any) {
+        setIsLoading(false);
+        setErrors({ email: error.message || 'Erreur lors de la connexion' });
+      }
     }
   };
 

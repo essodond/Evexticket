@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
+from rest_framework.authtoken.views import obtain_auth_token
 
 router = DefaultRouter()
 router.register(r'cities', views.CityViewSet, basename='city')        # ✅ basename ajouté
@@ -12,4 +13,5 @@ urlpatterns = [
     path('', include(router.urls)),
     path('dashboard/stats/', views.DashboardStatsView.as_view(), name='dashboard-stats'),
     path('register/', views.RegisterView.as_view(), name='register'),
+    path('login/', obtain_auth_token, name='api-token-auth'),
 ]

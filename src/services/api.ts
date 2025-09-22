@@ -103,9 +103,13 @@ class ApiService {
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     
-    const defaultHeaders = {
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null;
+    const defaultHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
     };
+    if (token) {
+      defaultHeaders['Authorization'] = `Token ${token}`;
+    }
 
     const config: RequestInit = {
       ...options,
@@ -127,6 +131,15 @@ class ApiService {
     } catch (error) {
       console.error('API request failed:', error);
       throw error;
+    }
+  }
+
+  // Stocker le token dans localStorage et mettre l'en-tête Authorization
+  setAuthToken(token: string | null) {
+    if (token) {
+      localStorage.setItem('authToken', token);
+    } else {
+      localStorage.removeItem('authToken');
     }
   }
 
@@ -252,20 +265,26 @@ class ApiService {
 
   // Authentification (pour l'instant, simulation)
   async login(username: string, password: string): Promise<{ token: string; user: any }> {
-    // Simulation d'authentification
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          token: 'mock-token-' + Date.now(),
-          user: {
-            id: 1,
-            username,
-            email: `${username}@togotrans.tg`,
-            is_staff: username === 'admin'
-          }
-        });
-      }, 1000);
+    const response = await fetch(`${API_BASE_URL}/login/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username, password }),
     });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || 'Erreur lors de la connexion');
+    }
+
+    const data = await response.json();
+    // endpoint DRF authtoken retourne {"token": "..."}
+    const token = data.token;
+    this.setAuthToken(token);
+    // Optionnel : récupérer les informations utilisateur après connexion
+    // Ici on retourne juste le token et un champ user minimal
+    return { token, user: { username } };
   }
 
   async register(userData: {
