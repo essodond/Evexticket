@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
+import apiService from './services/api';
 import LandingPage from './components/LandingPage';
 import AuthPage from './components/AuthPage';
 import HomePage from './components/HomePage';
@@ -24,25 +25,30 @@ function App() {
   const handleSearch = (data: any) => {
     setSearchData(data);
     setCurrentView('results');
+    localStorage.setItem('currentView', 'results');
   };
 
   const handleTripSelect = (trip: any) => {
     setSelectedTrip(trip);
     setCurrentView('booking');
+    localStorage.setItem('currentView', 'booking');
   };
 
   const handleProceedToPayment = (data: any) => {
     setBookingData(data);
     setCurrentView('payment');
+    localStorage.setItem('currentView', 'payment');
   };
 
   const handlePaymentSuccess = (data: any) => {
     setPaymentData(data);
     setCurrentView('confirmation');
+    localStorage.setItem('currentView', 'confirmation');
   };
 
   const handleNewBooking = () => {
     setCurrentView('home');
+    localStorage.setItem('currentView', 'home');
     setSearchData(null);
     setSelectedTrip(null);
     setBookingData(null);
@@ -52,21 +58,46 @@ function App() {
   const handleNavigateToAuth = (mode: AuthMode) => {
     setAuthMode(mode);
     setCurrentView('auth');
+    localStorage.setItem('currentView', 'auth');
   };
 
   const handleAuthSuccess = () => {
     setIsAuthenticated(true);
     setCurrentView('home');
+    localStorage.setItem('currentView', 'home');
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
+    // Clear stored token so user stays logged out after refresh
+    apiService.setAuthToken(null);
     setCurrentView('landing');
+    localStorage.setItem('currentView', 'landing');
     setSearchData(null);
     setSelectedTrip(null);
     setBookingData(null);
     setPaymentData(null);
   };
+
+  // On app mount, restore auth token from localStorage if present
+  useEffect(() => {
+    try {
+      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null;
+      if (token) {
+        apiService.setAuthToken(token);
+        setIsAuthenticated(true);
+        // Restore previous view if available, otherwise go to home
+        const savedView = localStorage.getItem('currentView') as ViewType | null;
+        if (savedView) {
+          setCurrentView(savedView);
+        } else {
+          setCurrentView('home');
+        }
+      }
+    } catch (e) {
+      console.warn('Could not restore auth token:', e);
+    }
+  }, []);
 
   // Quick navigation for demonstration
   const showDashboardControls = () => (
