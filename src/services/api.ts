@@ -146,6 +146,13 @@ class ApiService {
       }
 
       const data = await response.json();
+
+      // DRF pagination: responses for list endpoints may be { count, next, previous, results: [...] }
+      // Normalize by returning the inner `results` array when present so callers can always expect an array.
+      if (data && typeof data === 'object' && Array.isArray((data as any).results)) {
+        return (data as any).results as T;
+      }
+
       return data;
     } catch (error) {
       console.error('API request failed:', error);
