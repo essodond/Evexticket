@@ -108,7 +108,8 @@ class ApiService {
       'Content-Type': 'application/json',
     };
     if (token) {
-      defaultHeaders['Authorization'] = `Bearer ${token}`;
+      // DRF TokenAuthentication expects "Token <key>"
+      defaultHeaders['Authorization'] = `Token ${token}`;
     }
 
     const config: RequestInit = {
@@ -294,7 +295,7 @@ class ApiService {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ email: username, password }),
     });
 
     if (!tokenResp.ok) {

@@ -2,6 +2,7 @@ from rest_framework import generics
 from django.contrib.auth.models import User
 from rest_framework.permissions import AllowAny
 from rest_framework.authtoken.models import Token
+from django.contrib.auth import authenticate
 from .serializers import RegisterSerializer
 
 # Vue d'inscription
@@ -25,6 +26,31 @@ class RegisterView(generics.CreateAPIView):
         data['id'] = user.id
         data['token'] = token.key
         return Response(data, status=status.HTTP_201_CREATED)
+
+class EmailAuthToken(APIView):
+    """Authentification par email -> retourne un token."""
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        password = request.data.get('password')
+        if not email or not password:
+            return Response({'detail': 'Email et mot de passe requis.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({'detail': 'Identifiants invalides.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Authentifier en utilisant le username du user trouvé
+        user_auth = authenticate(request, username=user.username, password=password)
+        if user_auth is None:
+            return Response({'detail': 'Identifiants invalides.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        token, created = Token.objects.get_or_create(user=user_auth)
+        from .serializers import UserSerializer
+        user_data = UserSerializer(user_auth).data
+        return Response({'token': token.key, 'user': user_data})
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
