@@ -108,7 +108,7 @@ class ApiService {
       'Content-Type': 'application/json',
     };
     if (token) {
-      defaultHeaders['Authorization'] = `Token ${token}`;
+      defaultHeaders['Authorization'] = `Bearer ${token}`;
     }
 
     const config: RequestInit = {
