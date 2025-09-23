@@ -33,17 +33,25 @@ class EmailAuthToken(APIView):
 
     def post(self, request, *args, **kwargs):
         email = request.data.get('email')
+        username = request.data.get('username')
         password = request.data.get('password')
-        if not email or not password:
-            return Response({'detail': 'Email et mot de passe requis.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not password or (not email and not username):
+            return Response({'detail': 'Email/username et mot de passe requis.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            return Response({'detail': 'Identifiants invalides.'}, status=status.HTTP_400_BAD_REQUEST)
+        user = None
+        if email:
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                return Response({'detail': 'Identifiants invalides.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Authentifier en utilisant le username du user trouvé
-        user_auth = authenticate(request, username=user.username, password=password)
+        if username and not user:
+            # we will try direct username authentication
+            user = None
+
+        # If we found a user by email, authenticate using that user's username
+        auth_username = user.username if user else username
+        user_auth = authenticate(request, username=auth_username, password=password)
         if user_auth is None:
             return Response({'detail': 'Identifiants invalides.'}, status=status.HTTP_400_BAD_REQUEST)
 
