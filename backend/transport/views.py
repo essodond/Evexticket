@@ -1,5 +1,5 @@
 from rest_framework.views import APIView
-from rest_framework import generics
+from rest_framework import generics, status
 from django.contrib.auth.models import User
 from rest_framework.permissions import AllowAny
 from rest_framework.authtoken.models import Token
@@ -33,37 +33,60 @@ class EmailAuthToken(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
+        import logging
+        logger = logging.getLogger(__name__)
+
         email = request.data.get('email')
         username = request.data.get('username')
         password = request.data.get('password')
         if not password or (not email and not username):
             return Response({'detail': 'Email/username et mot de passe requis.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = None
+        attempts = []
+
+        # 1) If email provided, try to find user by email and authenticate with that user's username
         if email:
             try:
-                user = User.objects.get(email=email)
+                user_by_email = User.objects.get(email=email)
+                attempts.append(f'found_user_by_email:{user_by_email.username}')
+                user_auth = authenticate(request, username=user_by_email.username, password=password)
+                if user_auth:
+                    token, created = Token.objects.get_or_create(user=user_auth)
+                    from .serializers import UserSerializer
+                    user_data = UserSerializer(user_auth).data
+                    return Response({'token': token.key, 'user': user_data})
+                attempts.append('auth_failed_for_user_by_email')
             except User.DoesNotExist:
-                return Response({'detail': 'Identifiants invalides.'}, status=status.HTTP_400_BAD_REQUEST)
+                attempts.append('no_user_with_email')
 
-        if username and not user:
-            # we will try direct username authentication
-            user = None
+            # Also try authenticating directly using the email as username (in case username == email)
+            user_auth = authenticate(request, username=email, password=password)
+            if user_auth:
+                token, created = Token.objects.get_or_create(user=user_auth)
+                from .serializers import UserSerializer
+                user_data = UserSerializer(user_auth).data
+                return Response({'token': token.key, 'user': user_data})
+            attempts.append('auth_failed_using_email_as_username')
 
-        # If we found a user by email, authenticate using that user's username
-        auth_username = user.username if user else username
-        user_auth = authenticate(request, username=auth_username, password=password)
-        if user_auth is None:
-            return Response({'detail': 'Identifiants invalides.'}, status=status.HTTP_400_BAD_REQUEST)
+        # 2) If username provided, try username authentication
+        if username:
+            user_auth = authenticate(request, username=username, password=password)
+            if user_auth:
+                token, created = Token.objects.get_or_create(user=user_auth)
+                from .serializers import UserSerializer
+                user_data = UserSerializer(user_auth).data
+                return Response({'token': token.key, 'user': user_data})
+            attempts.append('auth_failed_for_provided_username')
 
-        token, created = Token.objects.get_or_create(user=user_auth)
-        from .serializers import UserSerializer
-        user_data = UserSerializer(user_auth).data
-        return Response({'token': token.key, 'user': user_data})
-from rest_framework import viewsets, status, permissions
+        # 3) Final fallback: try authenticate with username equal to provided password? (not typical) - skip
+
+        # Log attempts for debugging (server-side only)
+        logger.warning('EmailAuthToken failed: attempts=%s, remote=%s', attempts, request.META.get('REMOTE_ADDR'))
+
+        return Response({'detail': 'Identifiants invalides.'}, status=status.HTTP_400_BAD_REQUEST)
+from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.views import APIView
 from django.db.models import Q, Count, Sum, Avg
 from django.utils import timezone
 from datetime import datetime, timedelta
