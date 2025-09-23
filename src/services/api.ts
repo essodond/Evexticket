@@ -338,11 +338,29 @@ class ApiService {
       },
       body: JSON.stringify(userData),
     });
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.detail || 'Erreur lors de la création du compte');
     }
-    return response.json();
+
+    const data = await response.json();
+    // Si l'endpoint retourne un token (nous l'ajoutons côté backend), le stocker
+    const token = data.token;
+    if (token) {
+      this.setAuthToken(token);
+    }
+
+    // Récupérer les informations utilisateur
+    let user = null;
+    try {
+      user = await this.request<any>('/me/');
+      try { localStorage.setItem('user', JSON.stringify(user)); } catch (e) {}
+    } catch (e) {
+      // ignore
+    }
+
+    return { token, user };
   }
 }
 

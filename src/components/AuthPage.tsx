@@ -77,7 +77,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode, onBack, onSuccess, onSwitchMo
     setIsLoading(true);
     if (mode === 'register') {
       try {
-        await apiService.register({
+        const resp = await apiService.register({
           username: formData.email, // ou un champ username si vous en avez un
           email: formData.email,
           password: formData.password,
@@ -86,7 +86,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode, onBack, onSuccess, onSwitchMo
           last_name: formData.lastName,
         });
         setIsLoading(false);
-  onSuccess(user);
+        onSuccess(resp.user);
       } catch (error: any) {
         setIsLoading(false);
         setErrors({ email: error.message || 'Erreur lors de la création du compte' });
