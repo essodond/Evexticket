@@ -108,11 +108,11 @@ class CurrentUserView(APIView):
         # Importer le serializer local pour éviter les dépendances circulaires
         from .serializers import UserSerializer
         data = UserSerializer(user).data
-        # Indiquer si c'est un admin de compagnie
-        is_company_admin = Company.objects.filter(admin_user=user).exists()
+        # Indiquer si c'est un admin de compagnie (legacy admin_user ou nouveaux admins M2M)
+        is_company_admin = Company.objects.filter(Q(admin_user=user) | Q(admins=user)).exists()
         data['is_company_admin'] = is_company_admin
         if is_company_admin:
-            comp = Company.objects.filter(admin_user=user).first()
+            comp = Company.objects.filter(Q(admin_user=user) | Q(admins=user)).first()
             data['company_id'] = comp.id
         return Response(data)
 
@@ -148,7 +148,18 @@ class CompanyViewSet(viewsets.ModelViewSet):
         if not user.is_staff:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Seul un administrateur peut créer une compagnie.")
-        serializer.save(admin_user=user)
+        # Si l'utilisateur est déjà admin d'une compagnie, ne pas échouer — on crée quand même
+        try:
+            company = serializer.save()
+            # Ajouter l'utilisateur courant aux administrateurs M2M
+            try:
+                company.admins.add(user)
+            except Exception:
+                pass
+        except Exception as e:
+            from rest_framework.exceptions import ValidationError
+            error_msg = str(e)
+            raise ValidationError({'detail': f"Erreur lors de la création de la compagnie: {error_msg}"})
 
 
 class TripViewSet(viewsets.ModelViewSet):
@@ -161,8 +172,10 @@ class TripViewSet(viewsets.ModelViewSet):
         queryset = Trip.objects.filter(is_active=True)
         
         if not self.request.user.is_staff:
-            if hasattr(self.request.user, 'company_admin'):
-                queryset = queryset.filter(company=self.request.user.company_admin)
+            # Si l'utilisateur est admin d'une compagnie (legacy ou nouveau), limiter
+            companies_for_user = Company.objects.filter(models.Q(admin_user=self.request.user) | models.Q(admins=self.request.user))
+            if companies_for_user.exists():
+                queryset = queryset.filter(company__in=companies_for_user)
         
         return queryset
 

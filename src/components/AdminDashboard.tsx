@@ -138,7 +138,7 @@ const AdminDashboard: React.FC = () => {
     // Appel API pour créer la compagnie
     (async () => {
       try {
-        const created = await apiService.createCompany({
+        const payload: any = {
           name: companyData.name,
           description: companyData.description,
           address: companyData.address,
@@ -147,7 +147,12 @@ const AdminDashboard: React.FC = () => {
           website: companyData.website,
           logo: companyData.logo,
           is_active: companyData.isActive,
-        } as any);
+        };
+        // Forward optional admin credentials if present
+        if ((companyData as any).admin_email) payload.admin_email = (companyData as any).admin_email;
+        if ((companyData as any).admin_password) payload.admin_password = (companyData as any).admin_password;
+
+        const created = await apiService.createCompany(payload as any);
         setCompanies(prev => [{
           id: String(created.id),
           name: created.name,
@@ -162,7 +167,14 @@ const AdminDashboard: React.FC = () => {
         }, ...prev]);
       } catch (err) {
         console.error('Erreur création compagnie', err);
-        alert('Erreur lors de la création de la compagnie');
+        // Try to display server validation errors if available
+        if (err && typeof err === 'object' && (err as any).response && (err as any).response.data) {
+          const data = (err as any).response.data;
+          const messages = Object.entries(data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join('\n');
+          alert(`Erreur lors de la création de la compagnie:\n${messages}`);
+        } else {
+          alert('Erreur lors de la création de la compagnie');
+        }
       }
     })();
   };

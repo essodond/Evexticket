@@ -36,12 +36,25 @@ const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
     logo: editingCompany?.logo || '',
     isActive: editingCompany?.isActive ?? true
   });
+  // Champs pour création de l'administrateur de la compagnie
+  const [adminData, setAdminData] = useState({
+    adminEmail: '',
+    adminPassword: ''
+  });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
+    if (name === 'adminEmail' || name === 'adminPassword') {
+      setAdminData(prev => ({ ...prev, [name]: value }));
+      if (errors[name]) {
+        setErrors(prev => ({ ...prev, [name]: '' }));
+      }
+      return;
+    }
+
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
@@ -87,6 +100,14 @@ const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
       newErrors.website = 'L\'URL doit commencer par http:// ou https://';
     }
 
+    if (adminData.adminEmail && !/\S+@\S+\.\S+/.test(adminData.adminEmail)) {
+      newErrors.adminEmail = 'Format d\'email admin invalide';
+    }
+
+    if (adminData.adminPassword && adminData.adminPassword.length < 6) {
+      newErrors.adminPassword = 'Le mot de passe admin doit contenir au moins 6 caractères';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -98,12 +119,12 @@ const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
 
     setIsLoading(true);
     
-    // Simuler une requête API
+    // Envoyer les données (incluant admin si renseigné)
     setTimeout(() => {
       setIsLoading(false);
-      onSave(formData);
+      onSave({ ...formData, admin_email: adminData.adminEmail || undefined, admin_password: adminData.adminPassword || undefined } as any);
       onClose();
-    }, 1000);
+    }, 500);
   };
 
   const handleClose = () => {
@@ -264,6 +285,53 @@ const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
                 <p className="mt-1 text-sm text-red-600 flex items-center">
                   <AlertCircle className="w-4 h-4 mr-1" />
                   {errors.email}
+                </p>
+              )}
+            </div>
+
+            {/* Admin creation fields (optional) */}
+            <div>
+              <label htmlFor="adminEmail" className="block text-sm font-medium text-gray-700 mb-2">
+                Email administrateur (optionnel)
+              </label>
+              <input
+                type="email"
+                id="adminEmail"
+                name="adminEmail"
+                value={adminData.adminEmail}
+                onChange={handleInputChange}
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  errors.adminEmail ? 'border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="admin@companystore.tg"
+              />
+              {errors.adminEmail && (
+                <p className="mt-1 text-sm text-red-600 flex items-center">
+                  <AlertCircle className="w-4 h-4 mr-1" />
+                  {errors.adminEmail}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="adminPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                Mot de passe administrateur (optionnel)
+              </label>
+              <input
+                type="password"
+                id="adminPassword"
+                name="adminPassword"
+                value={adminData.adminPassword}
+                onChange={handleInputChange}
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  errors.adminPassword ? 'border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="Saisissez un mot de passe sécurisé"
+              />
+              {errors.adminPassword && (
+                <p className="mt-1 text-sm text-red-600 flex items-center">
+                  <AlertCircle className="w-4 h-4 mr-1" />
+                  {errors.adminPassword}
                 </p>
               )}
             </div>

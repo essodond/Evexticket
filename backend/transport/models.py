@@ -19,10 +19,20 @@ class Company(models.Model):
     
     # Lien avec l'utilisateur administrateur de la compagnie
     admin_user = models.OneToOneField(
-        User, 
-        on_delete=models.CASCADE, 
+        User,
+        on_delete=models.CASCADE,
         related_name='company_admin',
-        verbose_name="Administrateur de la compagnie"
+        verbose_name="Administrateur de la compagnie",
+        null=True,
+        blank=True,
+    )
+
+    # Permettre plusieurs administrateurs par compagnie
+    admins = models.ManyToManyField(
+        User,
+        related_name='admin_companies',
+        blank=True,
+        verbose_name='Administrateurs'
     )
 
     class Meta:

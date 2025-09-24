@@ -50,6 +50,10 @@ class CitySerializer(serializers.ModelSerializer):
 class CompanySerializer(serializers.ModelSerializer):
     """Serializer pour les compagnies"""
     admin_user = UserSerializer(read_only=True)
+    admins = UserSerializer(many=True, read_only=True)
+    # Champs write-only pour créer un administrateur lors de la création d'une compagnie
+    admin_email = serializers.EmailField(write_only=True, required=False, allow_null=True)
+    admin_password = serializers.CharField(write_only=True, required=False, allow_null=True)
     trips_count = serializers.SerializerMethodField()
     
     class Meta:
@@ -57,12 +61,44 @@ class CompanySerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'description', 'address', 'phone', 'email', 
             'website', 'logo', 'is_active', 'created_at', 'updated_at',
-            'admin_user', 'trips_count'
+            'admin_user', 'admins', 'trips_count'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'trips_count']
 
     def get_trips_count(self, obj):
         return obj.trips.count()
+
+    def create(self, validated_data):
+        # Extraire les champs pour création d'utilisateur si fournis
+        admin_email = validated_data.pop('admin_email', None)
+        admin_password = validated_data.pop('admin_password', None)
+
+        company = super().create(validated_data)
+
+        if admin_email and admin_password:
+            # Créer l'utilisateur admin pour la compagnie
+            from django.contrib.auth.models import User
+            from django.db import IntegrityError
+            try:
+                # Utiliser l'email comme username pour simplifier
+                if User.objects.filter(username=admin_email).exists():
+                    # Ne pas écraser l'utilisateur existant, ajouter erreur
+                    raise serializers.ValidationError({'admin_email': 'Un utilisateur avec cet email existe déjà.'})
+
+                user = User.objects.create_user(username=admin_email, email=admin_email, password=admin_password)
+                # Ajouter aux administrateurs M2M
+                try:
+                    company.admins.add(user)
+                except Exception:
+                    pass
+                # Si admin_user legacy non défini, l'assigner pour compatibilité
+                if not company.admin_user:
+                    company.admin_user = user
+                    company.save()
+            except IntegrityError:
+                raise serializers.ValidationError({'admin_email': 'Impossible de créer l\'utilisateur admin (conflit).'})
+
+        return company
 
 
 class TripSerializer(serializers.ModelSerializer):
