@@ -2,16 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { X, MapPin, Clock, DollarSign, Bus, AlertCircle, CheckCircle } from 'lucide-react';
 
 interface Company {
-  id: string;
+  id: string | number;
   name: string;
   isActive: boolean;
 }
 
 interface Trip {
   id: string;
-  companyId: string;
-  departureCity: string;
-  arrivalCity: string;
+  companyId: string | number;
+  departureCity: string | number;
+  arrivalCity: string | number;
   departureTime: string;
   arrivalTime: string;
   price: number;
@@ -24,9 +24,10 @@ interface Trip {
 interface AddTripModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (trip: Omit<Trip, 'id'>) => void;
+  onSave: (trip: any) => void;
   editingTrip?: Trip | null;
   companies: Company[];
+  cities?: { id: number; name: string }[];
 }
 
 const AddTripModal: React.FC<AddTripModalProps> = ({ 
@@ -34,7 +35,8 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
   onClose, 
   onSave, 
   editingTrip,
-  companies 
+  companies,
+  cities: propCities
 }) => {
   const [formData, setFormData] = useState({
     companyId: editingTrip?.companyId || '',
@@ -60,6 +62,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
   ];
 
   const cities = [
+    // fallback static list if `cities` prop is not provided
     'Lomé', 'Kara', 'Kpalimé', 'Sokodé', 'Atakpamé', 'Dapaong', 'Tsévié', 'Aného', 'Bassar', 'Mango'
   ];
 
@@ -82,10 +85,15 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
+    const parsedValue: any = (type === 'checkbox')
+      ? (e.target as HTMLInputElement).checked
+      : (e.target as HTMLSelectElement).tagName === 'SELECT' && name.match(/City|companyId/i)
+        ? (value === '' ? '' : Number(value))
+        : (type === 'number' ? parseFloat(value) || 0 : value);
+
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : 
-              type === 'number' ? parseFloat(value) || 0 : value
+      [name]: parsedValue
     }));
     
     // Clear error when user starts typing
@@ -163,12 +171,26 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
 
     setIsLoading(true);
     
-    // Simuler une requête API
+    // Préparer payload normalisé attendu par l'API
+    const payload: any = {
+      company: formData.companyId ? Number(formData.companyId) : null,
+      departure_city: formData.departureCity ? Number(formData.departureCity) : null,
+      arrival_city: formData.arrivalCity ? Number(formData.arrivalCity) : null,
+      departure_time: formData.departureTime,
+      arrival_time: formData.arrivalTime,
+      price: Number(formData.price),
+      duration: Number(formData.duration),
+      bus_type: formData.busType,
+      capacity: Number(formData.capacity),
+      is_active: Boolean(formData.isActive),
+    };
+
+    // Simuler requête API locale (AdminDashboard appellera apiService)
     setTimeout(() => {
       setIsLoading(false);
-      onSave(formData);
+      onSave(payload as any);
       onClose();
-    }, 1000);
+    }, 300);
   };
 
   const handleClose = () => {
@@ -257,9 +279,12 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
                 }`}
               >
                 <option value="">Sélectionner une ville</option>
-                {cities.map(city => (
-                  <option key={city} value={city}>{city}</option>
-                ))}
+                {/* Use provided cities prop when available */}
+                { propCities ? propCities.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  )) : cities.map(city => (
+                    <option key={city} value={city}>{city}</option>
+                  )) }
               </select>
               {errors.departureCity && (
                 <p className="mt-1 text-sm text-red-600 flex items-center">
@@ -285,9 +310,11 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
                 }`}
               >
                 <option value="">Sélectionner une ville</option>
-                {cities.filter(city => city !== formData.departureCity).map(city => (
-                  <option key={city} value={city}>{city}</option>
-                ))}
+                { propCities ? propCities.filter((c: any) => String(c.id) !== String(formData.departureCity)).map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  )) : cities.filter(city => city !== formData.departureCity).map(city => (
+                    <option key={city} value={city}>{city}</option>
+                  )) }
               </select>
               {errors.arrivalCity && (
                 <p className="mt-1 text-sm text-red-600 flex items-center">

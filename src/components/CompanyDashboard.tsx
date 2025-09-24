@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Users, Download, Calendar, MapPin, DollarSign, TrendingUp, Bus, BarChart3, FileText, Eye } from 'lucide-react';
+import apiService from '../services/api';
+import { useCities } from '../hooks/useApi';
 import AddTripModal from './AddTripModal';
 import ConfirmationModal from './ConfirmationModal';
 import NotificationModal from './NotificationModal';
@@ -45,6 +47,8 @@ const CompanyDashboard: React.FC = () => {
   });
   const [itemToDelete, setItemToDelete] = useState<{ type: 'trip' | 'booking', id: string, name: string } | null>(null);
 
+  const { cities: apiCities } = useCities();
+
   // Mock data
   const stats = {
     totalTrips: 24,
@@ -55,50 +59,35 @@ const CompanyDashboard: React.FC = () => {
     pendingBookings: 8
   };
 
-  const trips: Trip[] = [
-    {
-      id: '1',
-      companyId: '1',
-      companyName: 'TogoBus Express',
-      departureCity: 'Lomé',
-      arrivalCity: 'Kara',
-      departureTime: '08:00',
-      arrivalTime: '12:00',
-      price: 5000,
-      duration: 4,
-      busType: 'Premium',
-      capacity: 50,
-      isActive: true
-    },
-    {
-      id: '2',
-      companyId: '1',
-      companyName: 'TogoBus Express',
-      departureCity: 'Kara',
-      arrivalCity: 'Lomé',
-      departureTime: '14:00',
-      arrivalTime: '18:00',
-      price: 5000,
-      duration: 4,
-      busType: 'Premium',
-      capacity: 50,
-      isActive: true
-    },
-    {
-      id: '3',
-      companyId: '1',
-      companyName: 'TogoBus Express',
-      departureCity: 'Lomé',
-      arrivalCity: 'Kpalimé',
-      departureTime: '10:00',
-      arrivalTime: '12:30',
-      price: 3000,
-      duration: 2.5,
-      busType: 'Standard',
-      capacity: 40,
-      isActive: true
-    }
-  ];
+  const [trips, setTrips] = useState<Trip[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchTrips = async () => {
+      try {
+        const data = await apiService.getTrips();
+        if (!mounted) return;
+        setTrips((data as any[]).map(t => ({
+          id: String(t.id),
+          companyId: String(t.company),
+          companyName: t.company_name || '',
+          departureCity: t.departure_city_name || String(t.departure_city),
+          arrivalCity: t.arrival_city_name || String(t.arrival_city),
+          departureTime: t.departure_time,
+          arrivalTime: t.arrival_time,
+          price: t.price,
+          duration: t.duration,
+          busType: t.bus_type,
+          capacity: t.capacity,
+          isActive: t.is_active,
+        })));
+      } catch (e) {
+        console.error('Failed to load trips for company dashboard', e);
+      }
+    };
+    fetchTrips();
+    return () => { mounted = false };
+  }, []);
 
   const bookings: Booking[] = [
     {
@@ -136,14 +125,44 @@ const CompanyDashboard: React.FC = () => {
     }
   ];
 
-  const handleAddTrip = (tripData: Omit<Trip, 'id' | 'companyName'>) => {
-    console.log('Adding trip:', tripData);
-    setShowNotification(true);
-    setNotificationData({
-      type: 'success',
-      title: 'Trajet créé',
-      message: 'Le trajet a été créé avec succès.'
-    });
+  const handleAddTrip = async (tripData: Omit<Trip, 'id' | 'companyName'>) => {
+    try {
+      const payload: any = {
+        company: Number(tripData.companyId),
+        departure_city: Number(tripData.departureCity),
+        arrival_city: Number(tripData.arrivalCity),
+        departure_time: tripData.departureTime,
+        arrival_time: tripData.arrivalTime,
+        price: tripData.price,
+        duration: tripData.duration,
+        bus_type: tripData.busType,
+        capacity: tripData.capacity,
+        is_active: tripData.isActive,
+      };
+
+      const created = await apiService.createTrip(payload as any);
+      setTrips(prev => [{
+        id: String(created.id),
+        companyId: String(created.company),
+        companyName: created.company_name || '',
+        departureCity: created.departure_city_name || String(created.departure_city),
+        arrivalCity: created.arrival_city_name || String(created.arrival_city),
+        departureTime: created.departure_time,
+        arrivalTime: created.arrival_time,
+        price: created.price,
+        duration: created.duration,
+        busType: created.bus_type,
+        capacity: created.capacity,
+        isActive: created.is_active,
+      }, ...prev]);
+
+      setShowNotification(true);
+      setNotificationData({ type: 'success', title: 'Trajet créé', message: 'Le trajet a été créé avec succès.' });
+    } catch (e) {
+      console.error('Error creating trip', e);
+      setShowNotification(true);
+      setNotificationData({ type: 'error', title: 'Erreur', message: 'Impossible de créer le trajet.' });
+    }
   };
 
   const handleEditTrip = (trip: Trip) => {
@@ -547,9 +566,10 @@ const CompanyDashboard: React.FC = () => {
           setShowAddTripModal(false);
           setEditingTrip(null);
         }}
-        onSave={handleAddTrip}
+        onSave={handleAddTrip as any}
         editingTrip={editingTrip}
         companies={[{ id: '1', name: 'TogoBus Express', isActive: true }]}
+        cities={apiCities}
       />
 
       <ConfirmationModal

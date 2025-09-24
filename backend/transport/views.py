@@ -168,6 +168,63 @@ class TripViewSet(viewsets.ModelViewSet):
     serializer_class = TripSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def perform_create(self, serializer):
+        user = self.request.user
+        # Staff can create for any company
+        if user.is_staff:
+            return serializer.save()
+
+        # Non-staff: must be admin of a company
+        companies_for_user = Company.objects.filter(Q(admin_user=user) | Q(admins=user))
+        if not companies_for_user.exists():
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Vous n'êtes pas autorisé à créer des trajets.")
+
+        # If client provided a company, ensure it's one of their companies
+        provided_company = serializer.validated_data.get('company') if hasattr(serializer, 'validated_data') else None
+        if provided_company:
+            if isinstance(provided_company, Company):
+                company_obj = provided_company
+            else:
+                # provided_company may be a primary key
+                try:
+                    company_obj = Company.objects.get(pk=provided_company)
+                except Company.DoesNotExist:
+                    from rest_framework.exceptions import ValidationError
+                    raise ValidationError({'company': 'Compagnie inexistante.'})
+
+            if not companies_for_user.filter(pk=company_obj.pk).exists():
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("Vous ne pouvez créer que des trajets pour vos compagnies.")
+
+            return serializer.save()
+
+        # No company provided: default to the first company the user administers
+        return serializer.save(company=companies_for_user.first())
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        if user.is_staff:
+            return serializer.save()
+
+        companies_for_user = Company.objects.filter(Q(admin_user=user) | Q(admins=user))
+        if not companies_for_user.exists():
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Vous n'êtes pas autorisé à modifier ce trajet.")
+
+        instance_company = serializer.instance.company
+        if not companies_for_user.filter(pk=instance_company.pk).exists():
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Vous ne pouvez modifier que les trajets de vos compagnies.")
+
+        # If attempting to change company, forbid it unless it's still one of their companies
+        new_company = serializer.validated_data.get('company') if hasattr(serializer, 'validated_data') else None
+        if new_company and (isinstance(new_company, Company) and not companies_for_user.filter(pk=new_company.pk).exists()):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Impossible d'assigner le trajet à une compagnie que vous ne gérez pas.")
+
+        return serializer.save()
+
     def get_queryset(self):
         queryset = Trip.objects.filter(is_active=True)
 

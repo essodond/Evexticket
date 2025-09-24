@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import apiService from '../services/api';
+import { useCities } from '../hooks/useApi';
 import { Users, Building, DollarSign, Plus, Edit, Trash2, Eye, Download, Filter, Bus, FileText, BarChart3 } from 'lucide-react';
 import AddCompanyModal from './AddCompanyModal';
 import AddTripModal from './AddTripModal';
@@ -65,6 +66,7 @@ const AdminDashboard: React.FC = () => {
 
   const [companies, setCompanies] = useState<Company[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
+  const { cities: apiCities } = useCities();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -204,10 +206,11 @@ const AdminDashboard: React.FC = () => {
   const handleAddTrip = (tripData: Omit<Trip, 'id' | 'companyName'>) => {
     (async () => {
       try {
-        const created = await apiService.createTrip({
+        // ensure numeric IDs are sent for company and cities
+        const payload: any = {
           company: Number(tripData.companyId),
-          departure_city: tripData.departureCity,
-          arrival_city: tripData.arrivalCity,
+          departure_city: Number(tripData.departureCity),
+          arrival_city: Number(tripData.arrivalCity),
           departure_time: tripData.departureTime,
           arrival_time: tripData.arrivalTime,
           price: tripData.price,
@@ -215,7 +218,9 @@ const AdminDashboard: React.FC = () => {
           bus_type: tripData.busType,
           capacity: tripData.capacity,
           is_active: tripData.isActive,
-        } as any);
+        };
+
+        const created = await apiService.createTrip(payload as any);
         setTrips(prev => [{
           id: String(created.id),
           companyId: String(created.company),
@@ -736,9 +741,10 @@ const AdminDashboard: React.FC = () => {
           setShowAddTripModal(false);
           setEditingTrip(null);
         }}
-        onSave={handleAddTrip}
+        onSave={handleAddTrip as any}
         editingTrip={editingTrip}
         companies={companies}
+        cities={apiCities}
       />
 
       <ExportTicketsModal
