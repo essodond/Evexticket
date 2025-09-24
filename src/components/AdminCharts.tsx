@@ -17,54 +17,74 @@ import {
   Cell
 } from 'recharts';
 
-interface AdminChartsProps {
-  className?: string;
+interface Company {
+  id: string;
+  name: string;
 }
 
-const AdminCharts: React.FC<AdminChartsProps> = ({ className = '' }) => {
-  // Données simulées pour les graphiques
-  const revenueData = [
-    { month: 'Jan', revenue: 1200000, bookings: 245 },
-    { month: 'Fév', revenue: 1350000, bookings: 267 },
-    { month: 'Mar', revenue: 1420000, bookings: 289 },
-    { month: 'Avr', revenue: 1580000, bookings: 312 },
-    { month: 'Mai', revenue: 1650000, bookings: 298 },
-    { month: 'Juin', revenue: 1720000, bookings: 325 },
-    { month: 'Juil', revenue: 1890000, bookings: 356 },
-    { month: 'Août', revenue: 1950000, bookings: 378 },
-    { month: 'Sep', revenue: 1820000, bookings: 342 },
-    { month: 'Oct', revenue: 1980000, bookings: 389 },
-    { month: 'Nov', revenue: 2100000, bookings: 412 },
-    { month: 'Déc', revenue: 2250000, bookings: 445 }
-  ];
+interface Trip {
+  id: string;
+  companyId: string;
+}
 
-  const userGrowthData = [
-    { month: 'Jan', newUsers: 45, totalUsers: 1200 },
-    { month: 'Fév', newUsers: 52, totalUsers: 1252 },
-    { month: 'Mar', newUsers: 48, totalUsers: 1300 },
-    { month: 'Avr', newUsers: 61, totalUsers: 1361 },
-    { month: 'Mai', newUsers: 55, totalUsers: 1416 },
-    { month: 'Juin', newUsers: 67, totalUsers: 1483 },
-    { month: 'Juil', newUsers: 72, totalUsers: 1555 },
-    { month: 'Août', newUsers: 68, totalUsers: 1623 },
-    { month: 'Sep', newUsers: 59, totalUsers: 1682 },
-    { month: 'Oct', newUsers: 74, totalUsers: 1756 },
-    { month: 'Nov', newUsers: 78, totalUsers: 1834 },
-    { month: 'Déc', newUsers: 85, totalUsers: 1919 }
-  ];
+interface AdminChartsProps {
+  className?: string;
+  stats?: {
+    totalUsers: number;
+    totalCompanies: number;
+    totalTrips: number;
+    totalBookings: number;
+    totalRevenue: number;
+    monthlyGrowth: number;
+  } | null;
+  companies?: Company[];
+  trips?: Trip[];
+}
 
-  const companyStats = [
-    { name: 'TogoBus Express', trips: 45, revenue: 820000, color: '#3B82F6' },
-    { name: 'Lomé Transport', trips: 32, revenue: 654000, color: '#10B981' },
-    { name: 'Kara Lines', trips: 28, revenue: 487000, color: '#F59E0B' },
-    { name: 'Togo Trans', trips: 24, revenue: 423000, color: '#EF4444' },
-    { name: 'Autres', trips: 18, revenue: 312000, color: '#8B5CF6' }
-  ];
+const AdminCharts: React.FC<AdminChartsProps> = ({ className = '', stats = null, companies = [], trips = [] }) => {
+  // Générer des séries de données à partir des statistiques réelles (fallback aux valeurs simulées)
+  const defaultRevenue = stats?.totalRevenue ?? 2250000;
+  const defaultTotalUsers = stats?.totalUsers ?? 1919;
+  const defaultTotalTrips = stats?.totalTrips ?? 356;
 
+  // Répartir le revenu sur 12 mois de façon simple
+  const baseMonthly = Math.round(defaultRevenue / 12);
+  const revenueData = Array.from({ length: 12 }).map((_, i) => ({
+    month: ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'][i],
+    revenue: Math.round(baseMonthly * (1 + ((i / 11) * (stats?.monthlyGrowth ? stats.monthlyGrowth / 100 : 0.15)))),
+    bookings: Math.max(0, Math.round((stats?.totalBookings ?? 445) / 12))
+  }));
+
+  // Générer une courbe de croissance utilisateurs simple
+  const totalUsers = defaultTotalUsers;
+  const monthlyIncrease = stats?.monthlyGrowth ? Math.max(1, Math.round((stats.monthlyGrowth / 100) * totalUsers / 12)) : 50;
+  let cumulative = Math.max(0, totalUsers - monthlyIncrease * 11);
+  const userGrowthData = Array.from({ length: 12 }).map((_, i) => {
+    const newUsers = monthlyIncrease + Math.round((i / 11) * monthlyIncrease);
+    cumulative += newUsers;
+    return { month: ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'][i], newUsers, totalUsers: Math.max(cumulative, newUsers) };
+  });
+
+  // Composer les stats par compagnie en utilisant les trajets existants
+  const tripCountsByCompany: Record<string, number> = {};
+  trips.forEach(t => { tripCountsByCompany[t.companyId] = (tripCountsByCompany[t.companyId] || 0) + 1; });
+  const totalTripsCount = Object.values(tripCountsByCompany).reduce((s, v) => s + v, 0) || defaultTotalTrips;
+
+  const palette = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4'];
+  const companyStats = (companies.length ? companies : [{ id: '0', name: 'Aucune' }]).map((c, idx) => {
+    const tripsFor = tripCountsByCompany[c.id] || 0;
+    const revenue = Math.round(defaultRevenue * (tripsFor / Math.max(1, totalTripsCount)));
+    return { name: c.name, trips: tripsFor, revenue, color: palette[idx % palette.length] };
+  }).slice(0, 6);
+
+  // Statut des réservations: pas de liste complète ici, on utilise une estimation basée sur totals
+  const confirmed = Math.round((stats?.totalBookings ?? 445) * 0.75);
+  const pending = Math.round((stats?.totalBookings ?? 445) * 0.18);
+  const cancelled = Math.max(0, (stats?.totalBookings ?? 445) - confirmed - pending);
   const bookingStatusData = [
-    { name: 'Confirmés', value: 78, color: '#10B981' },
-    { name: 'En attente', value: 15, color: '#F59E0B' },
-    { name: 'Annulés', value: 7, color: '#EF4444' }
+    { name: 'Confirmés', value: confirmed, color: '#10B981' },
+    { name: 'En attente', value: pending, color: '#F59E0B' },
+    { name: 'Annulés', value: cancelled, color: '#EF4444' }
   ];
 
   const formatCurrency = (value: number) => {

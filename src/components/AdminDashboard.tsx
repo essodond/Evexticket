@@ -313,8 +313,8 @@ const AdminDashboard: React.FC = () => {
         </button>
       </div>
 
-      {/* Graphiques d'analyse */}
-      <AdminCharts />
+  {/* Graphiques d'analyse */}
+  <AdminCharts stats={stats} companies={companies} trips={trips} />
     </div>
   );
 
