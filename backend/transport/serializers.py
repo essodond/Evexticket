@@ -61,7 +61,7 @@ class CompanySerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'description', 'address', 'phone', 'email', 
             'website', 'logo', 'is_active', 'created_at', 'updated_at',
-            'admin_user', 'admins', 'trips_count'
+            'admin_user', 'admins', 'trips_count', 'admin_email', 'admin_password'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'trips_count']
 
