@@ -84,7 +84,24 @@ const AdminDashboard: React.FC = () => {
 
         if (!mounted) return;
 
-        setStats(statsData as any);
+        // Normaliser les clés renvoyées par l'API (snake_case) vers camelCase
+        const s: any = statsData || {};
+        const normalized = {
+          totalUsers: s.total_users ?? s.totalUsers ?? 0,
+          totalCompanies: s.total_companies ?? s.totalCompanies ?? 0,
+          totalTrips: s.total_trips ?? s.totalTrips ?? 0,
+          totalBookings: s.total_bookings ?? s.totalBookings ?? 0,
+          totalRevenue: s.total_revenue ?? s.totalRevenue ?? 0,
+          monthlyGrowth: s.monthly_growth ?? s.monthlyGrowth ?? 0,
+        };
+        // Si l'API n'a pas retourné de chiffres mais qu'on a des données listes, utiliser des fallback
+        if ((normalized.totalCompanies === 0 || normalized.totalCompanies === null) && Array.isArray(companiesData) && (companiesData as any[]).length > 0) {
+          normalized.totalCompanies = (companiesData as any[]).length;
+        }
+        if ((normalized.totalTrips === 0 || normalized.totalTrips === null) && Array.isArray(tripsData) && (tripsData as any[]).length > 0) {
+          normalized.totalTrips = (tripsData as any[]).length;
+        }
+        setStats(normalized as any);
         // Adapter les données pour les types locaux si nécessaire
         setCompanies((companiesData as any[]).map(c => ({
           id: String(c.id),
