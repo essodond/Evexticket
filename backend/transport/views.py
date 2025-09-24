@@ -170,13 +170,13 @@ class TripViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = Trip.objects.filter(is_active=True)
-        
+
         if not self.request.user.is_staff:
             # Si l'utilisateur est admin d'une compagnie (legacy ou nouveau), limiter
-            companies_for_user = Company.objects.filter(models.Q(admin_user=self.request.user) | models.Q(admins=self.request.user))
+            companies_for_user = Company.objects.filter(Q(admin_user=self.request.user) | Q(admins=self.request.user))
             if companies_for_user.exists():
                 queryset = queryset.filter(company__in=companies_for_user)
-        
+
         return queryset
 
     @action(detail=False, methods=['post'])
@@ -236,26 +236,34 @@ class DashboardStatsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if not request.user.is_staff:
-            return Response({'error': 'Accès non autorisé'}, status=status.HTTP_403_FORBIDDEN)
-        
-        total_users = User.objects.count()
-        total_companies = Company.objects.count()
-        total_trips = Trip.objects.count()
-        total_bookings = Booking.objects.count()
-        
-        total_revenue = Booking.objects.filter(
-            status='confirmed'
-        ).aggregate(total=Sum('total_price'))['total'] or 0
-        
-        stats_data = {
-            'total_users': total_users,
-            'total_companies': total_companies,
-            'total_trips': total_trips,
-            'total_bookings': total_bookings,
-            'total_revenue': total_revenue,
-            'monthly_growth': 18.5
-        }
-        
-        serializer = DashboardStatsSerializer(stats_data)
-        return Response(serializer.data)
+        import logging, traceback
+        logger = logging.getLogger(__name__)
+
+        try:
+            if not request.user.is_staff:
+                return Response({'error': 'Accès non autorisé'}, status=status.HTTP_403_FORBIDDEN)
+
+            total_users = User.objects.count()
+            total_companies = Company.objects.count()
+            total_trips = Trip.objects.count()
+            total_bookings = Booking.objects.count()
+
+            total_revenue = Booking.objects.filter(
+                status='confirmed'
+            ).aggregate(total=Sum('total_price'))['total'] or 0
+
+            stats_data = {
+                'total_users': total_users,
+                'total_companies': total_companies,
+                'total_trips': total_trips,
+                'total_bookings': total_bookings,
+                'total_revenue': total_revenue,
+                'monthly_growth': 18.5
+            }
+
+            serializer = DashboardStatsSerializer(stats_data)
+            return Response(serializer.data)
+        except Exception as e:
+            tb = traceback.format_exc()
+            logger.error('Error in DashboardStatsView.get: %s\n%s', str(e), tb)
+            return Response({'error': 'Erreur serveur lors du calcul des statistiques', 'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
