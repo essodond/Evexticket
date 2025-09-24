@@ -126,8 +126,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode, onBack, onSuccess, onSwitchMo
           </h2>
           <p className="mt-2 text-gray-600">
             {mode === 'login' 
-              ? 'Connectez-vous à votre compte TogoTrans' 
-              : 'Rejoignez TogoTrans et commencez à voyager'
+              ? 'Connectez-vous à votre compte Evexticket' 
+              : 'Rejoignez Evexticket et commencez à voyager'
             }
           </p>
         </div>

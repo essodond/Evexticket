@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bus, MapPin, Clock, Shield, Users, Star, ArrowRight, CheckCircle } from 'lucide-react';
+import { Bus, MapPin, Clock, Shield, Users, Star, ArrowRight } from 'lucide-react';
 
 interface LandingPageProps {
   onNavigateToAuth: (mode: 'login' | 'register') => void;
@@ -7,7 +7,7 @@ interface LandingPageProps {
 }
 
 const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateToHome }) => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn] = useState(false);
 
   const handleReserveTicket = () => {
     if (isLoggedIn) {
@@ -120,7 +120,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateT
               <div className="bg-gradient-to-r from-blue-500 to-green-500 rounded-2xl p-8 text-white">
                 <div className="text-center">
                   <Bus className="w-24 h-24 mx-auto mb-4" />
-                  <h3 className="text-2xl font-bold mb-2">TogoTrans</h3>
+                  <h3 className="text-2xl font-bold mb-2">Evexticket</h3>
                   <p className="text-blue-100">Votre transport, notre passion</p>
                 </div>
               </div>
