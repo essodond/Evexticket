@@ -143,6 +143,13 @@ class CompanyViewSet(viewsets.ModelViewSet):
         serializer = TripSerializer(trips, many=True)
         return Response(serializer.data)
 
+        def perform_create(self, serializer):
+            user = self.request.user
+            if not user.is_staff:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("Seul un administrateur peut créer une compagnie.")
+            serializer.save(admin_user=user)
+
 
 class TripViewSet(viewsets.ModelViewSet):
     """ViewSet pour les trajets"""
