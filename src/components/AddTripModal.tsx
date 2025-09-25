@@ -38,6 +38,18 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
   companies,
   cities: propCities
 }) => {
+  // Helper pour calculer la durée en minutes (gère le lendemain)
+  const computeDurationMinutes = (dep: string, arr: string) => {
+    if (!dep || !arr) return 0;
+    const depTime = new Date(`2000-01-01T${dep}`);
+    const arrTime = new Date(`2000-01-01T${arr}`);
+    if (arrTime < depTime) {
+      arrTime.setDate(arrTime.getDate() + 1);
+    }
+    const diffMs = arrTime.getTime() - depTime.getTime();
+    return Math.round(diffMs / (1000 * 60));
+  };
+
   const [formData, setFormData] = useState({
     companyId: editingTrip?.companyId || '',
     departureCity: editingTrip?.departureCity || '',
@@ -107,20 +119,10 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
 
   const calculateDuration = () => {
     if (formData.departureTime && formData.arrivalTime) {
-      const depTime = new Date(`2000-01-01T${formData.departureTime}`);
-      const arrTime = new Date(`2000-01-01T${formData.arrivalTime}`);
-      
-      if (arrTime < depTime) {
-        // Si l'heure d'arrivée est le lendemain
-        arrTime.setDate(arrTime.getDate() + 1);
-      }
-      
-      const diffMs = arrTime.getTime() - depTime.getTime();
-      const diffHours = Math.round(diffMs / (1000 * 60 * 60));
-      
+      const minutes = computeDurationMinutes(formData.departureTime, formData.arrivalTime);
       setFormData(prev => ({
         ...prev,
-        duration: diffHours
+        duration: minutes
       }));
     }
   };
@@ -152,6 +154,17 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
       newErrors.arrivalTime = 'L\'heure d\'arrivée est requise';
     }
 
+    // Calculer et valider que la durée est strictement positive (en minutes)
+    const minutes = computeDurationMinutes(formData.departureTime, formData.arrivalTime);
+    if (minutes <= 0) {
+      newErrors.arrivalTime = 'La durée du trajet doit être supérieure à 0 minute';
+    } else {
+      // synchroniser la durée calculée
+      if (formData.duration !== minutes) {
+        setFormData(prev => ({ ...prev, duration: minutes }));
+      }
+    }
+
     if (formData.price <= 0) {
       newErrors.price = 'Le prix doit être supérieur à 0';
     }
@@ -167,11 +180,17 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // s'assurer que la durée est calculée correctement juste avant l'envoi
+    const minutes = computeDurationMinutes(formData.departureTime, formData.arrivalTime);
+    if (minutes !== formData.duration) {
+      setFormData(prev => ({ ...prev, duration: minutes }));
+    }
+    
     if (!validateForm()) return;
 
     setIsLoading(true);
     
-    // Préparer payload normalisé attendu par l'API
+    // Préparer payload normalisé attendu par l'API (durée en minutes)
     const payload: any = {
       company: formData.companyId ? Number(formData.companyId) : null,
       departure_city: formData.departureCity ? Number(formData.departureCity) : null,
@@ -179,7 +198,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
       departure_time: formData.departureTime,
       arrival_time: formData.arrivalTime,
       price: Number(formData.price),
-      duration: Number(formData.duration),
+      duration: Number(minutes),
       bus_type: formData.busType,
       capacity: Number(formData.capacity),
       is_active: Boolean(formData.isActive),
