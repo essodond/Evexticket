@@ -350,6 +350,40 @@ const AdminDashboard: React.FC = () => {
     { id: 'reports', label: 'Rapports', icon: FileText }
   ];
 
+  // --- Persist active tab in URL and localStorage so a page reload keeps the same tab ---
+  useEffect(() => {
+    try {
+      // Priority: URL query param `tab` -> localStorage -> default state
+      const params = new URLSearchParams(window.location.search);
+      const tabFromUrl = params.get('tab');
+      if (tabFromUrl) {
+        setActiveTab(tabFromUrl);
+      } else {
+        const saved = localStorage.getItem('admin_active_tab');
+        if (saved) setActiveTab(saved);
+      }
+    } catch (e) {
+      // ignore (e.g., SSR or unavailable window)
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (activeTab) {
+        params.set('tab', activeTab);
+      } else {
+        params.delete('tab');
+      }
+      const newUrl = window.location.pathname + (Array.from(params.keys()).length ? `?${params.toString()}` : '');
+      // replaceState to avoid polluting history on tab switches
+      window.history.replaceState(null, '', newUrl);
+      localStorage.setItem('admin_active_tab', activeTab);
+    } catch (e) {
+      // ignore
+    }
+  }, [activeTab]);
+
   const renderOverview = () => (
     <div className="space-y-6">
       {/* Stats Cards */}
