@@ -60,6 +60,7 @@ const AdminDashboard: React.FC = () => {
     message: ''
   });
   const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
+  const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
 
   // State pour données réelles
@@ -161,24 +162,39 @@ const AdminDashboard: React.FC = () => {
     return () => { mounted = false };
   }, []);
 
-  const handleAddCompany = (companyData: Omit<Company, 'id' | 'createdAt'>) => {
-    // Appel API pour créer la compagnie
-    (async () => {
-      try {
-        const payload: any = {
-          name: companyData.name,
-          description: companyData.description,
-          address: companyData.address,
-          phone: companyData.phone,
-          email: companyData.email,
-          website: companyData.website,
-          logo: companyData.logo,
-          is_active: companyData.isActive,
-        };
-        // Forward optional admin credentials if present
-        if ((companyData as any).admin_email) payload.admin_email = (companyData as any).admin_email;
-        if ((companyData as any).admin_password) payload.admin_password = (companyData as any).admin_password;
+  const handleAddCompany = async (companyData: any) => {
+    const payload: any = {
+      name: companyData.name,
+      description: companyData.description,
+      address: companyData.address,
+      phone: companyData.phone,
+      email: companyData.email,
+      website: companyData.website,
+      logo: companyData.logo,
+      is_active: companyData.isActive,
+    };
+    if ((companyData as any).admin_email) payload.admin_email = (companyData as any).admin_email;
+    if ((companyData as any).admin_password) payload.admin_password = (companyData as any).admin_password;
 
+    try {
+      const idToUse = companyData.id ?? editingCompany?.id;
+      if (idToUse) {
+        // Update existing company
+        const updated = await apiService.updateCompany(Number(idToUse), payload);
+        setCompanies(prev => prev.map(c => c.id === String(updated.id) ? ({
+          id: String(updated.id),
+          name: updated.name,
+          description: updated.description || '',
+          address: updated.address || '',
+          phone: updated.phone || '',
+          email: updated.email || '',
+          website: updated.website || '',
+          logo: updated.logo || '',
+          isActive: updated.is_active,
+          createdAt: updated.created_at,
+        }) : c));
+        setNotificationData({ type: 'success', title: 'Modification réussie', message: `La compagnie « ${updated.name} » a été mise à jour.` });
+      } else {
         const created = await apiService.createCompany(payload as any);
         setCompanies(prev => [{
           id: String(created.id),
@@ -192,18 +208,17 @@ const AdminDashboard: React.FC = () => {
           isActive: created.is_active,
           createdAt: created.created_at,
         }, ...prev]);
-      } catch (err) {
-        console.error('Erreur création compagnie', err);
-        // Try to display server validation errors if available
-        if (err && typeof err === 'object' && (err as any).response && (err as any).response.data) {
-          const data = (err as any).response.data;
-          const messages = Object.entries(data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join('\n');
-          alert(`Erreur lors de la création de la compagnie:\n${messages}`);
-        } else {
-          alert('Erreur lors de la création de la compagnie');
-        }
+        setNotificationData({ type: 'success', title: 'Création réussie', message: `La compagnie « ${created.name} » a été créée.` });
       }
-    })();
+    } catch (err: any) {
+      console.error('Erreur création/modification compagnie', err);
+      const msg = err?.data?.detail || err?.message || 'Erreur lors de l\'opération';
+      setNotificationData({ type: 'error', title: 'Erreur', message: String(msg) });
+    } finally {
+      setShowNotification(true);
+      setShowAddCompanyModal(false);
+      setEditingCompany(null);
+    }
   };
 
   const handleEditCompany = (company: Company) => {
@@ -238,39 +253,63 @@ const AdminDashboard: React.FC = () => {
 
   const handleAddTrip = (tripData: Omit<Trip, 'id' | 'companyName'>) => {
     (async () => {
-      try {
-        // ensure numeric IDs are sent for company and cities
-        const payload: any = {
-          company: Number(tripData.companyId),
-          departure_city: Number(tripData.departureCity),
-          arrival_city: Number(tripData.arrivalCity),
-          departure_time: tripData.departureTime,
-          arrival_time: tripData.arrivalTime,
-          price: tripData.price,
-          duration: tripData.duration,
-          bus_type: tripData.busType,
-          capacity: tripData.capacity,
-          is_active: tripData.isActive,
-        };
+      const payload: any = {
+        company: tripData.companyId ? Number(tripData.companyId) : null,
+        departure_city: tripData.departureCity ? Number(tripData.departureCity) : null,
+        arrival_city: tripData.arrivalCity ? Number(tripData.arrivalCity) : null,
+        departure_time: tripData.departureTime,
+        arrival_time: tripData.arrivalTime,
+        price: tripData.price,
+        duration: tripData.duration,
+        bus_type: tripData.busType,
+        capacity: tripData.capacity,
+        is_active: tripData.isActive,
+      };
 
-        const created = await apiService.createTrip(payload as any);
-        setTrips(prev => [{
-          id: String(created.id),
-          companyId: String(created.company),
-          companyName: created.company_name || '',
-          departureCity: created.departure_city_name || String(created.departure_city),
-          arrivalCity: created.arrival_city_name || String(created.arrival_city),
-          departureTime: created.departure_time,
-          arrivalTime: created.arrival_time,
-          price: created.price,
-          duration: created.duration,
-          busType: created.bus_type,
-          capacity: created.capacity,
-          isActive: created.is_active,
-        }, ...prev]);
-      } catch (err) {
-        console.error('Erreur création trajet', err);
-        alert('Erreur lors de la création du trajet');
+      try {
+        if (editingTrip) {
+          const updated = await apiService.updateTrip(Number(editingTrip.id), payload);
+          setTrips(prev => prev.map(t => t.id === String(updated.id) ? ({
+            id: String(updated.id),
+            companyId: String(updated.company),
+            companyName: updated.company_name || '',
+            departureCity: updated.departure_city_name || String(updated.departure_city),
+            arrivalCity: updated.arrival_city_name || String(updated.arrival_city),
+            departureTime: updated.departure_time,
+            arrivalTime: updated.arrival_time,
+            price: updated.price,
+            duration: updated.duration,
+            busType: updated.bus_type,
+            capacity: updated.capacity,
+            isActive: updated.is_active,
+          }) : t));
+          setNotificationData({ type: 'success', title: 'Modification réussie', message: `Le trajet a été mis à jour.` });
+        } else {
+          const created = await apiService.createTrip(payload as any);
+          setTrips(prev => [{
+            id: String(created.id),
+            companyId: String(created.company),
+            companyName: created.company_name || '',
+            departureCity: created.departure_city_name || String(created.departure_city),
+            arrivalCity: created.arrival_city_name || String(created.arrival_city),
+            departureTime: created.departure_time,
+            arrivalTime: created.arrival_time,
+            price: created.price,
+            duration: created.duration,
+            busType: created.bus_type,
+            capacity: created.capacity,
+            isActive: created.is_active,
+          }, ...prev]);
+          setNotificationData({ type: 'success', title: 'Création réussie', message: `Le trajet a été créé.` });
+        }
+      } catch (err: any) {
+        console.error('Erreur création/modification trajet', err);
+        const msg = err?.data?.detail || err?.message || 'Erreur lors de l\'opération';
+        setNotificationData({ type: 'error', title: 'Erreur', message: String(msg) });
+      } finally {
+        setShowNotification(true);
+        setShowAddTripModal(false);
+        setEditingTrip(null);
       }
     })();
   };
@@ -278,6 +317,24 @@ const AdminDashboard: React.FC = () => {
   const handleEditTrip = (trip: Trip) => {
     setEditingTrip(trip);
     setShowAddTripModal(true);
+  };
+
+  const handleDeleteTrip = (trip: Trip) => {
+    setTripToDelete(trip);
+  };
+
+  const confirmDeleteTrip = async () => {
+    if (!tripToDelete) return;
+    try {
+      await apiService.deleteTrip(Number(tripToDelete.id));
+      setTrips(prev => prev.filter(t => t.id !== tripToDelete.id));
+      setNotificationData({ type: 'success', title: 'Suppression réussie', message: `Le trajet a été supprimé.` });
+    } catch (err) {
+      console.error('Erreur suppression trajet', err);
+      setNotificationData({ type: 'error', title: 'Erreur de suppression', message: `La suppression du trajet a échoué.` });
+    }
+    setShowNotification(true);
+    setTripToDelete(null);
   };
 
   const handleExportTickets = (format: 'pdf' | 'excel', filters: any) => {
@@ -516,7 +573,7 @@ const AdminDashboard: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
                       <button onClick={() => handleEditTrip(trip)} className="text-blue-600 hover:text-blue-900"><Edit className="w-4 h-4" /></button>
-                      <button className="text-red-600 hover:text-red-900"><Trash2 className="w-4 h-4" /></button>
+                      <button onClick={() => handleDeleteTrip(trip)} className="text-red-600 hover:text-red-900"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </td>
                 </tr>
@@ -701,6 +758,25 @@ const AdminDashboard: React.FC = () => {
               <button
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                 onClick={confirmDeleteCompany}
+              >Supprimer</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal de confirmation suppression trajet */}
+      {tripToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+            <h2 className="text-xl font-bold mb-4">Confirmer la suppression du trajet</h2>
+            <p className="mb-6">Êtes-vous sûr de vouloir supprimer ce trajet de <b>{tripToDelete.companyName}</b> ({tripToDelete.departureCity} → {tripToDelete.arrivalCity}) ?</p>
+            <div className="flex justify-end space-x-4">
+              <button
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                onClick={() => setTripToDelete(null)}
+              >Annuler</button>
+              <button
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                onClick={confirmDeleteTrip}
               >Supprimer</button>
             </div>
           </div>
