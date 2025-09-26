@@ -26,6 +26,16 @@ const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
   onSave, 
   editingCompany 
 }) => {
+  // Determine current user role from localStorage. Only global admins (is_staff)
+  // may create an administrator account en même temps que la compagnie.
+  let currentUser: any = null;
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('user') : null;
+    currentUser = raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    currentUser = null;
+  }
+  const canCreateCompanyAdmin = !!(currentUser && currentUser.is_staff);
   const [formData, setFormData] = useState({
     name: editingCompany?.name || '',
     description: editingCompany?.description || '',
@@ -119,10 +129,13 @@ const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
 
     setIsLoading(true);
     
-    // Envoyer les données (incluant admin si renseigné)
+    // Envoyer les données (incluant admin si renseigné et si l'utilisateur a le droit)
     setTimeout(() => {
       setIsLoading(false);
-      onSave({ ...formData, admin_email: adminData.adminEmail || undefined, admin_password: adminData.adminPassword || undefined } as any);
+      const payload: any = { ...formData };
+      if (canCreateCompanyAdmin && adminData.adminEmail) payload.admin_email = adminData.adminEmail;
+      if (canCreateCompanyAdmin && adminData.adminPassword) payload.admin_password = adminData.adminPassword;
+      onSave(payload as any);
       onClose();
     }, 500);
   };
@@ -289,52 +302,56 @@ const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
               )}
             </div>
 
-            {/* Admin creation fields (optional) */}
-            <div>
-              <label htmlFor="adminEmail" className="block text-sm font-medium text-gray-700 mb-2">
-                Email administrateur (optionnel)
-              </label>
-              <input
-                type="email"
-                id="adminEmail"
-                name="adminEmail"
-                value={adminData.adminEmail}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.adminEmail ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="admin@companystore.tg"
-              />
-              {errors.adminEmail && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <AlertCircle className="w-4 h-4 mr-1" />
-                  {errors.adminEmail}
-                </p>
-              )}
-            </div>
+            {/* Admin creation fields (optional) - only visible to global admins */}
+            {canCreateCompanyAdmin && (
+              <>
+                <div>
+                  <label htmlFor="adminEmail" className="block text-sm font-medium text-gray-700 mb-2">
+                    Email administrateur (optionnel)
+                  </label>
+                  <input
+                    type="email"
+                    id="adminEmail"
+                    name="adminEmail"
+                    value={adminData.adminEmail}
+                    onChange={handleInputChange}
+                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      errors.adminEmail ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="admin@companystore.tg"
+                  />
+                  {errors.adminEmail && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center">
+                      <AlertCircle className="w-4 h-4 mr-1" />
+                      {errors.adminEmail}
+                    </p>
+                  )}
+                </div>
 
-            <div>
-              <label htmlFor="adminPassword" className="block text-sm font-medium text-gray-700 mb-2">
-                Mot de passe administrateur (optionnel)
-              </label>
-              <input
-                type="password"
-                id="adminPassword"
-                name="adminPassword"
-                value={adminData.adminPassword}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.adminPassword ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="Saisissez un mot de passe sécurisé"
-              />
-              {errors.adminPassword && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <AlertCircle className="w-4 h-4 mr-1" />
-                  {errors.adminPassword}
-                </p>
-              )}
-            </div>
+                <div>
+                  <label htmlFor="adminPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                    Mot de passe administrateur (optionnel)
+                  </label>
+                  <input
+                    type="password"
+                    id="adminPassword"
+                    name="adminPassword"
+                    value={adminData.adminPassword}
+                    onChange={handleInputChange}
+                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      errors.adminPassword ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Saisissez un mot de passe sécurisé"
+                  />
+                  {errors.adminPassword && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center">
+                      <AlertCircle className="w-4 h-4 mr-1" />
+                      {errors.adminPassword}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
 
             {/* Site web */}
             <div>
