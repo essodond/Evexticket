@@ -6,6 +6,7 @@ import AddCompanyModal from './AddCompanyModal';
 import AddTripModal from './AddTripModal';
 import ExportTicketsModal from './ExportTicketsModal';
 import AdminCharts from './AdminCharts';
+import NotificationModal from './NotificationModal';
 
 interface Company {
   id: string;
@@ -474,7 +475,121 @@ const AdminDashboard: React.FC = () => {
         </div>
       </div>
     </div>
-    {/* ...rendu du tableau... */}
+  );
+
+  const renderTrips = () => (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">Gestion des trajets</h2>
+        <button
+          onClick={() => setShowAddTripModal(true)}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Ajouter un trajet
+        </button>
+      </div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trajet</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Compagnie</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Horaires</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Prix</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {trips.map((trip) => (
+                <tr key={trip.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">{trip.departureCity} → {trip.arrivalCity}</div>
+                    <div className="text-sm text-gray-500">{trip.duration}h de trajet</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{trip.companyName}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><div>{trip.departureTime} - {trip.arrivalTime}</div></td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{trip.price.toLocaleString()} FCFA</td>
+                  <td className="px-6 py-4 whitespace-nowrap"><span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">{trip.busType}</span></td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex space-x-2">
+                      <button onClick={() => handleEditTrip(trip)} className="text-blue-600 hover:text-blue-900"><Edit className="w-4 h-4" /></button>
+                      <button className="text-red-600 hover:text-red-900"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderUsers = () => (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">Gestion des utilisateurs</h2>
+        <div className="flex space-x-2">
+          <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center"><Filter className="w-4 h-4 mr-2" />Filtrer</button>
+          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"><Download className="w-4 h-4 mr-2" />Exporter</button>
+        </div>
+      </div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Utilisateur</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rôle</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Inscription</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {users.map((user) => (
+                <tr key={user.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 h-10 w-10">
+                        <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center"><Users className="h-6 w-6 text-gray-600" /></div>
+                      </div>
+                      <div className="ml-4"><div className="text-sm font-medium text-gray-900">{user.firstName} {user.lastName}</div></div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-900">{user.email}</div><div className="text-sm text-gray-500">{user.phone}</div></td>
+                  <td className="px-6 py-4 whitespace-nowrap"><span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${user.role === 'admin' ? 'bg-red-100 text-red-800' : user.role === 'company' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>{user.role === 'admin' ? 'Admin' : user.role === 'company' ? 'Compagnie' : 'Utilisateur'}</span></td>
+                  <td className="px-6 py-4 whitespace-nowrap"><span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{user.isActive ? 'Actif' : 'Inactif'}</span></td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(user.createdAt).toLocaleDateString('fr-FR')}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex space-x-2">
+                      <button className="text-blue-600 hover:text-blue-900"><Eye className="w-4 h-4" /></button>
+                      <button className="text-green-600 hover:text-green-900"><Edit className="w-4 h-4" /></button>
+                      <button className="text-red-600 hover:text-red-900"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderReports = () => (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold text-gray-900">Rapports et exports</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <button onClick={() => setShowExportModal(true)} className="p-6 bg-white border border-gray-200 rounded-xl hover:shadow-md transition-shadow text-left"><FileText className="w-8 h-8 text-blue-600 mb-4" /><h3 className="text-lg font-semibold text-gray-900 mb-2">Export des tickets</h3><p className="text-sm text-gray-600">Générer des rapports de tickets en PDF ou Excel</p></button>
+        <button className="p-6 bg-white border border-gray-200 rounded-xl hover:shadow-md transition-shadow text-left"><BarChart3 className="w-8 h-8 text-green-600 mb-4" /><h3 className="text-lg font-semibold text-gray-900 mb-2">Rapport financier</h3><p className="text-sm text-gray-600">Analyser les revenus et performances</p></button>
+        <button className="p-6 bg-white border border-gray-200 rounded-xl hover:shadow-md transition-shadow text-left"><Users className="w-8 h-8 text-purple-600 mb-4" /><h3 className="text-lg font-semibold text-gray-900 mb-2">Rapport utilisateurs</h3><p className="text-sm text-gray-600">Statistiques d'utilisation et engagement</p></button>
+      </div>
+    </div>
   );
 
 
