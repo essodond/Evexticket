@@ -95,13 +95,30 @@ function App() {
     setPaymentData(null);
   };
 
-  // On app mount, restore auth token from localStorage if present
+  // On app mount, restore auth token and user data from localStorage if present
   useEffect(() => {
     try {
       const token = typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null;
       if (token) {
         apiService.setAuthToken(token);
         setIsAuthenticated(true);
+        // Restore user data if available
+        const savedUser = typeof localStorage !== 'undefined' ? localStorage.getItem('user') : null;
+        if (savedUser) {
+          const user = JSON.parse(savedUser);
+          setCurrentUser(user);
+          // Redirect based on role
+          if (user.is_staff) {
+            setCurrentView('admin-dashboard');
+            localStorage.setItem('currentView', 'admin-dashboard');
+            return;
+          }
+          if (user.is_company_admin) {
+            setCurrentView('company-dashboard');
+            localStorage.setItem('currentView', 'company-dashboard');
+            return;
+          }
+        }
         // Restore previous view if available, otherwise go to home
         const savedView = localStorage.getItem('currentView') as ViewType | null;
         if (savedView) {
@@ -111,7 +128,7 @@ function App() {
         }
       }
     } catch (e) {
-      console.warn('Could not restore auth token:', e);
+      console.warn('Could not restore auth token or user data:', e);
     }
   }, []);
 
