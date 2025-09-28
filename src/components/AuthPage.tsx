@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { apiService } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import { Bus, ArrowLeft, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface AuthPageProps {
@@ -71,6 +71,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode, onBack, onSuccess, onSwitchMo
     return Object.keys(newErrors).length === 0;
   };
 
+  const auth = useAuth();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
@@ -82,8 +84,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode, onBack, onSuccess, onSwitchMo
     //   décider quelle vue afficher (admin vs company dashboard).
     if (mode === 'register') {
       try {
-        const resp = await apiService.register({
-          username: formData.email, // ou un champ username si vous en avez un
+        const respUser = await auth.register({
+          username: formData.email,
           email: formData.email,
           password: formData.password,
           password2: formData.confirmPassword,
@@ -91,16 +93,16 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode, onBack, onSuccess, onSwitchMo
           last_name: formData.lastName,
         });
         setIsLoading(false);
-        onSuccess(resp.user);
+        onSuccess(respUser);
       } catch (error: any) {
         setIsLoading(false);
         setErrors({ email: error.message || 'Erreur lors de la création du compte' });
       }
     } else {
       try {
-  const resp = await apiService.login(formData.email, formData.password);
-  setIsLoading(false);
-  onSuccess(resp.user);
+        const respUser = await auth.login(formData.email, formData.password);
+        setIsLoading(false);
+        onSuccess(respUser);
       } catch (error: any) {
         setIsLoading(false);
         setErrors({ email: error.message || 'Erreur lors de la connexion' });

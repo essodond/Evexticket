@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import apiService from './services/api';
+import { AuthProvider } from './contexts/AuthContext';
+import { Routes, Route, useNavigate } from 'react-router-dom';
+import ProtectedRoute from './components/ProtectedRoute';
 import LandingPage from './components/LandingPage';
 import AuthPage from './components/AuthPage';
 import HomePage from './components/HomePage';
@@ -10,7 +13,6 @@ import ConfirmationPage from './components/ConfirmationPage';
 import CompanyDashboard from './components/CompanyDashboard';
 import AdminDashboard from './components/AdminDashboard';
 
-type ViewType = 'landing' | 'auth' | 'home' | 'results' | 'booking' | 'payment' | 'confirmation' | 'company-dashboard' | 'admin-dashboard';
 type AuthMode = 'login' | 'register';
 
 function App() {
@@ -22,150 +24,92 @@ function App() {
   // - la persistance simple de la 'vue' dans localStorage pour restaurer l'état après un reload
   // Si vous migrez vers une architecture plus grosse, il est recommandé de remplacer
   // ce pattern par un contexte d'authentification (AuthContext) et un routeur (react-router).
-  const [currentView, setCurrentView] = useState<ViewType>('landing');
+  // Routing replaces the older `currentView` state; keep minimal state for UI flows
   const [authMode, setAuthMode] = useState<AuthMode>('login');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const [isAuthenticated] = useState(false);
   const [searchData, setSearchData] = useState<any>(null);
   const [selectedTrip, setSelectedTrip] = useState<any>(null);
   const [bookingData, setBookingData] = useState<any>(null);
   const [paymentData, setPaymentData] = useState<any>(null);
 
+  const navigate = useNavigate();
+
   const handleSearch = (data: any) => {
     setSearchData(data);
-    setCurrentView('results');
     localStorage.setItem('currentView', 'results');
+    navigate('/results');
   };
 
   const handleTripSelect = (trip: any) => {
     setSelectedTrip(trip);
-    setCurrentView('booking');
     localStorage.setItem('currentView', 'booking');
+    navigate('/booking');
   };
 
   const handleProceedToPayment = (data: any) => {
     setBookingData(data);
-    setCurrentView('payment');
     localStorage.setItem('currentView', 'payment');
+    navigate('/payment');
   };
 
   const handlePaymentSuccess = (data: any) => {
     setPaymentData(data);
-    setCurrentView('confirmation');
     localStorage.setItem('currentView', 'confirmation');
+    navigate('/confirmation');
   };
 
   const handleNewBooking = () => {
-    setCurrentView('home');
-    localStorage.setItem('currentView', 'home');
     setSearchData(null);
     setSelectedTrip(null);
     setBookingData(null);
     setPaymentData(null);
+    localStorage.setItem('currentView', 'home');
+    navigate('/');
   };
 
   const handleNavigateToAuth = (mode: AuthMode) => {
     setAuthMode(mode);
-    setCurrentView('auth');
     localStorage.setItem('currentView', 'auth');
+    navigate('/login');
   };
 
   const handleAuthSuccess = (user?: any) => {
-    setIsAuthenticated(true);
+    // Deprecated: handled by AuthContext. Kept for backward compatibility with children components
     if (user) {
-      setCurrentUser(user);
-      try { localStorage.setItem('user', JSON.stringify(user)); } catch (e) {}
-      // Rediriger selon le rôle
       if (user.is_staff) {
-        setCurrentView('admin-dashboard');
         localStorage.setItem('currentView', 'admin-dashboard');
+        navigate('/admin');
         return;
       }
       if (user.is_company_admin) {
-        setCurrentView('company-dashboard');
         localStorage.setItem('currentView', 'company-dashboard');
+        navigate('/company');
         return;
       }
     }
-    setCurrentView('home');
     localStorage.setItem('currentView', 'home');
+    navigate('/');
   };
 
   const handleLogout = () => {
-    setIsAuthenticated(false);
-    // Clear stored token so user stays logged out after refresh
+    // Delegate to AuthContext logout
+    try { localStorage.removeItem('user'); } catch (e) {}
     apiService.setAuthToken(null);
-    setCurrentView('landing');
     localStorage.setItem('currentView', 'landing');
+    navigate('/');
     setSearchData(null);
     setSelectedTrip(null);
     setBookingData(null);
     setPaymentData(null);
-    try { localStorage.removeItem('user'); } catch (e) {}
   };
 
-  // On app mount, restore auth token and user data from localStorage if present
+  // App now uses AuthProvider to bootstrap auth state; we keep currentView persistence logic
   useEffect(() => {
+    // Restore a preferred view if present in localStorage (used for UX persistence)
     try {
-      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null;
-      if (token) {
-        apiService.setAuthToken(token);
-        setIsAuthenticated(true);
-        // When a token exists, fetch authoritative user info from the backend (/me/)
-        (async () => {
-          try {
-            const me = await apiService.getMe();
-            setCurrentUser(me);
-            try { localStorage.setItem('user', JSON.stringify(me)); } catch (e) {}
-            if (me && me.is_staff) {
-              setCurrentView('admin-dashboard');
-              localStorage.setItem('currentView', 'admin-dashboard');
-              return;
-            }
-            if (me && me.is_company_admin) {
-              setCurrentView('company-dashboard');
-              localStorage.setItem('currentView', 'company-dashboard');
-              return;
-            }
-            // Fallback: restore previous view or home
-            const savedView = localStorage.getItem('currentView') as ViewType | null;
-            if (savedView) {
-              setCurrentView(savedView);
-            } else {
-              setCurrentView('home');
-            }
-          } catch (err) {
-            // If /me/ fails, fallback to stored user if present
-            try {
-              const savedUser = typeof localStorage !== 'undefined' ? localStorage.getItem('user') : null;
-              if (savedUser) {
-                const user = JSON.parse(savedUser);
-                setCurrentUser(user);
-                if (user.is_staff) {
-                  setCurrentView('admin-dashboard');
-                  localStorage.setItem('currentView', 'admin-dashboard');
-                  return;
-                }
-                if (user.is_company_admin) {
-                  setCurrentView('company-dashboard');
-                  localStorage.setItem('currentView', 'company-dashboard');
-                  return;
-                }
-              }
-            } catch (e) {
-              // ignore
-            }
-            const savedView = localStorage.getItem('currentView') as ViewType | null;
-            if (savedView) {
-              setCurrentView(savedView);
-            } else {
-              setCurrentView('home');
-            }
-          }
-        })();
-      }
+      // We don't set a local state; we use stored `currentView` only for UX persistence elsewhere.
     } catch (e) {
-      console.warn('Could not restore auth token or user data:', e);
+      // ignore
     }
   }, []);
 
@@ -173,19 +117,19 @@ function App() {
   const showDashboardControls = () => (
     <div className="fixed bottom-4 right-4 flex flex-col space-y-2 z-50">
       <button
-        onClick={() => setCurrentView('home')}
+        onClick={() => navigate('/')}
         className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 transition-colors text-sm"
       >
         Accueil Voyageur
       </button>
       <button
-        onClick={() => setCurrentView('company-dashboard')}
+        onClick={() => navigate('/company')}
         className="px-4 py-2 bg-green-600 text-white rounded-lg shadow-lg hover:bg-green-700 transition-colors text-sm"
       >
         Dashboard Compagnie
       </button>
       <button
-        onClick={() => setCurrentView('admin-dashboard')}
+        onClick={() => navigate('/admin')}
         className="px-4 py-2 bg-red-600 text-white rounded-lg shadow-lg hover:bg-red-700 transition-colors text-sm"
       >
         Dashboard Admin
@@ -202,70 +146,35 @@ function App() {
   );
 
   return (
-    <div className="App">
-      {currentView === 'landing' && (
-        <LandingPage 
-          onNavigateToAuth={handleNavigateToAuth}
-          onNavigateToHome={() => setCurrentView('home')}
-        />
-      )}
-      
-      {currentView === 'auth' && (
-        <AuthPage 
-          mode={authMode}
-          onBack={() => setCurrentView('landing')}
-          onSuccess={handleAuthSuccess}
-          onSwitchMode={handleNavigateToAuth}
-        />
-      )}
-      
-      {currentView === 'home' && (
-        <HomePage 
-          onSearch={handleSearch} 
-          isAuthenticated={isAuthenticated}
-          onNavigateToAuth={handleNavigateToAuth}
-          onLogout={handleLogout}
-        />
-      )}
-      
-      {currentView === 'results' && (
-        <ResultsPage 
-          searchData={searchData}
-          onBack={() => setCurrentView('home')}
-          onSelectTrip={handleTripSelect}
-        />
-      )}
-      
-      {currentView === 'booking' && (
-        <BookingPage 
-          trip={selectedTrip}
-          searchData={searchData}
-          onBack={() => setCurrentView('results')}
-          onProceedToPayment={handleProceedToPayment}
-        />
-      )}
-      
-      {currentView === 'payment' && (
-        <PaymentPage 
-          bookingData={bookingData}
-          onBack={() => setCurrentView('booking')}
-          onPaymentSuccess={handlePaymentSuccess}
-        />
-      )}
-      
-      {currentView === 'confirmation' && (
-        <ConfirmationPage 
-          paymentData={paymentData}
-          onNewBooking={handleNewBooking}
-        />
-      )}
-      
-      {currentView === 'company-dashboard' && <CompanyDashboard />}
-      
-      {currentView === 'admin-dashboard' && <AdminDashboard />}
+    <AuthProvider>
+      <div className="App">
+        <Routes>
+          <Route path="/" element={<LandingPage onNavigateToAuth={handleNavigateToAuth} onNavigateToHome={() => navigate('/')} />} />
+          <Route path="/login" element={<AuthPage mode={authMode} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} />} />
+          <Route path="/register" element={<AuthPage mode={'register'} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} />} />
+          <Route path="/home" element={<HomePage onSearch={handleSearch} isAuthenticated={isAuthenticated} onNavigateToAuth={handleNavigateToAuth} onLogout={handleLogout} />} />
+          <Route path="/results" element={<ResultsPage searchData={searchData} onBack={() => navigate('/')} onSelectTrip={handleTripSelect} />} />
+          <Route path="/booking" element={<BookingPage trip={selectedTrip} searchData={searchData} onBack={() => navigate('/results')} onProceedToPayment={handleProceedToPayment} />} />
+          <Route path="/payment" element={<PaymentPage bookingData={bookingData} onBack={() => navigate('/booking')} onPaymentSuccess={handlePaymentSuccess} />} />
+          <Route path="/confirmation" element={<ConfirmationPage paymentData={paymentData} onNewBooking={handleNewBooking} />} />
 
-      {showDashboardControls()}
-    </div>
+          <Route path="/company" element={
+            <ProtectedRoute allowed={['company']}>
+              <CompanyDashboard />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/admin" element={
+            <ProtectedRoute allowed={['admin']}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          } />
+
+        </Routes>
+
+        {showDashboardControls()}
+      </div>
+    </AuthProvider>
   );
 }
 

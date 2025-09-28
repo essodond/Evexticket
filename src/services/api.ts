@@ -299,6 +299,23 @@ class ApiService {
     });
   }
 
+  // Utilisateurs (endpoints administratifs)
+  // Remarque: ces endpoints doivent exister côté backend Django (/users/)
+  async getUsers(): Promise<any[]> {
+    return this.request<any[]>('/users/');
+  }
+
+  async getUser(id: number): Promise<any> {
+    return this.request<any>(`/users/${id}/`);
+  }
+
+  async updateUser(id: number, user: Partial<any>): Promise<any> {
+    return this.request<any>(`/users/${id}/`, {
+      method: 'PUT',
+      body: JSON.stringify(user),
+    });
+  }
+
   // Statistiques
   async getDashboardStats(): Promise<DashboardStats> {
     return this.request<DashboardStats>('/dashboard/stats/');

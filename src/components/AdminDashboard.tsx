@@ -151,8 +151,25 @@ const AdminDashboard: React.FC = () => {
           isActive: t.is_active,
         })));
 
-        // Users: l'API n'a pas d'endpoint users explicite; on peut réutiliser totalUsers pour le chiffre
-        setUsers([]);
+        // Users: fetch all users via API so l'admin puisse les gérer
+        let usersData: any[] = [];
+        try {
+          usersData = await apiService.getUsers();
+        } catch (e) {
+          console.warn('Could not load users list', e);
+          usersData = [];
+        }
+
+        setUsers((usersData as any[]).map(u => ({
+          id: String(u.id),
+          firstName: u.first_name || u.firstName || '',
+          lastName: u.last_name || u.lastName || '',
+          email: u.email || '',
+          phone: u.phone || '',
+          role: u.is_staff ? 'admin' : (u.is_company_admin ? 'company' : 'user'),
+          isActive: u.is_active ?? u.isActive ?? true,
+          createdAt: u.created_at || u.createdAt || ''
+        })));
       } catch (err: any) {
         console.error('Failed loading admin data', err);
         // Si erreur 403 -> accès non autorisé
@@ -237,6 +254,58 @@ const AdminDashboard: React.FC = () => {
 
   const handleDeleteCompany = (company: Company) => {
     setCompanyToDelete(company);
+  };
+
+  // --- Utilisateurs: block/unblock / edit handlers ---
+  const handleEditUser = async (user: User) => {
+    // Ouvrir un modal d'édition serait idéal; pour l'instant on appelle updateUser directement
+    try {
+      const updated = await apiService.updateUser(Number(user.id), {
+        first_name: user.firstName,
+        last_name: user.lastName,
+        email: user.email,
+        phone: user.phone,
+        is_active: user.isActive,
+      });
+      setUsers(prev => prev.map(u => u.id === String(updated.id) ? ({
+        id: String(updated.id),
+        firstName: updated.first_name || updated.firstName || '',
+        lastName: updated.last_name || updated.lastName || '',
+        email: updated.email || '',
+        phone: updated.phone || '',
+        role: updated.is_staff ? 'admin' : (updated.is_company_admin ? 'company' : 'user'),
+        isActive: updated.is_active ?? true,
+        createdAt: updated.created_at || ''
+      }) : u));
+      setNotificationData({ type: 'success', title: 'Utilisateur mis à jour', message: `L'utilisateur ${updated.email} a été mis à jour.` });
+      setShowNotification(true);
+    } catch (err) {
+      console.error('Erreur update user', err);
+      setNotificationData({ type: 'error', title: 'Erreur', message: 'Impossible de mettre à jour l\'utilisateur.' });
+      setShowNotification(true);
+    }
+  };
+
+  const handleToggleUserActive = async (user: User) => {
+    try {
+      const updated = await apiService.updateUser(Number(user.id), { is_active: !user.isActive });
+      setUsers(prev => prev.map(u => u.id === String(updated.id) ? ({
+        id: String(updated.id),
+        firstName: updated.first_name || updated.firstName || '',
+        lastName: updated.last_name || updated.lastName || '',
+        email: updated.email || '',
+        phone: updated.phone || '',
+        role: updated.is_staff ? 'admin' : (updated.is_company_admin ? 'company' : 'user'),
+        isActive: updated.is_active ?? true,
+        createdAt: updated.created_at || ''
+      }) : u));
+      setNotificationData({ type: 'success', title: updated.is_active ? 'Débloqué' : 'Bloqué', message: `L'utilisateur ${updated.email} a été ${updated.is_active ? 'débloqué' : 'bloqué'}.` });
+      setShowNotification(true);
+    } catch (err) {
+      console.error('Erreur toggle user active', err);
+      setNotificationData({ type: 'error', title: 'Erreur', message: 'Impossible de changer le statut de l\'utilisateur.' });
+      setShowNotification(true);
+    }
   };
 
   const confirmDeleteCompany = async () => {
@@ -667,9 +736,9 @@ const AdminDashboard: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(user.createdAt).toLocaleDateString('fr-FR')}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
-                      <button className="text-blue-600 hover:text-blue-900"><Eye className="w-4 h-4" /></button>
-                      <button className="text-green-600 hover:text-green-900"><Edit className="w-4 h-4" /></button>
-                      <button className="text-red-600 hover:text-red-900"><Trash2 className="w-4 h-4" /></button>
+                      <button onClick={() => { /* TODO: view user profile modal */ }} className="text-blue-600 hover:text-blue-900"><Eye className="w-4 h-4" /></button>
+                      <button onClick={() => handleEditUser(user)} className="text-green-600 hover:text-green-900"><Edit className="w-4 h-4" /></button>
+                      <button onClick={() => handleToggleUserActive(user)} className="text-red-600 hover:text-red-900"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </td>
                 </tr>
