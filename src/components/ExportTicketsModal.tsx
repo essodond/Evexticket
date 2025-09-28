@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
-import { X, Download, FileText, Table, Calendar, Filter, CheckCircle } from 'lucide-react';
+// EXPORT TICKETS MODAL
+// Ce composant affiche une interface pour configurer et lancer l'export
+// des tickets (PDF/Excel). Il ne gère pas l'export côté serveur directement
+// : il émet `onExport(format, filters)` vers le parent qui fera l'appel API.
+import { X, Download, FileText, Table, Calendar, Filter } from 'lucide-react';
 
 interface ExportTicketsModalProps {
   isOpen: boolean;

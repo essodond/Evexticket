@@ -1,4 +1,7 @@
 import React from 'react';
+// RESULTS PAGE
+// Page de résultats affichant la liste des trajets correspondant à la recherche.
+// Le parent (App) fournit `searchData` et gère la navigation vers la page de réservation.
 import { ArrowLeft, Clock, Users, Star, ArrowRight } from 'lucide-react';
 
 interface Trip {

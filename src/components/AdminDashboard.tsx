@@ -47,6 +47,15 @@ interface User {
   createdAt: string;
 }
 
+// AdminDashboard: zone d'administration globale.
+// Rôles et responsabilités:
+// - L'administrateur global (is_staff) gère les compagnies, les trajets et les utilisateurs.
+// - Le composant charge les stats, la liste des compagnies et trajets via `apiService`.
+// - Les modales (AddCompanyModal, AddTripModal) renvoient des payloads au parent qui
+//   appelle l'API appropriée (create/update) puis met à jour le state local.
+// Notes:
+// - Pour des permissions fines, vérifiez côté backend (Django) que les endpoints
+//   vérifient `request.user.is_staff` ou `is_company_admin`.
 const AdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [showAddCompanyModal, setShowAddCompanyModal] = useState(false);

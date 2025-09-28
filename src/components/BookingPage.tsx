@@ -1,4 +1,8 @@
 import React, { useState } from 'react';
+// BOOKING PAGE
+// Étape de saisie des informations passager et sélection de siège.
+// Le parent (ResultsPage/App) fournit `trip` et `searchData`. Après validation,
+// on appelle `onProceedToPayment` pour passer à la page de paiement.
 import { ArrowLeft, User, CheckCircle } from 'lucide-react';
 
 interface Trip {

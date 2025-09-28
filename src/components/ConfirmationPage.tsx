@@ -1,4 +1,8 @@
 import React from 'react';
+// CONFIRMATION PAGE
+// Page affichée après un paiement réussi. `paymentData` contient les infos
+// transactionnelles (transactionId, seat, etc.). Dans une vraie app, ce composant
+// peut demander au backend le billet final ou le PDF à télécharger.
 import { Check, Download, Share, Calendar, MapPin, Clock, User, CreditCard } from 'lucide-react';
 
 interface ConfirmationPageProps {

@@ -14,6 +14,14 @@ type ViewType = 'landing' | 'auth' | 'home' | 'results' | 'booking' | 'payment' 
 type AuthMode = 'login' | 'register';
 
 function App() {
+  // NOTE: Ce composant est le point d'entrée de l'application React.
+  // Il gère :
+  // - la vue courante (landing, auth, home, booking, company-dashboard, admin-dashboard)
+  // - le cycle d'authentification (stockage du token, récupération de l'utilisateur via /me/)
+  // - la redirection initiale selon le rôle renvoyé par l'API (is_staff, is_company_admin)
+  // - la persistance simple de la 'vue' dans localStorage pour restaurer l'état après un reload
+  // Si vous migrez vers une architecture plus grosse, il est recommandé de remplacer
+  // ce pattern par un contexte d'authentification (AuthContext) et un routeur (react-router).
   const [currentView, setCurrentView] = useState<ViewType>('landing');
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -93,6 +101,7 @@ function App() {
     setSelectedTrip(null);
     setBookingData(null);
     setPaymentData(null);
+    try { localStorage.removeItem('user'); } catch (e) {}
   };
 
   // On app mount, restore auth token and user data from localStorage if present
@@ -102,30 +111,58 @@ function App() {
       if (token) {
         apiService.setAuthToken(token);
         setIsAuthenticated(true);
-        // Restore user data if available
-        const savedUser = typeof localStorage !== 'undefined' ? localStorage.getItem('user') : null;
-        if (savedUser) {
-          const user = JSON.parse(savedUser);
-          setCurrentUser(user);
-          // Redirect based on role
-          if (user.is_staff) {
-            setCurrentView('admin-dashboard');
-            localStorage.setItem('currentView', 'admin-dashboard');
-            return;
+        // When a token exists, fetch authoritative user info from the backend (/me/)
+        (async () => {
+          try {
+            const me = await apiService.getMe();
+            setCurrentUser(me);
+            try { localStorage.setItem('user', JSON.stringify(me)); } catch (e) {}
+            if (me && me.is_staff) {
+              setCurrentView('admin-dashboard');
+              localStorage.setItem('currentView', 'admin-dashboard');
+              return;
+            }
+            if (me && me.is_company_admin) {
+              setCurrentView('company-dashboard');
+              localStorage.setItem('currentView', 'company-dashboard');
+              return;
+            }
+            // Fallback: restore previous view or home
+            const savedView = localStorage.getItem('currentView') as ViewType | null;
+            if (savedView) {
+              setCurrentView(savedView);
+            } else {
+              setCurrentView('home');
+            }
+          } catch (err) {
+            // If /me/ fails, fallback to stored user if present
+            try {
+              const savedUser = typeof localStorage !== 'undefined' ? localStorage.getItem('user') : null;
+              if (savedUser) {
+                const user = JSON.parse(savedUser);
+                setCurrentUser(user);
+                if (user.is_staff) {
+                  setCurrentView('admin-dashboard');
+                  localStorage.setItem('currentView', 'admin-dashboard');
+                  return;
+                }
+                if (user.is_company_admin) {
+                  setCurrentView('company-dashboard');
+                  localStorage.setItem('currentView', 'company-dashboard');
+                  return;
+                }
+              }
+            } catch (e) {
+              // ignore
+            }
+            const savedView = localStorage.getItem('currentView') as ViewType | null;
+            if (savedView) {
+              setCurrentView(savedView);
+            } else {
+              setCurrentView('home');
+            }
           }
-          if (user.is_company_admin) {
-            setCurrentView('company-dashboard');
-            localStorage.setItem('currentView', 'company-dashboard');
-            return;
-          }
-        }
-        // Restore previous view if available, otherwise go to home
-        const savedView = localStorage.getItem('currentView') as ViewType | null;
-        if (savedView) {
-          setCurrentView(savedView);
-        } else {
-          setCurrentView('home');
-        }
+        })();
       }
     } catch (e) {
       console.warn('Could not restore auth token or user data:', e);

@@ -1,4 +1,7 @@
 import React from 'react';
+// ADMIN CHARTS
+// Composant réutilisable qui affiche des graphiques (Révenus, Croissance, Répartition)
+// à partir des données passées en props. Utilise recharts.
 import {
   LineChart,
   Line,

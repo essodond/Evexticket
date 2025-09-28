@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+// LANDING PAGE
+// Page d'accueil marketing. Elle propose des actions rapides pour aller vers
+// l'inscription/connexion ou la recherche de trajets pour les voyageurs.
 import { Bus, MapPin, Clock, Shield, Users, Star, ArrowRight } from 'lucide-react';
 
 interface LandingPageProps {

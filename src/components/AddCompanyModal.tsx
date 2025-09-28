@@ -26,6 +26,12 @@ const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
   onSave, 
   editingCompany 
 }) => {
+  // Ce modal sert à la fois pour la création et la modification d'une compagnie.
+  // - Si `editingCompany` est fourni, les champs sont préremplis et l'envoi doit
+  //   provoquer une mise à jour côté backend (PUT).
+  // - Sinon, un POST sera fait pour créer une nouvelle compagnie.
+  // Le composant parent (AdminDashboard) gère la logique create vs update
+  // en fonction de l'existence d'un id ou du `editingCompany`.
   // Determine current user role from localStorage. Only global admins (is_staff)
   // may create an administrator account en même temps que la compagnie.
   let currentUser: any = null;

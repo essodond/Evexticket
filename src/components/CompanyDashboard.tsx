@@ -34,6 +34,11 @@ interface Booking {
   totalPrice: number;
 }
 
+// CompanyDashboard: dashboard spécifique à une compagnie.
+// - Un administrateur de compagnie (is_company_admin) utilise cette vue pour gérer
+//   ses trajets et réservations.
+// - Les appels à l'API doivent renvoyer uniquement les ressources liées à la compagnie
+//   (backend : filtrer par company= request.user.company_id ou via permissions).
 const CompanyDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('trips');
   const [showAddTripModal, setShowAddTripModal] = useState(false);

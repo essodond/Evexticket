@@ -1,4 +1,8 @@
 import React, { useState } from 'react';
+// HOME PAGE
+// Page d'accueil pour les voyageurs : formulaire de recherche de trajets.
+// Elle stocke et récupère quelques informations (username) depuis localStorage
+// pour afficher un avatar ou état de connexion simple.
 import { Search, MapPin, Calendar, ArrowRight } from 'lucide-react';
 
 interface HomePageProps {

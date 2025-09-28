@@ -75,6 +75,11 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode, onBack, onSuccess, onSwitchMo
     e.preventDefault();
     if (!validateForm()) return;
     setIsLoading(true);
+    // NOTE: Login/Register utilisent `apiService` qui interagit avec le backend Django.
+    // - `apiService.login()` doit récupérer un token auprès du backend et le stocker
+    //   via `apiService.setAuthToken(token)` (déjà fait dans apiService.login).
+    // - Après la connexion, `App` appellera `/me/` pour récupérer l'utilisateur et
+    //   décider quelle vue afficher (admin vs company dashboard).
     if (mode === 'register') {
       try {
         const resp = await apiService.register({

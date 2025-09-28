@@ -1,4 +1,14 @@
 // Configuration de l'API
+// Ce fichier centralise toutes les requêtes HTTP vers le backend Django (DRF).
+// Rappels de conventions utilisées :
+// - L'URL de base est définie par API_BASE_URL.
+// - Les méthodes retournent déjà le JSON parsé.
+// - Si le backend renvoie un objet paginé { count, next, results: [...] },
+//   la méthode normalize et retourne directement `results` pour simplifier l'appelant.
+// - L'authentification peut être gérée via un token stocké en localStorage (authToken).
+//   Le token est ajouté dans l'en-tête Authorization: 'Token <token>' par request().
+// - La méthode request utilise `credentials: 'include'` pour supporter la SessionAuthentication
+//   si le backend utilise des cookies.
 const API_BASE_URL = 'http://127.0.0.1:8000/api';
 
 // Types pour les données
@@ -328,6 +338,11 @@ class ApiService {
     try { localStorage.setItem('username', username); } catch (e) {}
 
     return { token, user };
+  }
+
+  // Récupérer l'utilisateur courant à partir de l'API (/me/)
+  async getMe(): Promise<any> {
+    return this.request<any>('/me/');
   }
 
   async register(userData: {

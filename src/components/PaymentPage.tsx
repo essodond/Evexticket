@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+// PAYMENT PAGE
+// Page démonstrative de paiement : ici on simule l'appel, mais dans la réalité
+// il faudra appeler votre backend Django pour initier/valider le paiement.
 import { ArrowLeft, CreditCard, Smartphone, Check, AlertCircle } from 'lucide-react';
 
 interface PaymentPageProps {
