@@ -109,7 +109,12 @@ class CurrentUserView(APIView):
         from .serializers import UserSerializer
         data = UserSerializer(user).data
         # Indiquer si c'est un admin de compagnie (legacy admin_user ou nouveaux admins M2M)
-        is_company_admin = Company.objects.filter(Q(admin_user=user) | Q(admins=user)).exists()
+        # Important: un administrateur global (is_staff) ne doit pas être traité comme
+        # admin de compagnie pour éviter les redirections/confusions côté frontend.
+        if user.is_staff:
+            is_company_admin = False
+        else:
+            is_company_admin = Company.objects.filter(Q(admin_user=user) | Q(admins=user)).exists()
         data['is_company_admin'] = is_company_admin
         if is_company_admin:
             comp = Company.objects.filter(Q(admin_user=user) | Q(admins=user)).first()

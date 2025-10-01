@@ -35,7 +35,12 @@ class UserSerializer(serializers.ModelSerializer):
     """Serializer pour les utilisateurs"""
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'is_active', 'date_joined']
+        # Exposer également les flags de rôle pour que le frontend puisse
+        # décider de la redirection (is_staff => Admin Général, is_company_admin calculé côté /me/)
+        fields = [
+            'id', 'username', 'email', 'first_name', 'last_name',
+            'is_active', 'is_staff', 'is_superuser', 'date_joined'
+        ]
         read_only_fields = ['id', 'date_joined']
 
 
