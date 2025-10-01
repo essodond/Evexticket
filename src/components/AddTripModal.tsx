@@ -38,11 +38,6 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
   companies,
   cities: propCities
 }) => {
-  // Modal pour créer / modifier un trajet.
-  // - `editingTrip` si fourni : prérempli et on fera un update côté parent.
-  // - `companies` et `cities` sont passés depuis le parent pour remplir les selects.
-  // - `onSave` n'appelle pas directement l'API ici (le parent l'appelle) dans ce projet ;
-  //   mais il renvoie un payload au format attendu par le parent (AdminDashboard/CompanyDashboard)
   // Helper pour calculer la durée en minutes (gère le lendemain)
   const computeDurationMinutes = (dep: string, arr: string) => {
     if (!dep || !arr) return 0;
