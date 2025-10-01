@@ -69,6 +69,7 @@ const AdminDashboard: React.FC = () => {
     message: ''
   });
   const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
+  const [deletingCompanyId, setDeletingCompanyId] = useState<string | null>(null);
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
 
@@ -310,23 +311,48 @@ const AdminDashboard: React.FC = () => {
 
   const confirmDeleteCompany = async () => {
     if (!companyToDelete) return;
-    try {
-      await apiService.deleteCompany(Number(companyToDelete.id));
-      setCompanies(prev => prev.filter(c => c.id !== companyToDelete.id));
-      setNotificationData({
-        type: 'success',
-        title: 'Suppression réussie',
-        message: `La compagnie « ${companyToDelete.name} » a été supprimée.`
-      });
-    } catch (err) {
-      setNotificationData({
-        type: 'error',
-        title: 'Erreur de suppression',
-        message: `La suppression de la compagnie a échoué.`
-      });
+    const id = companyToDelete.id;
+    const prevCompanies = companies.slice();
+
+    // Optimistic remove
+    setCompanies(prev => prev.filter(c => c.id !== id));
+    setDeletingCompanyId(id);
+
+    const maxAttempts = 3;
+    let attempt = 0;
+    let lastError: any = null;
+
+    const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+    while (attempt < maxAttempts) {
+      try {
+        attempt += 1;
+        await apiService.deleteCompany(Number(id));
+        setNotificationData({ type: 'success', title: 'Suppression réussie', message: `La compagnie « ${companyToDelete.name} » a été supprimée.` });
+        lastError = null;
+        break;
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`Delete company attempt ${attempt} failed`, err);
+        if (attempt < maxAttempts) {
+          // exponential backoff: 500ms, 1000ms, ...
+          await sleep(500 * attempt);
+          continue;
+        }
+      }
     }
+
+    if (lastError) {
+      // rollback UI
+      setCompanies(prevCompanies);
+      console.error('Erreur suppression compagnie', lastError);
+      const msg = lastError?.data?.detail || lastError?.message || 'La suppression de la compagnie a échoué.';
+      setNotificationData({ type: 'error', title: 'Erreur de suppression', message: String(msg) });
+    }
+
     setShowNotification(true);
     setCompanyToDelete(null);
+    setDeletingCompanyId(null);
   };
 
   const handleAddTrip = (tripData: Omit<Trip, 'id' | 'companyName'>) => {
@@ -630,10 +656,18 @@ const AdminDashboard: React.FC = () => {
                         <Edit className="w-4 h-4" />
                       </button>
                       <button
-                        className="text-red-600 hover:text-red-900"
+                        disabled={!!deletingCompanyId}
+                        className={`text-red-600 hover:text-red-900 flex items-center ${deletingCompanyId ? 'opacity-60 cursor-not-allowed' : ''}`}
                         onClick={() => handleDeleteCompany(company)}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        {deletingCompanyId === company.id ? (
+                          <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                          </svg>
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
                       </button>
                     </div>
                   </td>
@@ -868,9 +902,22 @@ const AdminDashboard: React.FC = () => {
                 onClick={() => setCompanyToDelete(null)}
               >Annuler</button>
               <button
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center disabled:opacity-60"
                 onClick={confirmDeleteCompany}
-              >Supprimer</button>
+                disabled={!!deletingCompanyId}
+              >
+                {deletingCompanyId ? (
+                  <>
+                    <svg className="w-4 h-4 mr-2 animate-spin" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                    </svg>
+                    Suppression...
+                  </>
+                ) : (
+                  'Supprimer'
+                )}
+              </button>
             </div>
           </div>
         </div>

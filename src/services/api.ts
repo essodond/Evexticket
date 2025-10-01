@@ -155,7 +155,21 @@ class ApiService {
         throw err;
       }
 
-      const data = await response.json();
+      // Some endpoints (DELETE) may return 204 No Content — response.json() would throw.
+      // Read body as text first and handle empty body gracefully.
+      const text = await response.text();
+      if (!text) {
+        // No content — return nullish value (caller should handle void/null)
+        return (null as unknown) as T;
+      }
+
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        // If response is not JSON for some reason, return raw text
+        return (text as unknown) as T;
+      }
 
       // DRF pagination: responses for list endpoints may be { count, next, previous, results: [...] }
       // Normalize by returning the inner `results` array when present so callers can always expect an array.
