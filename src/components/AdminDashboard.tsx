@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import apiService from '../services/api';
 import { useCities } from '../hooks/useApi';
-import { Users, Building, DollarSign, Plus, Edit, Trash2, Eye, Download, Filter, Bus, FileText, BarChart3 } from 'lucide-react';
+import { Users, Building, DollarSign, Plus, Edit, Trash2, Eye, Download, Bus, FileText, BarChart3, Lock } from 'lucide-react';
 import AddCompanyModal from './AddCompanyModal';
 import AddTripModal from './AddTripModal';
 import ExportTicketsModal from './ExportTicketsModal';
 import AdminCharts from './AdminCharts';
 import NotificationModal from './NotificationModal';
+import UserDetailsModal from './UserDetailsModal';
 
 interface Company {
   id: string;
@@ -63,8 +64,8 @@ const AdminDashboard: React.FC = () => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [showNotification, setShowNotification] = useState(false);
-  const [notificationData, setNotificationData] = useState({
-    type: 'success' as 'success' | 'error',
+  const [notificationData, setNotificationData] = useState<any>({
+    type: 'success' as 'success' | 'error' | 'warning' | 'info',
     title: '',
     message: ''
   });
@@ -87,6 +88,13 @@ const AdminDashboard: React.FC = () => {
   const [trips, setTrips] = useState<Trip[]>([]);
   const { cities: apiCities } = useCities();
   const [users, setUsers] = useState<User[]>([]);
+  const [showUserDetails, setShowUserDetails] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [userToConfirmDelete, setUserToConfirmDelete] = useState<User | null>(null);
+  const [undoTimeouts, setUndoTimeouts] = useState<Record<string, number>>({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -285,6 +293,104 @@ const AdminDashboard: React.FC = () => {
       setNotificationData({ type: 'error', title: 'Erreur', message: 'Impossible de mettre à jour l\'utilisateur.' });
       setShowNotification(true);
     }
+  };
+
+  const handleViewUser = (user: User) => {
+    setSelectedUser(user);
+    setShowUserDetails(true);
+  };
+
+  const handleSaveUserDetails = async (updated: any) => {
+    try {
+      const resp = await apiService.updateUser(Number(updated.id), {
+        first_name: updated.firstName,
+        last_name: updated.lastName,
+        email: updated.email,
+        phone: updated.phone,
+        is_active: updated.isActive,
+      });
+      setUsers(prev => prev.map(u => u.id === String(resp.id) ? ({
+        id: String(resp.id),
+        firstName: resp.first_name || '',
+        lastName: resp.last_name || '',
+        email: resp.email || '',
+        phone: resp.phone || '',
+        role: resp.is_staff ? 'admin' : (resp.is_company_admin ? 'company' : 'user'),
+        isActive: resp.is_active ?? true,
+        createdAt: resp.created_at || ''
+      }) : u));
+      setNotificationData({ type: 'success', title: 'Utilisateur mis à jour', message: 'Les détails ont été enregistrés.' });
+      setShowNotification(true);
+      setShowUserDetails(false);
+      setSelectedUser(null);
+    } catch (err) {
+      console.error('Erreur save user details', err);
+      setNotificationData({ type: 'error', title: 'Erreur', message: 'Impossible de sauvegarder.' });
+      setShowNotification(true);
+    }
+  };
+
+  const handleDeleteUser = (user: User) => {
+    // show confirmation modal first
+    setUserToConfirmDelete(user);
+  };
+
+  const confirmDeleteUser = () => {
+    if (!userToConfirmDelete) return;
+    const user = userToConfirmDelete;
+    const id = user.id;
+
+    // optimistic remove locally and give user 5s to undo via notification
+    const prev = users.slice();
+    setUsers(u => u.filter(x => x.id !== id));
+    setDeletingUserId(id);
+    setUserToConfirmDelete(null);
+
+    // show undo notification
+    setNotificationData({ type: 'warning', title: 'Utilisateur supprimé', message: 'Annulation possible pendant 5 secondes.', confirmText: 'Annuler', onConfirm: () => {
+      // undo handler
+      // clear pending delete
+      const pending = undoTimeouts[id];
+      if (pending) window.clearTimeout(pending);
+      setUsers(prev);
+      setDeletingUserId(null);
+      setShowNotification(false);
+    }} as any);
+    setShowNotification(true);
+
+    // schedule the actual delete after timeout unless undone
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        // attempt delete with retries
+        const maxAttempts = 3;
+        let attempt = 0;
+        let lastErr: any = null;
+        while (attempt < maxAttempts) {
+          try {
+            attempt += 1;
+            await apiService.deleteUser(Number(id));
+            lastErr = null;
+            break;
+          } catch (e: any) {
+            lastErr = e;
+            if (attempt < maxAttempts) await new Promise(r => setTimeout(r, 500 * attempt));
+          }
+        }
+        if (lastErr) {
+          setUsers(prev);
+          setNotificationData({ type: 'error', title: 'Erreur', message: lastErr?.data?.detail || lastErr?.message || 'Impossible de supprimer l\'utilisateur.' });
+          setShowNotification(true);
+        } else {
+          setNotificationData({ type: 'success', title: 'Suppression confirmée', message: 'L\'utilisateur a été définitivement supprimé.' });
+          setShowNotification(true);
+        }
+      } finally {
+        setDeletingUserId(null);
+        setUndoTimeouts(prev => { const c = { ...prev }; delete c[id]; return c; });
+      }
+    }, 5000);
+
+    setUndoTimeouts(prev => ({ ...prev, [id]: timeoutId }));
   };
 
   const handleToggleUserActive = async (user: User) => {
@@ -736,7 +842,9 @@ const AdminDashboard: React.FC = () => {
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">Gestion des utilisateurs</h2>
         <div className="flex space-x-2">
-          <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center"><Filter className="w-4 h-4 mr-2" />Filtrer</button>
+          <div className="flex items-center border border-gray-200 rounded-lg px-3 py-1">
+            <input value={searchQuery} onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }} placeholder="Rechercher par nom ou email" className="outline-none text-sm" />
+          </div>
           <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"><Download className="w-4 h-4 mr-2" />Exporter</button>
         </div>
       </div>
@@ -754,7 +862,14 @@ const AdminDashboard: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {users.map((user) => (
+                {users
+                  .filter(u => {
+                    if (!searchQuery) return true;
+                    const q = searchQuery.toLowerCase();
+                    return (`${u.firstName} ${u.lastName}`.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
+                  })
+                  .slice((currentPage - 1) * 10, (currentPage - 1) * 10 + 10)
+                  .map((user) => (
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -770,9 +885,21 @@ const AdminDashboard: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(user.createdAt).toLocaleDateString('fr-FR')}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
-                      <button onClick={() => { /* TODO: view user profile modal */ }} className="text-blue-600 hover:text-blue-900"><Eye className="w-4 h-4" /></button>
+                      <button onClick={() => handleViewUser(user)} className="text-blue-600 hover:text-blue-900">
+                        <Eye className="w-4 h-4" />
+                      </button>
                       <button onClick={() => handleEditUser(user)} className="text-green-600 hover:text-green-900"><Edit className="w-4 h-4" /></button>
-                      <button onClick={() => handleToggleUserActive(user)} className="text-red-600 hover:text-red-900"><Trash2 className="w-4 h-4" /></button>
+                      <button onClick={() => handleToggleUserActive(user)} className="text-yellow-600 hover:text-yellow-900"><Lock className="w-4 h-4" /></button>
+                      <button onClick={() => handleDeleteUser(user)} className={`text-red-600 hover:text-red-900 flex items-center ${deletingUserId ? 'opacity-60 cursor-not-allowed' : ''}`} disabled={!!deletingUserId}>
+                        {deletingUserId === user.id ? (
+                          <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                          </svg>
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -780,9 +907,23 @@ const AdminDashboard: React.FC = () => {
             </tbody>
           </table>
         </div>
+        {/* Pagination */}
+        <div className="p-4 flex items-center justify-between">
+          <div className="text-sm text-gray-600">Affichage {(currentPage - 1) * 10 + 1} - {Math.min(users.length, currentPage * 10)} sur {users.length}</div>
+          <div className="space-x-2">
+            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} className="px-3 py-1 border rounded disabled:opacity-50" disabled={currentPage === 1}>Préc</button>
+            <button onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1 border rounded disabled:opacity-50" disabled={currentPage * 10 >= users.filter(u => {
+              if (!searchQuery) return true; const q = searchQuery.toLowerCase(); return (`${u.firstName} ${u.lastName}`.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
+            }).length}>Suiv</button>
+          </div>
+        </div>
       </div>
     </div>
   );
+
+  {/* User details modal */}
+  
+  
 
   const renderReports = () => (
     <div className="space-y-6">
@@ -941,6 +1082,21 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Modal de confirmation suppression utilisateur */}
+      {userToConfirmDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+            <h2 className="text-xl font-bold mb-4">Confirmer la suppression de l'utilisateur</h2>
+            <p className="mb-6">Êtes-vous sûr de vouloir supprimer <b>{userToConfirmDelete.firstName} {userToConfirmDelete.lastName}</b> ? Vous pourrez annuler pendant 5 secondes.</p>
+            <div className="flex justify-end space-x-4">
+              <button className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" onClick={() => setUserToConfirmDelete(null)}>Annuler</button>
+              <button className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center" onClick={confirmDeleteUser}>
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Notification */}
       <NotificationModal
         isOpen={showNotification}
@@ -948,6 +1104,12 @@ const AdminDashboard: React.FC = () => {
         type={notificationData.type}
         title={notificationData.title}
         message={notificationData.message}
+      />
+      <UserDetailsModal
+        isOpen={showUserDetails}
+        onClose={() => { setShowUserDetails(false); setSelectedUser(null); }}
+        user={selectedUser}
+        onSave={handleSaveUserDetails}
       />
     </div>
   );

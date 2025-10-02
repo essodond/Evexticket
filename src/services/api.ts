@@ -330,6 +330,12 @@ class ApiService {
     });
   }
 
+  async deleteUser(id: number): Promise<void> {
+    return this.request<void>(`/users/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
   // Statistiques
   async getDashboardStats(): Promise<DashboardStats> {
     return this.request<DashboardStats>('/dashboard/stats/');
