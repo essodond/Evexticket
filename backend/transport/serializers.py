@@ -1,5 +1,7 @@
+from django.contrib.auth import get_user_model
 from rest_framework import serializers
-from django.contrib.auth.models import User
+
+
 
 from rest_framework import serializers
 from django.contrib.auth.models import User
@@ -33,15 +35,21 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer pour les utilisateurs"""
+    is_company_admin = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         # Exposer également les flags de rôle pour que le frontend puisse
         # décider de la redirection (is_staff => Admin Général, is_company_admin calculé côté /me/)
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'is_active', 'is_staff', 'is_superuser', 'date_joined'
+            'is_active', 'is_staff', 'is_superuser', 'date_joined', 'is_company_admin'
         ]
-        read_only_fields = ['id', 'date_joined']
+        read_only_fields = ['id', 'date_joined', 'is_company_admin']
+
+    def get_is_company_admin(self, obj):
+        # Vérifie si l'utilisateur est admin d'au moins une compagnie
+        return obj.admin_companies.exists()
 
 
 class CitySerializer(serializers.ModelSerializer):

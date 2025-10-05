@@ -8,6 +8,7 @@ router.register(r'cities', views.CityViewSet, basename='city')        # ✅ base
 router.register(r'companies', views.CompanyViewSet, basename='company')  # ✅ basename ajouté
 router.register(r'trips', views.TripViewSet, basename='trip')        # ✅ basename ajouté
 router.register(r'bookings', views.BookingViewSet, basename='booking')  # ✅ déjà corrigé
+router.register(r'users', views.UserViewSet, basename='user')
 
 urlpatterns = [
     path('', include(router.urls)),

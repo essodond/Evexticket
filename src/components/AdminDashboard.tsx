@@ -11,7 +11,7 @@ import UserDetailsModal from './UserDetailsModal';
 
 type Company = { id: string; name: string; description?: string; address?: string; phone?: string; email?: string; website?: string; logo?: string; isActive?: boolean; createdAt?: string };
 type Trip = { id: string; companyId?: string; companyName?: string; departureCity?: string; arrivalCity?: string; departureTime?: string; arrivalTime?: string; price?: number; duration?: number; busType?: string; capacity?: number; isActive?: boolean };
-type User = { id: string; firstName?: string; lastName?: string; email?: string; phone?: string; role?: 'user' | 'company' | 'admin'; isActive?: boolean; createdAt?: string };
+type User = { id: string; firstName?: string; lastName?: string; email?: string; role?: 'user' | 'company' | 'admin'; isActive?: boolean; createdAt?: string };
 
 const AdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -59,7 +59,7 @@ const AdminDashboard: React.FC = () => {
         setTrips(((tps as any[]) || []).map(t => ({ id: String(t.id), companyId: String(t.company), companyName: t.company_name || '', departureCity: t.departure_city_name || String(t.departure_city), arrivalCity: t.arrival_city_name || String(t.arrival_city), departureTime: t.departure_time, arrivalTime: t.arrival_time, price: t.price, duration: t.duration, busType: t.bus_type, capacity: t.capacity, isActive: t.is_active })));
         let usersData: any[] = [];
         try { usersData = await apiService.getUsers(); } catch (e) { usersData = []; }
-        setUsers((usersData || []).map(u => ({ id: String(u.id), firstName: u.first_name || u.firstName || '', lastName: u.last_name || u.lastName || '', email: u.email || '', phone: u.phone || '', role: u.is_staff ? 'admin' : (u.is_company_admin ? 'company' : 'user'), isActive: u.is_active ?? true, createdAt: u.created_at || '' })));
+        setUsers((usersData || []).map(u => ({ id: String(u.id), firstName: u.first_name || u.firstName || '', lastName: u.last_name || u.lastName || '', email: u.email || '', role: u.is_staff ? 'admin' : (u.is_company_admin ? 'company' : 'user'), isActive: u.is_active ?? true, createdAt: u.created_at || '' })));
       } catch (e: any) { console.error(e); setError(e?.message || 'Erreur'); }
       finally { setLoading(false); }
     };
@@ -123,8 +123,8 @@ const AdminDashboard: React.FC = () => {
   const handleViewUser = (u:User) => { setSelectedUser(u); setShowUserDetails(true); };
   const handleSaveUserDetails = async (payload:any) => {
     try {
-      const resp = await apiService.updateUser(Number(payload.id), { first_name: payload.firstName, last_name: payload.lastName, email: payload.email, phone: payload.phone, is_active: payload.isActive });
-      setUsers(prev => prev.map(p => p.id === String(resp.id) ? ({ ...p, firstName: resp.first_name || p.firstName, lastName: resp.last_name || p.lastName, email: resp.email || p.email, phone: resp.phone || p.phone, isActive: resp.is_active ?? p.isActive }) : p));
+      const resp = await apiService.updateUser(Number(payload.id), { first_name: payload.firstName, last_name: payload.lastName, email: payload.email, is_active: payload.isActive });
+      setUsers(prev => prev.map(p => p.id === String(resp.id) ? ({ ...p, firstName: resp.first_name || p.firstName, lastName: resp.last_name || p.lastName, email: resp.email || p.email, isActive: resp.is_active ?? p.isActive }) : p));
       setNotificationData({ type: 'success', title: 'Enregistré', message: 'Utilisateur mis à jour.' }); setShowNotification(true); setShowUserDetails(false); setSelectedUser(null);
     } catch (e:any) { setNotificationData({ type: 'error', title: 'Erreur', message: e?.message || 'Erreur' }); setShowNotification(true); }
   };
@@ -267,7 +267,7 @@ const AdminDashboard: React.FC = () => {
                   {paginated.map(user => (
                     <tr key={user.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap"><div className="flex items-center"><div className="flex-shrink-0 h-10 w-10"><div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center"><Users className="h-6 w-6 text-gray-600"/></div></div><div className="ml-4"><div className="text-sm font-medium text-gray-900">{user.firstName} {user.lastName}</div></div></div></td>
-                      <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-900">{user.email}</div><div className="text-sm text-gray-500">{user.phone}</div></td>
+                      <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-900">{user.email}</div></td>
                       <td className="px-6 py-4 whitespace-nowrap"><span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${user.role === 'admin' ? 'bg-red-100 text-red-800' : user.role === 'company' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>{user.role === 'admin' ? 'Admin' : user.role === 'company' ? 'Compagnie' : 'Utilisateur'}</span></td>
                       <td className="px-6 py-4 whitespace-nowrap"><span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{user.isActive ? 'Actif' : 'Inactif'}</span></td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.createdAt ? new Date(user.createdAt).toLocaleDateString('fr-FR') : '-'}</td>

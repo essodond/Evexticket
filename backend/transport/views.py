@@ -96,7 +96,7 @@ from .serializers import (
     CompanySerializer, CitySerializer, TripSerializer, BookingSerializer,
     PaymentSerializer, ReviewSerializer, NotificationSerializer,
     TripSearchSerializer, BookingCreateSerializer, DashboardStatsSerializer,
-    CompanyStatsSerializer
+    CompanyStatsSerializer, UserSerializer
 )
 
 class CurrentUserView(APIView):
@@ -329,3 +329,10 @@ class DashboardStatsView(APIView):
             tb = traceback.format_exc()
             logger.error('Error in DashboardStatsView.get: %s\n%s', str(e), tb)
             return Response({'error': 'Erreur serveur lors du calcul des statistiques', 'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class UserViewSet(viewsets.ModelViewSet):
+    """ViewSet pour les utilisateurs"""
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAdminUser]
