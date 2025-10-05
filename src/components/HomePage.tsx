@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 // Elle stocke et récupère quelques informations (username) depuis localStorage
 // pour afficher un avatar ou état de connexion simple.
 import { Search, MapPin, Calendar, ArrowRight } from 'lucide-react';
+import { useCities } from '../hooks/useApi';
 
 interface HomePageProps {
   onSearch: (searchData: any) => void;
@@ -18,7 +19,8 @@ const HomePage: React.FC<HomePageProps> = ({ onSearch, isAuthenticated = false, 
   const [date, setDate] = useState('');
   const [username, setUsername] = useState<string | null>(null);
 
-  const cities = ['Lomé', 'Sokodé', 'Kara', 'Atakpamé', 'Kpalimé', 'Dapaong', 'Tsévié', 'Aného'];
+  const { cities: apiCities, loading: citiesLoading } = useCities();
+  const cities = (apiCities && apiCities.length) ? apiCities.map((c:any) => (c.name || c.nom || c.label || String(c))) : ['Lomé', 'Sokodé', 'Kara', 'Atakpamé', 'Kpalimé', 'Dapaong', 'Tsévié', 'Aného'];
 
   // load username from localStorage for avatar initial
   React.useEffect(() => {
@@ -100,10 +102,10 @@ const HomePage: React.FC<HomePageProps> = ({ onSearch, isAuthenticated = false, 
                       className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       required
                     >
-                      <option value="">Sélectionnez une ville</option>
-                      {cities.map(city => (
-                        <option key={city} value={city}>{city}</option>
-                      ))}
+                        <option value="">{citiesLoading ? 'Chargement...' : 'Sélectionnez une ville'}</option>
+                        {!citiesLoading && cities.map(city => (
+                          <option key={city} value={city}>{city}</option>
+                        ))}
                     </select>
                   </div>
                 </div>
@@ -121,8 +123,8 @@ const HomePage: React.FC<HomePageProps> = ({ onSearch, isAuthenticated = false, 
                       className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       required
                     >
-                      <option value="">Sélectionnez une ville</option>
-                      {cities.filter(city => city !== departure).map(city => (
+                      <option value="">{citiesLoading ? 'Chargement...' : 'Sélectionnez une ville'}</option>
+                      {!citiesLoading && cities.filter((city:any) => city !== departure).map(city => (
                         <option key={city} value={city}>{city}</option>
                       ))}
                     </select>
@@ -136,7 +138,7 @@ const HomePage: React.FC<HomePageProps> = ({ onSearch, isAuthenticated = false, 
                   </label>
                   <div className="relative">
                     <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-blue-500" />
-                    <input 
+                      <input 
                       type="date"
                       value={date}
                       onChange={(e) => setDate(e.target.value)}

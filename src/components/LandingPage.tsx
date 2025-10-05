@@ -7,6 +7,10 @@ import { Bus, MapPin, Clock, Shield, Users, Star, ArrowRight } from 'lucide-reac
 interface LandingPageProps {
   onNavigateToAuth: (mode: 'login' | 'register') => void;
   onNavigateToHome: () => void;
+  /** URL public du logo à afficher dans l'en-tête (optionnel). Ex: '/logo.png' */
+  logoUrl?: string;
+  /** Texte alternatif pour le logo */
+  logoAlt?: string;
 }
 
 const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateToHome }) => {
@@ -55,10 +59,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateT
   ];
 
   const destinations = [
-    { name: "Lomé", image: "https://i.pinimg.com/736x/9c/cd/6e/9ccd6e29dc537fc53e9a08ee54e9b3a3.jpg" },
-    { name: "Kara", image: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=300&h=200&fit=crop" },
-    { name: "Kpalimé", image: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=300&h=200&fit=crop" },
-    { name: "Sokodé", image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=300&h=200&fit=crop" }
+    { name: 'Lomé', image: 'https://images.unsplash.com/photo-1601758123927-4b6f0a0d3f5b?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.0.3&s=8d0fc1c1d9f0c3ad1f3f9d8c6f0d3a7a' },
+    { name: 'Kara', image: 'https://images.unsplash.com/photo-1587502537745-1c89b6a0c3ad?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.0.3&s=5a2b6a1ac0f3b7e2a7a6c9d4a1b0f9d8' },
+    { name: "Kpalimé", image: 'https://images.unsplash.com/photo-1506801310323-534be5e7bb65?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.0.3&s=3f2a1b2c4d5e6f7a8b9c0d1e2f3a4b5c' },
+    { name: 'Sokodé', image: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.0.3&s=7b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e' }
   ];
 
   return (
@@ -68,7 +72,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateT
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
-              <Bus className="w-10 h-10 text-blue-600 mr-3" />
+              {/* Logo: preferer `logoUrl` si fourni */}
+              {/** @note: fournissez votre logo en plaçant le fichier dans /public et en passant '/logo.png' à la prop logoUrl */}
+              {/** eslint-disable-next-line @next/next/no-img-element */}
+              {props.logoUrl ? (
+                <img src={props.logoUrl} alt={props.logoAlt || 'Logo'} className="w-10 h-10 object-contain mr-3" />
+              ) : (
+                <Bus className="w-10 h-10 text-blue-600 mr-3" />
+              )}
               <h1 className="text-2xl font-bold text-gray-900">EvexTicket</h1>
             </div>
             <div className="flex space-x-4">
@@ -120,16 +131,17 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateT
               </div>
             </div>
             <div className="relative">
-              <div className="bg-gradient-to-r from-blue-500 to-green-500 rounded-2xl p-8 text-white">
-                <div className="text-center">
-                  <Bus className="w-24 h-24 mx-auto mb-4" />
-                  <h3 className="text-2xl font-bold mb-2">Evexticket</h3>
-                  <p className="text-blue-100">Votre transport, notre passion</p>
+              <div className="rounded-2xl overflow-hidden shadow-xl">
+                <div className="relative h-80 bg-gray-200">
+                  <img src={destinations[0].image} alt="Togo paysage" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent flex items-end">
+                    <div className="p-6 text-white">
+                      <h3 className="text-2xl font-bold">Explorez Lomé et ses alentours</h3>
+                      <p className="text-sm">Trajets fréquents, confort et sécurité.</p>
+                    </div>
+                  </div>
                 </div>
               </div>
-              {/* Images décoratives */}
-              <div className="absolute -top-4 -right-4 w-20 h-20 bg-yellow-400 rounded-full opacity-80"></div>
-              <div className="absolute -bottom-4 -left-4 w-16 h-16 bg-red-400 rounded-full opacity-80"></div>
             </div>
           </div>
         </div>
@@ -148,7 +160,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateT
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((feature, index) => (
-              <div key={index} className="bg-gray-50 p-6 rounded-xl hover:shadow-lg transition-shadow">
+              <div key={index} className="bg-gradient-to-tr from-white to-gray-50 p-6 rounded-2xl hover:shadow-2xl transition-shadow border">
                 <div className="mb-4">{feature.icon}</div>
                 <h4 className="text-xl font-semibold text-gray-900 mb-2">{feature.title}</h4>
                 <p className="text-gray-600">{feature.description}</p>
@@ -172,15 +184,60 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateT
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {destinations.map((destination, index) => (
               <div key={index} className="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow">
-                <div className="h-48 bg-gradient-to-r from-blue-400 to-green-400 flex items-center justify-center">
-                  <MapPin className="w-12 h-12 text-white" />
+                <div className="h-48 relative">
+                  <img src={destination.image} alt={destination.name} className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-black/20 flex items-end">
+                    <div className="p-4 text-white">
+                      <h4 className="text-lg font-semibold">{destination.name}</h4>
+                    </div>
+                  </div>
                 </div>
                 <div className="p-4">
-                  <h4 className="text-xl font-semibold text-gray-900">{destination.name}</h4>
                   <p className="text-gray-600">Découvrez cette magnifique ville</p>
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Security / Reliability Section */}
+      <section className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+            <div>
+              <h3 className="text-3xl font-bold text-gray-900 mb-4">Sécurité & Fiabilité</h3>
+              <p className="text-gray-600 mb-6">Nous mettons la sécurité au cœur de nos opérations : inspections régulières des véhicules, formation continue des conducteurs et support client disponible 24/7. Vos données et paiements sont chiffrés et traités par des prestataires de confiance.</p>
+              <ul className="space-y-3 text-gray-700">
+                <li className="flex items-start"><Shield className="w-5 h-5 text-purple-600 mr-3"/> Véhicules entretenus et contrôles réguliers</li>
+                <li className="flex items-start"><Users className="w-5 h-5 text-red-600 mr-3"/> Chauffeurs formés et évalués</li>
+                <li className="flex items-start"><Lock className="w-5 h-5 text-yellow-600 mr-3"/> Paiement et données sécurisées</li>
+              </ul>
+            </div>
+            <div className="rounded-xl overflow-hidden shadow-lg">
+              <img src="https://images.unsplash.com/photo-1549576490-b0b4831ef60a?q=80&w=1400&auto=format&fit=crop&ixlib=rb-4.0.3&s=abcd1234" alt="Contrôle bus" className="w-full h-80 object-cover" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <section className="py-16 bg-gradient-to-r from-blue-50 to-green-50">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h3 className="text-3xl font-bold mb-6">Ils nous font confiance</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <blockquote className="bg-white p-6 rounded-xl shadow">
+              <p className="text-gray-700">« Réservation simple et service impeccable. Mes trajets vers Kara sont toujours confortables. »</p>
+              <footer className="mt-4 text-sm text-gray-500">— A. Koffi</footer>
+            </blockquote>
+            <blockquote className="bg-white p-6 rounded-xl shadow">
+              <p className="text-gray-700">« Chauffeurs professionnels et bus propres. Je recommande EvexTicket. »</p>
+              <footer className="mt-4 text-sm text-gray-500">— M. Ahoueke</footer>
+            </blockquote>
+            <blockquote className="bg-white p-6 rounded-xl shadow">
+              <p className="text-gray-700">« Paiement mobile rapide et support réactif. Très pratique. »</p>
+              <footer className="mt-4 text-sm text-gray-500">— S. Agbo</footer>
+            </blockquote>
           </div>
         </div>
       </section>
