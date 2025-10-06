@@ -28,16 +28,29 @@ function App() {
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [isAuthenticated] = useState(false);
   const [searchData, setSearchData] = useState<any>(null);
+  const [searchResults, setSearchResults] = useState<any[]>([]); // New state for search results
   const [selectedTrip, setSelectedTrip] = useState<any>(null);
   const [bookingData, setBookingData] = useState<any>(null);
   const [paymentData, setPaymentData] = useState<any>(null);
 
   const navigate = useNavigate();
 
-  const handleSearch = (data: any) => {
+  const handleSearch = async (data: any) => {
     setSearchData(data);
-    localStorage.setItem('currentView', 'results');
-    navigate('/results');
+    try {
+      const trips = await apiService.searchTrips({
+        departure_city: data.departure,
+        arrival_city: data.arrival,
+        travel_date: data.date, // Assuming data.date is in a format apiService expects
+        passengers: data.passengers || 1, // Default to 1 if not provided
+      });
+      setSearchResults(trips);
+      localStorage.setItem('currentView', 'results');
+      navigate('/results');
+    } catch (error) {
+      console.error("Error searching for trips:", error);
+      // Optionally, handle error display to the user
+    }
   };
 
   const handleTripSelect = (trip: any) => {
@@ -88,7 +101,7 @@ function App() {
       }
     }
     localStorage.setItem('currentView', 'home');
-    navigate('/');
+    navigate('/home');
   };
 
   const handleLogout = () => {
@@ -153,7 +166,7 @@ function App() {
           <Route path="/login" element={<AuthPage mode={authMode} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} />} />
           <Route path="/register" element={<AuthPage mode={'register'} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} />} />
           <Route path="/home" element={<HomePage onSearch={handleSearch} isAuthenticated={isAuthenticated} onNavigateToAuth={handleNavigateToAuth} onLogout={handleLogout} />} />
-          <Route path="/results" element={<ResultsPage searchData={searchData} onBack={() => navigate('/')} onSelectTrip={handleTripSelect} />} />
+          <Route path="/results" element={<ResultsPage searchData={searchData} searchResults={searchResults} onBack={() => navigate('/')} onSelectTrip={handleTripSelect} />} />
           <Route path="/booking" element={<BookingPage trip={selectedTrip} searchData={searchData} onBack={() => navigate('/results')} onProceedToPayment={handleProceedToPayment} />} />
           <Route path="/payment" element={<PaymentPage bookingData={bookingData} onBack={() => navigate('/booking')} onPaymentSuccess={handlePaymentSuccess} />} />
           <Route path="/confirmation" element={<ConfirmationPage paymentData={paymentData} onNewBooking={handleNewBooking} />} />

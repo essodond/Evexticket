@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, MapPin, Clock, DollarSign, Bus, AlertCircle, CheckCircle } from 'lucide-react';
+import apiService from '../services/api';
 
 interface Company {
   id: string | number;
@@ -24,10 +25,9 @@ interface Trip {
 interface AddTripModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (trip: any) => void;
-  editingTrip?: Trip | null;
-  companies: Company[];
-  cities?: { id: number; name: string }[];
+  onSave: (trip: Trip) => void;
+  editingTrip: Trip | null;
+  cities: City[];
 }
 
 const AddTripModal: React.FC<AddTripModalProps> = ({ 
@@ -73,10 +73,10 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
     { value: 'Luxury', label: 'Luxury' }
   ];
 
-  const cities = [
-    // fallback static list if `cities` prop is not provided
-    'Lomé', 'Kara', 'Kpalimé', 'Sokodé', 'Atakpamé', 'Dapaong', 'Tsévié', 'Aného', 'Bassar', 'Mango'
-  ];
+  // const cities = [
+  //   // fallback static list if `cities` prop is not provided
+  //   'Lomé', 'Kara', 'Kpalimé', 'Sokodé', 'Atakpamé', 'Dapaong', 'Tsévié', 'Aného', 'Bassar', 'Mango'
+  // ];
 
   useEffect(() => {
     if (editingTrip) {
@@ -205,11 +205,28 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
     };
 
     // Simuler requête API locale (AdminDashboard appellera apiService)
-    setTimeout(() => {
-      setIsLoading(false);
-      onSave(payload as any);
+    // setTimeout(() => {
+    //   setIsLoading(false);
+    //   onSave(payload as any);
+    //   onClose();
+    // }, 300);
+
+    try {
+      let response;
+      if (editingTrip) {
+        await apiService.put(`/trips/${editingTrip.id}`, tripData);
+        onSave({ ...editingTrip, ...tripData });
+      } else {
+        const response = await apiService.post('/trips', tripData);
+        onSave(response.data);
+      }
       onClose();
-    }, 300);
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde du trajet:', error);
+      // Gérer l'affichage des erreurs à l'utilisateur si nécessaire
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleClose = () => {
@@ -299,10 +316,8 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
               >
                 <option value="">Sélectionner une ville</option>
                 {/* Use provided cities prop when available */}
-                { propCities ? propCities.map((c: any) => (
+                { propCities && propCities.map((c: any) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
-                  )) : cities.map(city => (
-                    <option key={city} value={city}>{city}</option>
                   )) }
               </select>
               {errors.departureCity && (
@@ -329,10 +344,8 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
                 }`}
               >
                 <option value="">Sélectionner une ville</option>
-                { propCities ? propCities.filter((c: any) => String(c.id) !== String(formData.departureCity)).map((c: any) => (
+                { propCities && propCities.filter((c: any) => String(c.id) !== String(formData.departureCity)).map((c: any) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
-                  )) : cities.filter(city => city !== formData.departureCity).map(city => (
-                    <option key={city} value={city}>{city}</option>
                   )) }
               </select>
               {errors.arrivalCity && (
