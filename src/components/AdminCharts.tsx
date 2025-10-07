@@ -20,15 +20,10 @@ import {
   Cell
 } from 'recharts';
 
-interface Company {
-  id: string;
-  name: string;
-}
+import { Company as TCompany, Trip as TTrip } from '../types';
 
-interface Trip {
-  id: string;
-  companyId: string;
-}
+type Company = TCompany;
+type Trip = TTrip;
 
 interface AdminChartsProps {
   className?: string;
@@ -70,7 +65,10 @@ const AdminCharts: React.FC<AdminChartsProps> = ({ className = '', stats = null,
 
   // Composer les stats par compagnie en utilisant les trajets existants
   const tripCountsByCompany: Record<string, number> = {};
-  trips.forEach(t => { tripCountsByCompany[t.companyId] = (tripCountsByCompany[t.companyId] || 0) + 1; });
+  trips.forEach(t => {
+    const key = String((t as any).companyId ?? (t as any).company ?? '0');
+    tripCountsByCompany[key] = (tripCountsByCompany[key] || 0) + 1;
+  });
   const totalTripsCount = Object.values(tripCountsByCompany).reduce((s, v) => s + v, 0) || defaultTotalTrips;
 
   const palette = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4'];

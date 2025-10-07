@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, MapPin, Clock, DollarSign, Bus, AlertCircle, CheckCircle } from 'lucide-react';
 import apiService from '../services/api';
+import { City } from '../types';
 
 interface Company {
   id: string | number;
@@ -27,7 +28,8 @@ interface AddTripModalProps {
   onClose: () => void;
   onSave: (trip: Trip) => void;
   editingTrip: Trip | null;
-  cities: City[];
+  companies?: Company[];
+  cities?: City[];
 }
 
 const AddTripModal: React.FC<AddTripModalProps> = ({ 
@@ -212,18 +214,16 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
     // }, 300);
 
     try {
-      let response;
       if (editingTrip) {
-        await apiService.put(`/trips/${editingTrip.id}`, tripData);
-        onSave({ ...editingTrip, ...tripData });
+        const updated = await apiService.updateTrip(Number(editingTrip.id), payload);
+        onSave({ ...editingTrip, ...updated } as any);
       } else {
-        const response = await apiService.post('/trips', tripData);
-        onSave(response.data);
+        const created = await apiService.createTrip(payload as any);
+        onSave(created as any);
       }
       onClose();
     } catch (error) {
       console.error('Erreur lors de la sauvegarde du trajet:', error);
-      // Gérer l'affichage des erreurs à l'utilisateur si nécessaire
     } finally {
       setIsLoading(false);
     }
@@ -285,7 +285,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
                 }`}
               >
                 <option value="">Sélectionner une compagnie</option>
-                {companies.filter(c => c.isActive).map(company => (
+                {companies && companies.filter(c => c.isActive).map(company => (
                   <option key={company.id} value={company.id}>
                     {company.name}
                   </option>
