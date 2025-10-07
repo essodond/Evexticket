@@ -12,7 +12,12 @@ interface LocalBooking extends Booking {
   trip_details?: Trip; // Add trip_details for local use if needed
 }
 
-const CompanyDashboard: React.FC = () => {
+interface CompanyDashboardProps {
+  logoUrl?: string;
+  siteTitle?: string;
+}
+
+const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle }) => {
   const auth = useAuth();
   const companyId = auth.user?.company_id;
   const [activeTab, setActiveTab] = useState('trips');
@@ -179,7 +184,12 @@ const CompanyDashboard: React.FC = () => {
 
   return (
     <div className="company-dashboard p-6">
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">Tableau de bord de la compagnie pour l'ID: {companyId}</h1>
+      <div className="flex items-center mb-6">
+        {logoUrl && (
+          <img src={logoUrl} alt={siteTitle || "Logo"} className="h-10 w-10 mr-3" />
+        )}
+        <h1 className="text-3xl font-bold text-gray-800">Tableau de bord de la compagnie {siteTitle ? `pour ${siteTitle}` : ''} (ID: {companyId})</h1>
+      </div>
 
       {/* Stats Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -188,7 +198,11 @@ const CompanyDashboard: React.FC = () => {
             <p className="text-sm text-gray-500">Total Trips</p>
             <p className="text-2xl font-bold">{stats?.totalTrips || 0}</p>
           </div>
-          <Bus className="text-blue-500" size={28} />
+          {logoUrl ? (
+            <img src={logoUrl} alt={siteTitle || "Logo"} className="h-7 w-7 text-blue-500" />
+          ) : (
+            <Bus className="text-blue-500" size={28} />
+          )}
         </div>
         <div className="bg-white p-4 rounded-lg shadow flex items-center justify-between">
           <div>

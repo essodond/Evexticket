@@ -11,9 +11,11 @@ interface LandingPageProps {
   logoUrl?: string;
   /** Texte alternatif pour le logo */
   logoAlt?: string;
+  /** Titre du site à afficher dans l'en-tête */
+  siteTitle?: string;
 }
 
-const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateToHome, logoUrl = undefined, logoAlt = undefined }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateToHome, logoUrl = undefined, logoAlt = undefined, siteTitle = "EvexTicket" }) => {
   const [isLoggedIn] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -88,7 +90,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateT
                   <Bus className="w-6 h-6 text-slate-900" />
                 </div>
               )}
-              <h1 className="text-xl font-extrabold tracking-tight">EvexTicket</h1>
+              <h1 className="text-xl font-extrabold tracking-tight">{siteTitle}</h1>
             </div>
 
             <div className="hidden sm:flex items-center space-x-4">
@@ -133,7 +135,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateT
                 ) : (
                   <Bus className="w-8 h-8 text-teal-300 mr-3" />
                 )}
-                <span className="font-bold text-lg">EvexTicket</span>
+                <span className="font-bold text-lg">{siteTitle}</span>
               </div>
               <button onClick={() => setMenuOpen(false)} className="p-2 rounded-md text-slate-100">
                 <span className="sr-only">Fermer</span>
@@ -312,9 +314,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateT
             <div className="p-2 bg-gradient-to-br from-indigo-600 to-teal-400 rounded-md">
               <Bus className="w-6 h-6 text-slate-900" />
             </div>
-            <span className="font-semibold">EvexTicket</span>
+            <span className="font-semibold">{siteTitle}</span>
           </div>
-          <p className="text-sm text-slate-300">© {new Date().getFullYear()} EvexTicket — Tous droits réservés.</p>
+          <p className="text-sm text-slate-300">© {new Date().getFullYear()} {siteTitle} — Tous droits réservés.</p>
         </div>
       </footer>
 

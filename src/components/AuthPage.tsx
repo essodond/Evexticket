@@ -7,9 +7,11 @@ interface AuthPageProps {
   onBack: () => void;
   onSuccess: (user?: any) => void;
   onSwitchMode: (mode: 'login' | 'register') => void;
+  logoUrl?: string;
+  siteTitle?: string;
 }
 
-const AuthPage: React.FC<AuthPageProps> = ({ mode, onBack, onSuccess, onSwitchMode }) => {
+const AuthPage: React.FC<AuthPageProps> = ({ mode, onBack, onSuccess, onSwitchMode, logoUrl, siteTitle }) => {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -124,7 +126,11 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode, onBack, onSuccess, onSwitchMo
           
           <div className="flex justify-center mb-6">
             <div className="bg-blue-600 p-3 rounded-full">
-              <Bus className="w-8 h-8 text-white" />
+              {logoUrl ? (
+                <img src={logoUrl} alt={siteTitle || "Logo"} className="w-8 h-8 text-white" />
+              ) : (
+                <Bus className="w-8 h-8 text-white" />
+              )}
             </div>
           </div>
           
@@ -133,10 +139,9 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode, onBack, onSuccess, onSwitchMo
           </h2>
           <p className="mt-2 text-gray-600">
             {mode === 'login' 
-              ? 'Connectez-vous à votre compte Evexticket' 
-              : 'Rejoignez Evexticket et commencez à voyager'
-            }
-          </p>
+              ? `Connectez-vous à votre compte ${siteTitle || 'EvexTicket'}` 
+              : `Rejoignez ${siteTitle || 'EvexTicket'} et commencez à voyager`}
+            </p>
         </div>
 
         {/* Form */}

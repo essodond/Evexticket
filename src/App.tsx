@@ -162,9 +162,9 @@ function App() {
     <AuthProvider>
       <div className="App">
         <Routes>
-          <Route path="/" element={<LandingPage onNavigateToAuth={handleNavigateToAuth} onNavigateToHome={() => navigate('/')} />} />
-          <Route path="/login" element={<AuthPage mode={authMode} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} />} />
-          <Route path="/register" element={<AuthPage mode={'register'} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} />} />
+          <Route path="/" element={<LandingPage onNavigateToAuth={handleNavigateToAuth} onNavigateToHome={() => navigate('/')} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
+          <Route path="/login" element={<AuthPage mode={authMode} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
+          <Route path="/register" element={<AuthPage mode={'register'} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
           <Route path="/home" element={<HomePage onSearch={handleSearch} isAuthenticated={isAuthenticated} onNavigateToAuth={handleNavigateToAuth} onLogout={handleLogout} />} />
           <Route path="/results" element={<ResultsPage searchData={searchData} searchResults={searchResults} onBack={() => navigate('/')} onSelectTrip={handleTripSelect} />} />
           <Route path="/booking" element={<BookingPage trip={selectedTrip} searchData={searchData} onBack={() => navigate('/results')} onProceedToPayment={handleProceedToPayment} />} />
@@ -173,7 +173,7 @@ function App() {
 
           <Route path="/company" element={
             <ProtectedRoute allowed={['company']}>
-              <CompanyDashboard />
+              <CompanyDashboard logoUrl="/logo.jpg" siteTitle="EvexTicket" />
             </ProtectedRoute>
           } />
 
@@ -185,7 +185,7 @@ function App() {
 
         </Routes>
 
-        {showDashboardControls()}
+        {/* {showDashboardControls()} */}
       </div>
     </AuthProvider>
   );
