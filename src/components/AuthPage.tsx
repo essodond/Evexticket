@@ -125,13 +125,11 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode, onBack, onSuccess, onSwitchMo
           </button>
           
           <div className="flex justify-center mb-6">
-            <div className="bg-blue-600 p-3 rounded-full">
-              {logoUrl ? (
-                <img src={logoUrl} alt={siteTitle || "Logo"} className="w-8 h-8 text-white" />
-              ) : (
-                <Bus className="w-8 h-8 text-white" />
-              )}
-            </div>
+            {logoUrl ? (
+              <img src={logoUrl} alt={siteTitle || "Logo"} className="w-24 h-24 rounded-full" />
+            ) : (
+              <Bus className="w-24 h-24 text-blue-600" />
+            )}
           </div>
           
           <h2 className="text-3xl font-bold text-gray-900">

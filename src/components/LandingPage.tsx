@@ -64,8 +64,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateT
   const destinations = [
     { name: 'Lomé', image: 'https://i.pinimg.com/736x/9c/cd/6e/9ccd6e29dc537fc53e9a08ee54e9b3a3.jpg' },
     { name: 'Kara', image: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFnHDfOQwYE9pg0Xj3xoJdai_oD_sMfZnPLQ&s' },
-    { name: "Kpalimé", image: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1200&q=60' },
-    { name: 'Sokodé', image: 'https://images.unsplash.com/photo-1505739774209-0a0b2f6a9c8d?auto=format&fit=crop&w=1200&q=60' }
+    { name: "Atkpame", image: 'https://i.pinimg.com/1200x/fc/4b/8a/fc4b8af0ff5df7825dbfc659685ea477.jpg' },
+    { name: 'Sokodé', image: 'https://i.pinimg.com/1200x/e1/e1/a3/e1e1a39c9d441c11a4e1955120942222.jpg' }
   ];
 
   return (
@@ -264,7 +264,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToAuth, onNavigateT
             </ul>
           </div>
           <div className="rounded-xl overflow-hidden shadow-lg border border-white/6 bg-white/3 backdrop-blur-md">
-            <img loading="lazy" src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=1200&q=60" alt="Sécurité" className="w-full h-64 object-cover" />
+            <img loading="lazy" src="https://i.pinimg.com/1200x/be/d9/5f/bed95f67a0643a9dcd08b39554c52f0e.jpg" alt="Sécurité" className="w-full h-64 object-cover" />
           </div>
         </div>
       </section>
