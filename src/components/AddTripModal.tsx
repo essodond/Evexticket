@@ -28,16 +28,16 @@ interface AddTripModalProps {
   onClose: () => void;
   onSave: (trip: Trip) => void;
   editingTrip: Trip | null;
-  companies?: Company[];
+  companyId: string | number;
   cities?: City[];
 }
 
-const AddTripModal: React.FC<AddTripModalProps> = ({ 
-  isOpen, 
-  onClose, 
-  onSave, 
+const AddTripModal: React.FC<AddTripModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
   editingTrip,
-  companies,
+  companyId,
   cities: propCities
 }) => {
   // Helper pour calculer la durée en minutes (gère le lendemain)
@@ -53,7 +53,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
   };
 
   const [formData, setFormData] = useState({
-    companyId: editingTrip?.companyId || '',
+    companyId: editingTrip?.companyId || companyId,
     departureCity: editingTrip?.departureCity || '',
     arrivalCity: editingTrip?.arrivalCity || '',
     departureTime: editingTrip?.departureTime || '',
@@ -62,7 +62,8 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
     duration: editingTrip?.duration || 0,
     busType: editingTrip?.busType || 'Standard',
     capacity: editingTrip?.capacity || 50,
-    isActive: editingTrip?.isActive ?? true
+    isActive: editingTrip?.isActive ?? true,
+    date: editingTrip?.date || ''
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -92,7 +93,8 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
         duration: editingTrip.duration,
         busType: editingTrip.busType,
         capacity: editingTrip.capacity,
-        isActive: editingTrip.isActive
+        isActive: editingTrip.isActive,
+        date: editingTrip.date
       });
     }
   }, [editingTrip]);
@@ -101,7 +103,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
     const { name, value, type } = e.target;
     const parsedValue: any = (type === 'checkbox')
       ? (e.target as HTMLInputElement).checked
-      : (e.target as HTMLSelectElement).tagName === 'SELECT' && name.match(/City|companyId/i)
+      : (e.target as HTMLSelectElement).tagName === 'SELECT' && name.match(/City/i)
         ? (value === '' ? '' : Number(value))
         : (type === 'number' ? parseFloat(value) || 0 : value);
 
@@ -132,9 +134,9 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!formData.companyId) {
-      newErrors.companyId = 'Veuillez sélectionner une compagnie';
-    }
+    // if (!formData.companyId) {
+    //   newErrors.companyId = 'Veuillez sélectionner une compagnie';
+    // }
 
     if (!formData.departureCity) {
       newErrors.departureCity = 'La ville de départ est requise';
@@ -154,6 +156,10 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
 
     if (!formData.arrivalTime) {
       newErrors.arrivalTime = 'L\'heure d\'arrivée est requise';
+    }
+
+    if (!formData.date) {
+      newErrors.date = 'La date du trajet est requise';
     }
 
     // Calculer et valider que la durée est strictement positive (en minutes)
@@ -199,6 +205,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
       arrival_city: formData.arrivalCity ? Number(formData.arrivalCity) : null,
       departure_time: formData.departureTime,
       arrival_time: formData.arrivalTime,
+      date: formData.date,
       price: Number(formData.price),
       duration: Number(minutes),
       bus_type: formData.busType,
@@ -240,7 +247,8 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
       duration: 0,
       busType: 'Standard',
       capacity: 50,
-      isActive: true
+      isActive: true,
+      date: ''
     });
     setErrors({});
     onClose();
@@ -270,35 +278,6 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Compagnie */}
-            <div className="md:col-span-2">
-              <label htmlFor="companyId" className="block text-sm font-medium text-gray-700 mb-2">
-                Compagnie *
-              </label>
-              <select
-                id="companyId"
-                name="companyId"
-                value={formData.companyId}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.companyId ? 'border-red-500' : 'border-gray-300'
-                }`}
-              >
-                <option value="">Sélectionner une compagnie</option>
-                {companies && companies.filter(c => c.isActive).map(company => (
-                  <option key={company.id} value={company.id}>
-                    {company.name}
-                  </option>
-                ))}
-              </select>
-              {errors.companyId && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <AlertCircle className="w-4 h-4 mr-1" />
-                  {errors.companyId}
-                </p>
-              )}
-            </div>
-
             {/* Ville de départ */}
             <div>
               <label htmlFor="departureCity" className="block text-sm font-medium text-gray-700 mb-2">
@@ -352,6 +331,29 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
                 <p className="mt-1 text-sm text-red-600 flex items-center">
                   <AlertCircle className="w-4 h-4 mr-1" />
                   {errors.arrivalCity}
+                </p>
+              )}
+            </div>
+
+            {/* Date du trajet */}
+            <div>
+              <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
+                Date du trajet *
+              </label>
+              <input
+                type="date"
+                id="date"
+                name="date"
+                value={formData.date || ''}
+                onChange={handleInputChange}
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  errors.date ? 'border-red-500' : 'border-gray-300'
+                }`}
+              />
+              {errors.date && (
+                <p className="mt-1 text-sm text-red-600 flex items-center">
+                  <AlertCircle className="w-4 h-4 mr-1" />
+                  {errors.date}
                 </p>
               )}
             </div>

@@ -5,6 +5,7 @@ export interface City {
   region?: string;
   is_active?: boolean;
   created_at?: string;
+  date?: string;
 }
 
 export interface Company {
@@ -33,9 +34,11 @@ export interface Trip {
   departureCity?: number | string;
   departure_city?: number;
   departure_city_name?: string;
+  origin?: string;
   arrivalCity?: number | string;
   arrival_city?: number;
   arrival_city_name?: string;
+  destination?: string;
   departureTime?: string;
   departure_time?: string;
   arrivalTime?: string;

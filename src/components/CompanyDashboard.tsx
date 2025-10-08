@@ -5,7 +5,7 @@ import AddTripModal from './AddTripModal';
 import ConfirmationModal from './ConfirmationModal';
 import NotificationModal from './NotificationModal';
 import CompanyCharts from './CompanyCharts';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface LocalBooking extends Booking {
@@ -38,52 +38,45 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
   const [trips, setTrips] = useState<Trip[]>([]);
   const [bookings, setBookings] = useState<LocalBooking[]>([]);
 
-  useEffect(() => {
-    let mounted = true;
-
-    const fetchCompanyData = async () => {
-      try {
-        // const companyId = auth.user?.company_id; // This line is moved up
-        if (!companyId) {
-          console.error("Company ID not found for the authenticated user.");
-          setNotificationData({
-            type: 'error',
-            title: 'Erreur d\'authentification',
-            message: 'ID de compagnie non trouvé pour l\'utilisateur authentifié.'
-          });
-          setShowNotification(true);
-          return;
-        }
-        const companyStats = await apiService.getCompanyStats(companyId);
-        if (mounted) {
-          setStats(companyStats);
-        }
-
-        const fetchedTrips = await apiService.getTrips(); // This should be filtered by company on backend
-        if (mounted) {
-          setTrips(fetchedTrips);
-        }
-
-        const fetchedBookings = await apiService.getBookings(); // This should be filtered by company on backend
-        if (mounted) {
-          setBookings(fetchedBookings);
-        }
-
-      } catch (e) {
-        console.error('Failed to load company dashboard data', e);
+  const fetchCompanyData = useCallback(async () => {
+    try {
+      if (!companyId) {
+        console.error("Company ID not found for the authenticated user.");
         setNotificationData({
           type: 'error',
-          title: 'Erreur de chargement',
-          message: 'Impossible de charger les données du tableau de bord.'
+          title: 'Erreur d\'authentification',
+          message: 'ID de compagnie non trouvé pour l\'utilisateur authentifié.'
         });
         setShowNotification(true);
+        return;
       }
-    };
+      const companyStats = await apiService.getCompanyStats(companyId);
+      setStats(companyStats);
+
+      const fetchedTrips = await apiService.getTrips(companyId); // This should be filtered by company on backend
+      setTrips(fetchedTrips);
+
+      const fetchedBookings = await apiService.getBookings(); // This should be filtered by company on backend
+      setBookings(fetchedBookings);
+
+    } catch (e) {
+      console.error('Failed to load company dashboard data', e);
+      setNotificationData({
+        type: 'error',
+        title: 'Erreur de chargement',
+        message: 'Impossible de charger les données du tableau de bord.'
+      });
+      setShowNotification(true);
+    }
+  }, [companyId]);
+
+  useEffect(() => {
+    let mounted = true;
 
     fetchCompanyData();
 
     return () => { mounted = false };
-  }, [companyId]); // Add companyId to dependency array
+  }, [fetchCompanyData]); // Add fetchCompanyData to dependency array
 
   const handleSaveTrip = (trip: Trip) => {
     if (editingTrip) {
@@ -104,6 +97,7 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
     setShowNotification(true);
     setShowAddTripModal(false);
     setEditingTrip(null);
+    fetchCompanyData();
   };
 
   const handleDeleteTrip = async () => {
@@ -294,7 +288,7 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
                 {trips.map((trip) => (
                   <tr key={trip.id}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{trip.id}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{trip.origin} to {trip.destination}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{trip.departure_city_name} to {trip.arrival_city_name}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(trip.date).toLocaleDateString()}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{trip.departure_time}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{trip.price} €</td>
@@ -362,6 +356,7 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
           onClose={() => setShowAddTripModal(false)}
           onSave={handleSaveTrip}
           editingTrip={editingTrip}
+          companyId={companyId}
           cities={apiCities}
         />
       )}

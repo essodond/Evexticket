@@ -54,6 +54,7 @@ export interface Trip {
   updated_at: string;
   bookings_count?: number;
   available_seats?: number;
+  date: string;
 }
 
 export interface Booking {
@@ -95,6 +96,7 @@ export interface TripSearchParams {
   departure_city: string;
   arrival_city: string;
   travel_date: string;
+  date: string;
   passengers: number;
 }
 
@@ -237,15 +239,16 @@ class ApiService {
   }
 
   // Trajets
-  async getTrips(): Promise<Trip[]> {
-    return this.request<Trip[]>('/trips/');
+  async getTrips(companyId?: number): Promise<Trip[]> {
+    const response = await this.api.get<Trip[]>('/trips', { params: { company_id: companyId } });
+    return response.data;
   }
 
   async getTrip(id: number): Promise<Trip> {
     return this.request<Trip>(`/trips/${id}/`);
   }
 
-  async createTrip(trip: Omit<Trip, 'id' | 'created_at' | 'updated_at' | 'company_name' | 'departure_city_name' | 'arrival_city_name' | 'bookings_count' | 'available_seats'>): Promise<Trip> {
+  async createTrip(trip: Omit<Trip, 'arrival_city_name' | 'available_seats' | 'bookings_count' | 'company_name' | 'created_at' | 'departure_city_name' | 'id' | 'updated_at'>): Promise<Trip> {
     return this.request<Trip>('/trips/', {
       method: 'POST',
       body: JSON.stringify(trip),
