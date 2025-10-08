@@ -240,8 +240,8 @@ class ApiService {
 
   // Trajets
   async getTrips(companyId?: number): Promise<Trip[]> {
-    const response = await this.api.get<Trip[]>('/trips', { params: { company_id: companyId } });
-    return response.data;
+    const query = companyId ? `?company_id=${encodeURIComponent(String(companyId))}` : '';
+    return this.request<Trip[]>(`/trips/${query}`);
   }
 
   async getTrip(id: number): Promise<Trip> {

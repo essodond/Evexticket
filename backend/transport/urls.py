@@ -16,4 +16,5 @@ urlpatterns = [
     path('register/', views.RegisterView.as_view(), name='register'),
     path('login/', views.EmailAuthToken.as_view(), name='api-token-auth'),
     path('me/', views.CurrentUserView.as_view(), name='current-user'),
+    path('scheduled_trips/', views.scheduled_trips_list, name='scheduled-trips'),
 ]

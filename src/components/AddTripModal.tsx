@@ -1,33 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { X, MapPin, Clock, DollarSign, Bus, AlertCircle, CheckCircle } from 'lucide-react';
 import apiService from '../services/api';
-import { City } from '../types';
-
-interface Company {
-  id: string | number;
-  name: string;
-  isActive: boolean;
-}
-
-interface Trip {
-  id: string;
-  companyId: string | number;
-  departureCity: string | number;
-  arrivalCity: string | number;
-  departureTime: string;
-  arrivalTime: string;
-  price: number;
-  duration: number;
-  busType: string;
-  capacity: number;
-  isActive: boolean;
-}
+import { City, Trip as SharedTrip } from '../types';
 
 interface AddTripModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (trip: Trip) => void;
-  editingTrip: Trip | null;
+  onSave: (trip: SharedTrip) => void;
+  editingTrip: SharedTrip | null;
   companyId: string | number;
   cities?: City[];
 }
@@ -63,7 +43,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
     busType: editingTrip?.busType || 'Standard',
     capacity: editingTrip?.capacity || 50,
     isActive: editingTrip?.isActive ?? true,
-    date: editingTrip?.date || ''
+    date: (editingTrip as any)?.date || ''
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -84,17 +64,17 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
   useEffect(() => {
     if (editingTrip) {
       setFormData({
-        companyId: editingTrip.companyId,
-        departureCity: editingTrip.departureCity,
-        arrivalCity: editingTrip.arrivalCity,
-        departureTime: editingTrip.departureTime,
-        arrivalTime: editingTrip.arrivalTime,
-        price: editingTrip.price,
-        duration: editingTrip.duration,
-        busType: editingTrip.busType,
-        capacity: editingTrip.capacity,
-        isActive: editingTrip.isActive,
-        date: editingTrip.date
+        companyId: editingTrip.companyId ?? companyId,
+        departureCity: editingTrip.departureCity ?? '',
+        arrivalCity: editingTrip.arrivalCity ?? '',
+        departureTime: editingTrip.departureTime ?? '',
+        arrivalTime: editingTrip.arrivalTime ?? '',
+        price: editingTrip.price ?? 0,
+        duration: editingTrip.duration ?? 0,
+        busType: editingTrip.busType ?? 'Standard',
+        capacity: editingTrip.capacity ?? 50,
+        isActive: editingTrip.isActive ?? true,
+        date: (editingTrip as any).date ?? ''
       });
     }
   }, [editingTrip]);

@@ -336,3 +336,19 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAdminUser]
+
+
+from rest_framework.decorators import api_view
+from .serializers import ScheduledTripSerializer
+from .models import ScheduledTrip
+
+
+@api_view(['GET'])
+def scheduled_trips_list(request):
+    """List scheduled trips, optionally filtered by company_id."""
+    company_id = request.query_params.get('company_id')
+    qs = ScheduledTrip.objects.all().select_related('trip', 'trip__departure_city', 'trip__arrival_city')
+    if company_id:
+        qs = qs.filter(trip__company_id=company_id)
+    serializer = ScheduledTripSerializer(qs, many=True)
+    return Response(serializer.data)

@@ -271,3 +271,12 @@ class CompanyStatsSerializer(serializers.Serializer):
     active_trips = serializers.IntegerField()
     pending_bookings = serializers.IntegerField()
     monthly_growth = serializers.FloatField()
+
+
+class ScheduledTripSerializer(serializers.ModelSerializer):
+    trip_info = TripSerializer(source='trip', read_only=True)
+
+    class Meta:
+        model = ScheduledTrip
+        fields = ['id', 'trip', 'trip_info', 'date', 'is_active', 'available_seats', 'created_at']
+        read_only_fields = ['id', 'created_at']

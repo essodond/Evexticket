@@ -310,3 +310,31 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"{self.title} - {self.user.username}"
+
+
+class ScheduledTrip(models.Model):
+    """Représente un voyage daté (instance d'un Trip pour une date donnée).
+
+    Permet d'activer / désactiver un voyage pour une date spécifique sans
+    toucher le trajet permanent (Trip).
+    """
+    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='scheduled_trips', verbose_name='Trajet')
+    date = models.DateField(verbose_name='Date du voyage')
+    is_active = models.BooleanField(default=True, verbose_name='Voyage actif')
+    available_seats = models.PositiveIntegerField(null=True, blank=True, verbose_name='Places disponibles')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Date de création')
+
+    class Meta:
+        verbose_name = 'Voyage planifié'
+        verbose_name_plural = 'Voyages planifiés'
+        unique_together = ('trip', 'date')
+        ordering = ['date', 'trip__departure_time']
+
+    def __str__(self):
+        return f"{self.trip} @ {self.date}"
+
+    def save(self, *args, **kwargs):
+        # Si available_seats n'est pas précisé, initialiser à la capacité du bus
+        if self.available_seats is None:
+            self.available_seats = self.trip.capacity
+        super().save(*args, **kwargs)

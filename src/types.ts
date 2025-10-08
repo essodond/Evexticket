@@ -42,6 +42,7 @@ export interface Trip {
   departureTime?: string;
   departure_time?: string;
   arrivalTime?: string;
+  date?: string;
   arrival_time?: string;
   price?: number;
   duration?: number;
