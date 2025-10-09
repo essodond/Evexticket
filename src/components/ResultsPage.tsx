@@ -1,14 +1,16 @@
-import { ArrowLeft, Clock, Users, Star, ArrowRight } from 'lucide-react';
-import { Trip, TripSearchParams } from '../services/api'; // Import Trip interface
+import { ArrowLeft, Clock, Users, ArrowRight } from 'lucide-react';
+import { Trip, TripSearchParams } from '../services/api';
+import { useState, useMemo } from 'react';
 
 interface ResultsPageProps {
   searchData: TripSearchParams; // Use TripSearchParams for searchData
-  searchResults: Trip[]; // New prop for actual search results
+  searchResults: Trip[]; // actual search results from API
   onBack: () => void;
   onSelectTrip: (trip: Trip) => void;
 }
 
 const ResultsPage: React.FC<ResultsPageProps> = ({ searchData, searchResults, onBack, onSelectTrip }) => {
+  const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('fr-FR', {
@@ -18,6 +20,18 @@ const ResultsPage: React.FC<ResultsPageProps> = ({ searchData, searchResults, on
       day: 'numeric'
     });
   };
+
+  // Extraire la liste unique des compagnies depuis les résultats
+  const companies = useMemo(() => {
+    const map = new Map<string, { name: string }>();
+    for (const t of searchResults) {
+      if (t.company_name) map.set(t.company_name, { name: t.company_name });
+    }
+    return Array.from(map.values());
+  }, [searchResults]);
+
+  // Trajets filtrés par compagnie sélectionnée
+  const filteredTrips = selectedCompany ? searchResults.filter(t => t.company_name === selectedCompany) : searchResults;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -77,16 +91,32 @@ const ResultsPage: React.FC<ResultsPageProps> = ({ searchData, searchResults, on
             <option>Après-midi (12h-18h)</option>
             <option>Soir (18h-24h)</option>
           </select>
-          <select className="px-4 py-2 border border-gray-300 rounded-lg bg-white">
-            <option>Compagnie</option>
-            {/* Dynamically load companies or use a predefined list */}
-          </select>
+          <div className="px-4 py-2 border border-gray-300 rounded-lg bg-white">
+            <span className="text-sm text-gray-600">Compagnies: {companies.length}</span>
+          </div>
         </div>
+
+        {/* Étape 1 : afficher les compagnies */}
+        {!selectedCompany && (
+          <div className="mb-8">
+            <h2 className="text-lg font-bold mb-4">Choisissez une compagnie</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+              {companies.map(c => (
+                <button key={c.name} onClick={() => setSelectedCompany(c.name)} className="bg-white border border-gray-200 rounded-lg shadow-sm p-6 flex flex-col items-center hover:shadow-md transition-shadow">
+                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-2">
+                    <span className="text-blue-600 font-bold text-lg">{c.name.substring(0,2)}</span>
+                  </div>
+                  <span className="text-lg font-semibold text-gray-900">{c.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Trip Results */}
         <div className="space-y-6">
-          {searchResults.length > 0 ? (
-            searchResults.map((trip) => (
+          {filteredTrips.length > 0 ? (
+            filteredTrips.map((trip) => (
               <div key={trip.id} className="bg-white rounded-xl shadow-md border border-gray-100 hover:shadow-lg transition-shadow">
                 <div className="p-6">
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
