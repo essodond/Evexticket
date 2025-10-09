@@ -403,7 +403,8 @@ class ScheduledTripSearchView(APIView):
             available_scheduled_trips = []
             for st in scheduled_trips:
                 confirmed_bookings = Booking.objects.filter(
-                    scheduled_trip=st,
+                    trip=st.trip,
+                    travel_date=st.date,
                     status='confirmed'
                 ).count()
 

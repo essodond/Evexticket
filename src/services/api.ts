@@ -99,7 +99,6 @@ export interface TripSearchParams {
   departure_city: string;
   arrival_city: string;
   travel_date: string;
-  date: string;
   passengers: number;
 }
 

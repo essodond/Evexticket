@@ -58,25 +58,42 @@ const ResultsPage: React.FC<ResultsPageProps> = ({ searchData, searchResults, on
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Search Summary */}
-        <div className="bg-white rounded-lg shadow-sm border p-6 mb-8">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center space-x-4">
-              <div className="text-center">
-                <div className="text-lg font-semibold text-gray-900">{searchData.departure_city}</div>
-                <div className="text-sm text-gray-500">Départ</div>
+        {searchData && (
+          <>
+            <div className="bg-white rounded-lg shadow-sm border p-6 mb-8">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center space-x-4">
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-gray-900">{searchData.departure_city}</div>
+                    <div className="text-sm text-gray-500">Départ</div>
+                  </div>
+                  <ArrowRight className="w-5 h-5 text-gray-400" />
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-gray-900">{searchData.arrival_city}</div>
+                    <div className="text-sm text-gray-500">Arrivée</div>
+                  </div>
+                  <ArrowRight className="w-5 h-5 text-gray-400" />
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-gray-900">{searchData.travel_date}</div>
+                    <div className="text-sm text-gray-500">Date</div>
+                  </div>
+                  <ArrowRight className="w-5 h-5 text-gray-400" />
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-gray-900">{searchData.passengers}</div>
+                    <div className="text-sm text-gray-500">Passagers</div>
+                  </div>
+                </div>
               </div>
-              <ArrowRight className="w-5 h-5 text-gray-400" />
-              <div className="text-center">
-                <div className="text-lg font-semibold text-gray-900">{searchData.arrival_city}</div>
-                <div className="text-sm text-gray-500">Arrivée</div>
-              </div>
+              <Button onClick={handleModifySearch} className="px-6 py-2">
+                Modifier la recherche
+              </Button>
             </div>
-            <div className="text-center">
+            <div className="text-center mt-4">
               <div className="text-lg font-semibold text-gray-900">{formatDate(searchData.travel_date)}</div>
               <div className="text-sm text-gray-500">{searchResults.length} trajets trouvés</div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
 
         {/* Filters */}
         <div className="flex flex-wrap gap-4 mb-8">

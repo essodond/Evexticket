@@ -44,6 +44,7 @@ function App() {
         travel_date: data.date, // Assuming data.date is in a format apiService expects
         passengers: data.passengers || 1, // Default to 1 if not provided
       });
+      console.log("API search results:", trips);
       setSearchResults(trips);
       localStorage.setItem('currentView', 'results');
       navigate('/results');
