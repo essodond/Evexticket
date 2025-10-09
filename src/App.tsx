@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import apiService from './services/api';
+import type { ScheduledTrip } from './services/api';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -36,13 +37,21 @@ function App() {
   const navigate = useNavigate();
 
   const handleSearch = async (data: any) => {
-    setSearchData(data);
+    // normalize the search data to the TripSearchParams shape
+    const normalized = {
+      departure_city: data.departure,
+      arrival_city: data.arrival,
+      travel_date: data.date,
+      date: data.date,
+      passengers: data.passengers || 1,
+    };
+    setSearchData(normalized);
     try {
       const trips = await apiService.searchScheduledTrips({
-        departure_city: data.departure,
-        arrival_city: data.arrival,
-        travel_date: data.date, // Assuming data.date is in a format apiService expects
-        passengers: data.passengers || 1, // Default to 1 if not provided
+        departure_city: normalized.departure_city,
+        arrival_city: normalized.arrival_city,
+        travel_date: normalized.travel_date,
+        passengers: normalized.passengers,
       });
       console.log("API search results:", trips);
       setSearchResults(trips);
@@ -166,7 +175,7 @@ function App() {
           <Route path="/login" element={<AuthPage mode={authMode} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
           <Route path="/register" element={<AuthPage mode={'register'} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
           <Route path="/home" element={<HomePage onSearch={handleSearch} isAuthenticated={isAuthenticated} onNavigateToAuth={handleNavigateToAuth} onLogout={handleLogout} />} />
-          <Route path="/results" element={<ResultsPage searchData={searchData} searchResults={searchResults} onBack={() => navigate('/')} onSelectTrip={handleTripSelect} />} />
+          <Route path="/results" element={<ResultsPage searchData={searchData} searchResults={searchResults} onBack={() => navigate('/home')} onSelectTrip={handleTripSelect} />} />
           <Route path="/booking" element={<BookingPage trip={selectedTrip} searchData={searchData} onBack={() => navigate('/results')} onProceedToPayment={handleProceedToPayment} />} />
           <Route path="/payment" element={<PaymentPage bookingData={bookingData} onBack={() => navigate('/booking')} onPaymentSuccess={handlePaymentSuccess} />} />
           <Route path="/confirmation" element={<ConfirmationPage paymentData={paymentData} onNewBooking={handleNewBooking} />} />

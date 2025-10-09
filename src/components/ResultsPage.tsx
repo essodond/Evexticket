@@ -84,9 +84,9 @@ const ResultsPage: React.FC<ResultsPageProps> = ({ searchData, searchResults, on
                   </div>
                 </div>
               </div>
-              <Button onClick={handleModifySearch} className="px-6 py-2">
+              <button onClick={onBack} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                 Modifier la recherche
-              </Button>
+              </button>
             </div>
             <div className="text-center mt-4">
               <div className="text-lg font-semibold text-gray-900">{formatDate(searchData.travel_date)}</div>
