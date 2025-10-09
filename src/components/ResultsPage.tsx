@@ -7,18 +7,26 @@ interface ResultsPageProps {
   searchResults: Trip[]; // actual search results from API
   onBack: () => void;
   onSelectTrip: (trip: Trip) => void;
+  searchLoading?: boolean;
 }
 
-const ResultsPage: React.FC<ResultsPageProps> = ({ searchData, searchResults, onBack, onSelectTrip }) => {
+const ResultsPage: React.FC<ResultsPageProps> = ({ searchData, searchResults, onBack, onSelectTrip, searchLoading = false }) => {
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('fr-FR', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return String(dateStr);
+      return d.toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (e) {
+      return String(dateStr);
+    }
   };
 
   // Extraire la liste unique des compagnies depuis les résultats
@@ -32,6 +40,14 @@ const ResultsPage: React.FC<ResultsPageProps> = ({ searchData, searchResults, on
 
   // Trajets filtrés par compagnie sélectionnée
   const filteredTrips = selectedCompany ? searchResults.filter(t => t.company_name === selectedCompany) : searchResults;
+
+  if (searchLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center text-gray-600">Chargement des trajets...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
