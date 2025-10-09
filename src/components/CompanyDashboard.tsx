@@ -1,5 +1,5 @@
 import { Plus, Edit, Trash2, Users, Download, Calendar, MapPin, DollarSign, TrendingUp, Bus, BarChart3, FileText, Eye } from 'lucide-react';
-import apiService, { Trip, Booking, CompanyStats } from '../services/api';
+import apiService, { ScheduledTrip, Booking, CompanyStats } from '../services/api';
 import { useCities } from '../hooks/useApi';
 import AddTripModal from './AddTripModal';
 import ConfirmationModal from './ConfirmationModal';
@@ -22,7 +22,7 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
   const companyId = auth.user?.company_id;
   const [activeTab, setActiveTab] = useState('trips');
   const [showAddTripModal, setShowAddTripModal] = useState(false);
-  const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
+  const [editingTrip, setEditingTrip] = useState<ScheduledTrip | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showNotification, setShowNotification] = useState(false);
   const [notificationData, setNotificationData] = useState({
@@ -35,7 +35,7 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
   const { cities: apiCities } = useCities();
 
   const [stats, setStats] = useState<CompanyStats | null>(null);
-  const [trips, setTrips] = useState<Trip[]>([]);
+  const [trips, setTrips] = useState<ScheduledTrip[]>([]);
   const [bookings, setBookings] = useState<LocalBooking[]>([]);
 
   const fetchCompanyData = useCallback(async () => {
@@ -53,7 +53,7 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
       const companyStats = await apiService.getCompanyStats(companyId);
       setStats(companyStats);
 
-      const fetchedTrips = await apiService.getTrips(companyId); // This should be filtered by company on backend
+      const fetchedTrips = await apiService.getScheduledTrips(companyId); // This should be filtered by company on backend
       setTrips(fetchedTrips);
 
       const fetchedBookings = await apiService.getBookings(); // This should be filtered by company on backend
@@ -78,7 +78,7 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
     return () => { mounted = false };
   }, [fetchCompanyData]); // Add fetchCompanyData to dependency array
 
-  const handleSaveTrip = (trip: Trip) => {
+  const handleSaveTrip = (trip: ScheduledTrip) => {
     if (editingTrip) {
       setTrips((prev) => prev.map((t) => (t.id === trip.id ? trip : t)));
       setNotificationData({
@@ -103,7 +103,7 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
   const handleDeleteTrip = async () => {
     if (itemToDelete && itemToDelete.type === 'trip') {
       try {
-        await apiService.deleteTrip(itemToDelete.id);
+        await apiService.deleteScheduledTrip(itemToDelete.id);
         setTrips((prev) => prev.filter((trip) => trip.id !== itemToDelete.id));
         setNotificationData({
           type: 'success',
@@ -288,14 +288,14 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
                 {trips.map((trip) => (
                   <tr key={trip.id}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{trip.id}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{trip.departure_city_name} to {trip.arrival_city_name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{trip.trip_info?.departure_city_name || 'N/A'} to {trip.trip_info?.arrival_city_name || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(trip.date).toLocaleDateString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{trip.departure_time}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{trip.price} €</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{trip.trip_info?.departure_time || 'N/A'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{(trip.trip_info?.price ? `${trip.trip_info.price} FCFA` : 'N/A')}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{trip.available_seats}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button onClick={() => setEditingTrip(trip)} className="text-indigo-600 hover:text-indigo-900 mr-4"><Edit size={18} /></button>
-                      <button onClick={() => { setItemToDelete({ type: 'trip', id: trip.id, name: `${trip.origin} to ${trip.destination}` }); setShowDeleteModal(true); }} className="text-red-600 hover:text-red-900"><Trash2 size={18} /></button>
+                      <button onClick={() => { setItemToDelete({ type: 'trip', id: trip.id, name: `${trip.trip_info?.departure_city_name} to ${trip.trip_info?.arrival_city_name}` }); setShowDeleteModal(true); }} className="text-red-600 hover:text-red-900"><Trash2 size={18} /></button>
                     </td>
                   </tr>
                 ))}

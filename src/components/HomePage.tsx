@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 // Elle stocke et récupère quelques informations (username) depuis localStorage
 // pour afficher un avatar ou état de connexion simple.
 import { Search, MapPin, Calendar, ArrowRight } from 'lucide-react';
-import { useCities } from '../hooks/useApi';
+// import { useCities } from '../hooks/useApi'; // Commented out
 
 interface HomePageProps {
   onSearch: (searchData: any) => void;
@@ -19,8 +19,9 @@ const HomePage: React.FC<HomePageProps> = ({ onSearch, isAuthenticated = false, 
   const [date, setDate] = useState('');
   const [username, setUsername] = useState<string | null>(null);
 
-  const { cities: apiCities, loading: citiesLoading } = useCities();
-  const cities = (apiCities && apiCities.length) ? apiCities.map((c:any) => (c.name || c.nom || c.label || String(c))) : ['Lomé', 'Sokodé', 'Kara', 'Atakpamé', 'Kpalimé', 'Dapaong', 'Tsévié', 'Aného'];
+  // const { cities: apiCities, loading: citiesLoading } = useCities(); // Commented out
+  const cities = ['Lomé', 'Sokodé', 'Kara', 'Atakpamé', 'Kpalimé', 'Dapaong', 'Tsévié', 'Aného']; // Hardcoded cities
+  const citiesLoading = false; // Set loading to false
 
   // load username from localStorage for avatar initial
   React.useEffect(() => {

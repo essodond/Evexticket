@@ -148,6 +148,33 @@ class CompanyViewSet(viewsets.ModelViewSet):
         serializer = TripSerializer(trips, many=True)
         return Response(serializer.data)
 
+    @action(detail=True, methods=['get'])
+    def stats(self, request, pk=None):
+        company = self.get_object()
+        
+        total_trips = Trip.objects.filter(company=company).count()
+        total_bookings = Booking.objects.filter(trip__company=company).count()
+        
+        total_revenue = Booking.objects.filter(
+            trip__company=company,
+            status='confirmed'
+        ).aggregate(total=Sum('total_price'))['total'] or 0
+        
+        # Pour les utilisateurs actifs, nous pourrions compter les utilisateurs uniques ayant réservé un voyage avec cette compagnie
+        active_users = Booking.objects.filter(
+            trip__company=company
+        ).values('user').distinct().count()
+
+        stats_data = {
+            'total_trips': total_trips,
+            'total_bookings': total_bookings,
+            'total_revenue': total_revenue,
+            'active_users': active_users,
+        }
+        
+        serializer = CompanyStatsSerializer(stats_data)
+        return Response(serializer.data)
+
     def perform_create(self, serializer):
         user = self.request.user
         if not user.is_staff:
@@ -339,8 +366,8 @@ class UserViewSet(viewsets.ModelViewSet):
 
 
 from rest_framework.decorators import api_view
-from .serializers import ScheduledTripSerializer
-from .models import ScheduledTrip
+from .serializers import ScheduledTripSerializer, TripSearchSerializer
+from .models import ScheduledTrip, Booking
 
 
 @api_view(['GET'])
@@ -352,3 +379,38 @@ def scheduled_trips_list(request):
         qs = qs.filter(trip__company_id=company_id)
     serializer = ScheduledTripSerializer(qs, many=True)
     return Response(serializer.data)
+
+
+class ScheduledTripSearchView(APIView):
+    """Rechercher des voyages planifiés."""
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        serializer = TripSearchSerializer(data=request.data)
+        if serializer.is_valid():
+            departure_city = serializer.validated_data['departure_city']
+            arrival_city = serializer.validated_data['arrival_city']
+            travel_date = serializer.validated_data['travel_date']
+            passengers = serializer.validated_data['passengers']
+
+            scheduled_trips = ScheduledTrip.objects.filter(
+                trip__departure_city__name__icontains=departure_city,
+                trip__arrival_city__name__icontains=arrival_city,
+                date=travel_date,  # Filter by the exact date
+                trip__is_active=True
+            ).select_related('trip__company', 'trip__departure_city', 'trip__arrival_city')
+
+            available_scheduled_trips = []
+            for st in scheduled_trips:
+                confirmed_bookings = Booking.objects.filter(
+                    scheduled_trip=st,
+                    status='confirmed'
+                ).count()
+
+                if (st.trip.capacity - confirmed_bookings) >= passengers:
+                    available_scheduled_trips.append(st)
+
+            st_serializer = ScheduledTripSerializer(available_scheduled_trips, many=True)
+            return Response(st_serializer.data)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

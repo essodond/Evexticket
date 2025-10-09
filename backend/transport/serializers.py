@@ -5,7 +5,7 @@ from rest_framework import serializers
 
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Company, City, Trip, Booking, Payment, Review, Notification
+from .models import Company, City, Trip, Booking, Payment, Review, Notification, ScheduledTrip
 
 # Serializer pour l'inscription d'utilisateur
 class RegisterSerializer(serializers.ModelSerializer):
@@ -268,9 +268,7 @@ class CompanyStatsSerializer(serializers.Serializer):
     total_trips = serializers.IntegerField()
     total_bookings = serializers.IntegerField()
     total_revenue = serializers.DecimalField(max_digits=12, decimal_places=2)
-    active_trips = serializers.IntegerField()
-    pending_bookings = serializers.IntegerField()
-    monthly_growth = serializers.FloatField()
+    active_users = serializers.IntegerField()
 
 
 class ScheduledTripSerializer(serializers.ModelSerializer):

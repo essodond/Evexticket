@@ -54,6 +54,9 @@ export interface Trip {
   updated_at: string;
   bookings_count?: number;
   available_seats?: number;
+}
+
+export interface ScheduledTrip extends Trip {
   date: string;
 }
 
@@ -239,39 +242,69 @@ class ApiService {
   }
 
   // Trajets
-  async getTrips(companyId?: number): Promise<Trip[]> {
+  async getRoutes(companyId?: number): Promise<Trip[]> {
     const query = companyId ? `?company_id=${encodeURIComponent(String(companyId))}` : '';
     return this.request<Trip[]>(`/trips/${query}`);
   }
 
-  async getTrip(id: number): Promise<Trip> {
+  async getRoute(id: number): Promise<Trip> {
     return this.request<Trip>(`/trips/${id}/`);
   }
 
-  async createTrip(trip: Omit<Trip, 'arrival_city_name' | 'available_seats' | 'bookings_count' | 'company_name' | 'created_at' | 'departure_city_name' | 'id' | 'updated_at'>): Promise<Trip> {
+  async createRoute(trip: Omit<Trip, 'arrival_city_name' | 'available_seats' | 'bookings_count' | 'company_name' | 'created_at' | 'departure_city_name' | 'id' | 'updated_at'>): Promise<Trip> {
     return this.request<Trip>('/trips/', {
       method: 'POST',
       body: JSON.stringify(trip),
     });
   }
 
-  async updateTrip(id: number, trip: Partial<Trip>): Promise<Trip> {
+  async updateRoute(id: number, trip: Partial<Trip>): Promise<Trip> {
     return this.request<Trip>(`/trips/${id}/`, {
       method: 'PUT',
       body: JSON.stringify(trip),
     });
   }
 
-  async deleteTrip(id: number): Promise<void> {
+  async deleteRoute(id: number): Promise<void> {
     return this.request<void>(`/trips/${id}/`, {
       method: 'DELETE',
     });
   }
 
-  async searchTrips(params: TripSearchParams): Promise<Trip[]> {
-    return this.request<Trip[]>('/trips/search/', {
+  async searchScheduledTrips(params: TripSearchParams): Promise<ScheduledTrip[]> {
+    return this.request<ScheduledTrip[]>('/scheduled_trips/search/', {
       method: 'POST',
       body: JSON.stringify(params),
+    });
+  }
+
+  // Voyages datés
+  async getScheduledTrips(companyId?: number): Promise<ScheduledTrip[]> {
+    const query = companyId ? `?company_id=${encodeURIComponent(String(companyId))}` : '';
+    return this.request<ScheduledTrip[]>(`/scheduled_trips/${query}`);
+  }
+
+  async getScheduledTrip(id: number): Promise<ScheduledTrip> {
+    return this.request<ScheduledTrip>(`/scheduled_trips/${id}/`);
+  }
+
+  async createScheduledTrip(scheduledTrip: Omit<ScheduledTrip, 'arrival_city_name' | 'available_seats' | 'bookings_count' | 'company_name' | 'created_at' | 'departure_city_name' | 'id' | 'updated_at'>): Promise<ScheduledTrip> {
+    return this.request<ScheduledTrip>('/scheduled_trips/', {
+      method: 'POST',
+      body: JSON.stringify(scheduledTrip),
+    });
+  }
+
+  async updateScheduledTrip(id: number, scheduledTrip: Partial<ScheduledTrip>): Promise<ScheduledTrip> {
+    return this.request<ScheduledTrip>(`/scheduled_trips/${id}/`, {
+      method: 'PUT',
+      body: JSON.stringify(scheduledTrip),
+    });
+  }
+
+  async deleteScheduledTrip(id: number): Promise<void> {
+    return this.request<void>(`/scheduled_trips/${id}/`, {
+      method: 'DELETE',
     });
   }
 

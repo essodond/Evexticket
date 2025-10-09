@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import apiService from './services/api';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 import LandingPage from './components/LandingPage';
@@ -26,9 +26,9 @@ function App() {
   // ce pattern par un contexte d'authentification (AuthContext) et un routeur (react-router).
   // Routing replaces the older `currentView` state; keep minimal state for UI flows
   const [authMode, setAuthMode] = useState<AuthMode>('login');
-  const [isAuthenticated] = useState(false);
+  const { isAuthenticated, logout: authLogout } = useAuth();
   const [searchData, setSearchData] = useState<any>(null);
-  const [searchResults, setSearchResults] = useState<any[]>([]); // New state for search results
+  const [searchResults, setSearchResults] = useState<ScheduledTrip[]>([]); // New state for search results
   const [selectedTrip, setSelectedTrip] = useState<any>(null);
   const [bookingData, setBookingData] = useState<any>(null);
   const [paymentData, setPaymentData] = useState<any>(null);
@@ -38,7 +38,7 @@ function App() {
   const handleSearch = async (data: any) => {
     setSearchData(data);
     try {
-      const trips = await apiService.searchTrips({
+      const trips = await apiService.searchScheduledTrips({
         departure_city: data.departure,
         arrival_city: data.arrival,
         travel_date: data.date, // Assuming data.date is in a format apiService expects
@@ -106,8 +106,7 @@ function App() {
 
   const handleLogout = () => {
     // Delegate to AuthContext logout
-    try { localStorage.removeItem('user'); } catch (e) {}
-    apiService.setAuthToken(null);
+    authLogout();
     localStorage.setItem('currentView', 'landing');
     navigate('/');
     setSearchData(null);

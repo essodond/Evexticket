@@ -60,7 +60,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
     const load = async () => {
       setLoading(true);
       try {
-        const [s, comps, tps] = await Promise.all([apiService.getDashboardStats(), apiService.getCompanies(), apiService.getTrips()]);
+        const [s, comps, tps] = await Promise.all([apiService.getDashboardStats(), apiService.getCompanies(), apiService.getScheduledTrips()]);
         if (!mounted) return;
         setStats(s || {});
         setCompanies(((comps as any[]) || []).map(c => ({ id: String(c.id), name: c.name, description: c.description || '', address: c.address || '', phone: c.phone || '', email: c.email || '', website: c.website || '', logo: c.logo || '', isActive: c.is_active, createdAt: c.created_at })));
