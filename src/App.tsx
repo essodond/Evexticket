@@ -55,6 +55,8 @@ function App() {
       });
       console.log("API search results:", trips);
       setSearchResults(trips);
+      localStorage.setItem('searchData', JSON.stringify(normalized));
+      localStorage.setItem('searchResults', JSON.stringify(trips));
       localStorage.setItem('currentView', 'results');
       navigate('/results');
     } catch (error) {
@@ -86,6 +88,8 @@ function App() {
     setSelectedTrip(null);
     setBookingData(null);
     setPaymentData(null);
+    localStorage.removeItem('searchData');
+    localStorage.removeItem('searchResults');
     localStorage.setItem('currentView', 'home');
     navigate('/');
   };
@@ -117,6 +121,8 @@ function App() {
   const handleLogout = () => {
     // Delegate to AuthContext logout
     authLogout();
+    localStorage.removeItem('searchData');
+    localStorage.removeItem('searchResults');
     localStorage.setItem('currentView', 'landing');
     navigate('/');
     setSearchData(null);
@@ -129,6 +135,14 @@ function App() {
   useEffect(() => {
     // Restore a preferred view if present in localStorage (used for UX persistence)
     try {
+      const storedSearchData = localStorage.getItem('searchData');
+      const storedSearchResults = localStorage.getItem('searchResults');
+      if (storedSearchData) {
+        setSearchData(JSON.parse(storedSearchData));
+      }
+      if (storedSearchResults) {
+        setSearchResults(JSON.parse(storedSearchResults));
+      }
       // We don't set a local state; we use stored `currentView` only for UX persistence elsewhere.
     } catch (e) {
       // ignore
@@ -175,7 +189,7 @@ function App() {
           <Route path="/login" element={<AuthPage mode={authMode} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
           <Route path="/register" element={<AuthPage mode={'register'} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
           <Route path="/home" element={<HomePage onSearch={handleSearch} isAuthenticated={isAuthenticated} onNavigateToAuth={handleNavigateToAuth} onLogout={handleLogout} />} />
-          <Route path="/results" element={<ResultsPage searchData={searchData} searchResults={searchResults} onBack={() => navigate('/home')} onSelectTrip={handleTripSelect} />} />
+          <Route path="/results" element={<ResultsPage searchData={searchData} searchResults={searchResults.map((sr: any) => sr?.trip_info ? sr.trip_info : sr)} onBack={() => navigate('/home')} onSelectTrip={handleTripSelect} />} />
           <Route path="/booking" element={<BookingPage trip={selectedTrip} searchData={searchData} onBack={() => navigate('/results')} onProceedToPayment={handleProceedToPayment} />} />
           <Route path="/payment" element={<PaymentPage bookingData={bookingData} onBack={() => navigate('/booking')} onPaymentSuccess={handlePaymentSuccess} />} />
           <Route path="/confirmation" element={<ConfirmationPage paymentData={paymentData} onNewBooking={handleNewBooking} />} />

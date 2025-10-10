@@ -29,6 +29,23 @@ const ResultsPage: React.FC<ResultsPageProps> = ({ searchData, searchResults, on
     }
   };
 
+  // Format des heures
+  const formatTime = (timeStr?: string) => {
+    if (!timeStr) return '';
+    const simpleTime = /^\d{2}:\d{2}(:\d{2})?$/;
+    if (simpleTime.test(timeStr)) {
+      const [h, m] = timeStr.split(':');
+      return `${h}:${m}`;
+    }
+    try {
+      const d = new Date(timeStr);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+    } catch {}
+    return String(timeStr);
+  };
+
   // Extraire la liste unique des compagnies depuis les résultats
   const companies = useMemo(() => {
     const map = new Map<string, { name: string }>();
@@ -137,7 +154,7 @@ const ResultsPage: React.FC<ResultsPageProps> = ({ searchData, searchResults, on
               {companies.map(c => (
                 <button key={c.name} onClick={() => setSelectedCompany(c.name)} className="bg-white border border-gray-200 rounded-lg shadow-sm p-6 flex flex-col items-center hover:shadow-md transition-shadow">
                   <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-2">
-                    <span className="text-blue-600 font-bold text-lg">{c.name.substring(0,2)}</span>
+                    <span className="text-blue-600 font-bold text-lg">{c.name?.substring(0,2) ?? ''}</span>
                   </div>
                   <span className="text-lg font-semibold text-gray-900">{c.name}</span>
                 </button>
@@ -156,7 +173,7 @@ const ResultsPage: React.FC<ResultsPageProps> = ({ searchData, searchResults, on
                     {/* Company & Rating */}
                     <div className="flex items-start space-x-4">
                       <div className="w-16 h-16 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <span className="text-blue-600 font-bold text-sm">{trip.company_name.substring(0, 2)}</span>
+                        <span className="text-blue-600 font-bold text-sm">{trip.company_name?.substring(0, 2) ?? ''}</span>
                       </div>
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900">{trip.company_name}</h3>
@@ -179,7 +196,9 @@ const ResultsPage: React.FC<ResultsPageProps> = ({ searchData, searchResults, on
                     {/* Time & Duration */}
                     <div className="flex items-center space-x-4">
                       <div className="text-center">
-                        <div className="text-xl font-bold text-gray-900">{new Date(trip.departure_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                        <div className="text-xl font-bold text-gray-900">
+                          {formatTime(trip.departure_time)}
+                        </div>
                         <div className="text-sm text-gray-500">{trip.departure_city_name}</div>
                       </div>
                       <div className="flex flex-col items-center px-4">
@@ -187,7 +206,9 @@ const ResultsPage: React.FC<ResultsPageProps> = ({ searchData, searchResults, on
                         <span className="text-sm text-gray-500">{trip.duration} min</span>
                       </div>
                       <div className="text-center">
-                        <div className="text-xl font-bold text-gray-900">{new Date(trip.arrival_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                        <div className="text-xl font-bold text-gray-900">
+                          {formatTime(trip.arrival_time)}
+                        </div>
                         <div className="text-sm text-gray-500">{trip.arrival_city_name}</div>
                       </div>
                     </div>
@@ -203,7 +224,10 @@ const ResultsPage: React.FC<ResultsPageProps> = ({ searchData, searchResults, on
                       </div>
                       <div className="text-right">
                         <div className="text-2xl font-bold text-green-600">
-                          {trip.price.toLocaleString()} CFA
+                          {(() => {
+                            const priceNum = typeof trip.price === 'number' ? trip.price : parseFloat(String(trip.price));
+                            return isNaN(priceNum) ? '' : priceNum.toLocaleString('fr-FR');
+                          })()} CFA
                         </div>
                         <button
                           onClick={() => onSelectTrip(trip)}
