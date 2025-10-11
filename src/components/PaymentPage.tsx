@@ -1,82 +1,118 @@
-import React, { useState } from 'react';
-// PAYMENT PAGE
-// Page démonstrative de paiement : ici on simule l'appel, mais dans la réalité
-// il faudra appeler votre backend Django pour initier/valider le paiement.
-import { ArrowLeft, CreditCard, Smartphone, Check, AlertCircle } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import apiService from '../services/api';
 
 interface PaymentPageProps {
   bookingData: any;
   onBack: () => void;
-  onPaymentSuccess: (paymentData: any) => void;
+  onPaymentSuccess: (data: any) => void;
 }
 
 const PaymentPage: React.FC<PaymentPageProps> = ({ bookingData, onBack, onPaymentSuccess }) => {
-  const [selectedMethod, setSelectedMethod] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'bank_card'>('mobile_money');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [processing, setProcessing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
-  const paymentMethods = [
-    {
-      id: 'tmoney',
-      name: 'TMoney',
-      logo: '🏦',
-      color: 'bg-blue-100 border-blue-300',
-      selectedColor: 'bg-blue-500'
-    },
-    {
-      id: 'flooz',
-      name: 'Flooz',
-      logo: '💳',
-      color: 'bg-purple-100 border-purple-300',
-      selectedColor: 'bg-purple-500'
-    },
-    {
-      id: 'mtn',
-      name: 'MTN MoMo',
-      logo: '📱',
-      color: 'bg-yellow-100 border-yellow-300',
-      selectedColor: 'bg-yellow-500'
-    },
-    {
-      id: 'wave',
-      name: 'Wave',
-      logo: '🌊',
-      color: 'bg-green-100 border-green-300',
-      selectedColor: 'bg-green-500'
+  const { trip, selectedSeat, passengerInfo, searchData } = bookingData || {};
+
+  const formatTime = (timeStr?: string) => {
+    if (!timeStr) return '-';
+    const simple = /^\d{2}:\d{2}(:\d{2})?$/;
+    if (simple.test(timeStr)) {
+      const [h, m] = timeStr.split(':');
+      return `${h}:${m}`;
     }
-  ];
-
-  const handlePayment = async () => {
-    if (!selectedMethod || !phoneNumber) return;
-
-    setProcessing(true);
-    
-    // Simulate payment processing
-    setTimeout(() => {
-      setProcessing(false);
-      onPaymentSuccess({
-        ...bookingData,
-        paymentMethod: selectedMethod,
-        phoneNumber,
-        paymentId: `PAY-${Date.now()}`,
-        transactionId: `TXN-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
-      });
-    }, 3000);
+    try {
+      const d = new Date(timeStr);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+    } catch {}
+    return String(timeStr);
   };
 
-  const totalAmount = bookingData.trip.price;
+  const formatDuration = (value?: number | string) => {
+    if (value === undefined || value === null || value === '') return '-';
+    const minutes = typeof value === 'number' ? value : parseInt(String(value), 10);
+    if (isNaN(minutes)) return String(value);
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    if (h <= 0) return `${m} min`;
+    return m > 0 ? `${h} h ${m} min` : `${h} h`;
+  };
+
+  const formatDate = (d: any) => {
+    if (!d) return new Date().toISOString().slice(0, 10);
+    if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+    const dateObj = new Date(d);
+    if (!isNaN(dateObj.getTime())) return dateObj.toISOString().slice(0, 10);
+    return new Date().toISOString().slice(0, 10);
+  };
+
+  const priceNum = useMemo(() => {
+    const p = trip?.price;
+    return typeof p === 'number' ? p : parseFloat(String(p));
+  }, [trip]);
+
+  const displayDeparture = trip?.departure_city_name || trip?.departure || (searchData?.departure || '-');
+  const displayArrival = trip?.arrival_city_name || trip?.arrival || (searchData?.arrival || '-');
+  const displayCompany = trip?.company_name || (trip?.company !== undefined ? String(trip.company) : '-');
+  const displayDateStr = searchData?.date || searchData?.travel_date;
+  const displayDate = displayDateStr ? new Date(displayDateStr).toLocaleDateString('fr-FR') : '-';
+
+  const handlePayment = async () => {
+    if (!bookingData || !trip || !selectedSeat || !passengerInfo) return;
+    if (paymentMethod === 'mobile_money' && !phoneNumber) {
+      setApiError('Veuillez saisir le numéro de téléphone pour Mobile Money.');
+      return;
+    }
+    setLoading(true);
+    setApiError(null);
+
+    try {
+      const tripId = Number(trip?.id ?? trip?.trip_id ?? trip);
+      const payload: any = {
+        trip: tripId,
+        passenger_name: `${passengerInfo.firstName || ''} ${passengerInfo.lastName || ''}`.trim(),
+        passenger_email: passengerInfo.email || undefined,
+        passenger_phone: passengerInfo.phone,
+        seat_number: String(selectedSeat),
+        payment_method: paymentMethod,
+        travel_date: formatDate(searchData?.date || searchData?.travel_date || new Date()),
+        notes: `Payment via ${paymentMethod}${phoneNumber ? ' - ' + phoneNumber : ''}`,
+      };
+
+      const created = await apiService.createBooking(payload);
+
+      const transactionId = `TXN-${Date.now()}`;
+      const paymentId = `PMT-${Math.floor(Math.random() * 1e6).toString().padStart(6, '0')}`;
+
+      onPaymentSuccess({
+        transactionId,
+        paymentId,
+        paymentMethod,
+        phoneNumber,
+        selectedSeat,
+        trip,
+        searchData,
+        passengerInfo,
+        booking: created,
+      });
+    } catch (error: any) {
+      const errMsg = error?.response?.data ? JSON.stringify(error.response.data) : (error?.message || 'Une erreur est survenue lors de la création de la réservation.');
+      setApiError(errMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <button
-              onClick={onBack}
-              className="flex items-center text-gray-600 hover:text-blue-600 transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5 mr-2" />
+            <button onClick={onBack} className="flex items-center text-gray-600 hover:text-blue-600 transition-colors">
+              <span className="mr-2">←</span>
               Retour
             </button>
             <div className="flex items-center space-x-2">
@@ -89,147 +125,95 @@ const PaymentPage: React.FC<PaymentPageProps> = ({ bookingData, onBack, onPaymen
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Payment Form */}
           <div className="space-y-6">
             <div className="bg-white rounded-xl shadow-md border p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-                <CreditCard className="w-6 h-6 mr-2 text-blue-600" />
-                Choisissez votre méthode de paiement
-              </h2>
-
-              {/* Payment Methods */}
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                {paymentMethods.map((method) => (
-                  <button
-                    key={method.id}
-                    onClick={() => setSelectedMethod(method.id)}
-                    className={`
-                      p-4 rounded-lg border-2 transition-all
-                      ${selectedMethod === method.id 
-                        ? `${method.selectedColor} text-white border-transparent` 
-                        : `${method.color} hover:border-opacity-60`
-                      }
-                    `}
-                  >
-                    <div className="text-2xl mb-2">{method.logo}</div>
-                    <div className="font-medium text-sm">{method.name}</div>
-                  </button>
-                ))}
-              </div>
-
-              {/* Phone Number Input */}
-              {selectedMethod && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      <Smartphone className="w-4 h-4 inline mr-1" />
-                      Numéro de téléphone
-                    </label>
-                    <input
-                      type="tel"
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
-                      placeholder="+228 XX XX XX XX"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  {/* Payment Info */}
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div className="flex items-start space-x-2">
-                      <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
-                      <div className="text-sm text-blue-800">
-                        <p className="font-medium mb-1">Instructions de paiement :</p>
-                        <ul className="space-y-1 text-xs">
-                          <li>• Vous recevrez une notification sur votre téléphone</li>
-                          <li>• Confirmez le paiement de {totalAmount.toLocaleString()} CFA</li>
-                          <li>• Le billet sera généré après confirmation</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Payment Button */}
-                  <button
-                    onClick={handlePayment}
-                    disabled={!phoneNumber || processing}
-                    className="w-full py-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
-                  >
-                    {processing ? (
-                      <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                        Traitement en cours...
-                      </>
-                    ) : (
-                      <>
-                        <Check className="w-5 h-5 mr-2" />
-                        Payer {totalAmount.toLocaleString()} CFA
-                      </>
-                    )}
-                  </button>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Récapitulatif du trajet</h2>
+              <div className="space-y-4">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Compagnie</span>
+                  <span className="font-medium">{displayCompany}</span>
                 </div>
-              )}
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Trajet</span>
+                  <span className="font-medium">{displayDeparture} → {displayArrival}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Date</span>
+                  <span className="font-medium">{displayDate}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Heure</span>
+                  <span className="font-medium">{formatTime(trip?.departure_time)} - {formatTime(trip?.arrival_time)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Durée</span>
+                  <span className="font-medium">{formatDuration(trip?.duration)}</span>
+                </div>
+                <div className="border-t pt-4">
+                  <div className="flex justify-between text-lg">
+                    <span className="font-semibold">Prix par personne</span>
+                    <span className="font-bold text-green-600">{!isNaN(priceNum) ? priceNum.toLocaleString('fr-FR') : '-'} CFA</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-md border p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Méthode de paiement</h2>
+              <div className="space-y-4">
+                <div className="flex items-center space-x-4">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input type="radio" name="payment" value="mobile_money" checked={paymentMethod === 'mobile_money'} onChange={() => setPaymentMethod('mobile_money')} />
+                    <span>Mobile Money</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input type="radio" name="payment" value="bank_card" checked={paymentMethod === 'bank_card'} onChange={() => setPaymentMethod('bank_card')} />
+                    <span>Carte bancaire</span>
+                  </label>
+                </div>
+
+                {paymentMethod === 'mobile_money' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Numéro Mobile Money *</label>
+                    <input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="+228 XX XX XX XX" />
+                  </div>
+                )}
+
+                {apiError && (
+                  <div className="mt-3 text-sm text-red-600">{apiError}</div>
+                )}
+
+                <button
+                  onClick={handlePayment}
+                  disabled={loading || (paymentMethod === 'mobile_money' && !phoneNumber)}
+                  className="w-full mt-4 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                >
+                  {loading ? 'Traitement...' : 'Payer et réserver'}
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Booking Summary */}
           <div className="bg-white rounded-xl shadow-md border p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Récapitulatif de la réservation</h2>
-            
-            <div className="space-y-4">
-              <div className="border-b pb-4">
-                <h3 className="font-semibold text-gray-900 mb-2">Détails du voyage</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Trajet</span>
-                    <span>{bookingData.trip.departure} → {bookingData.trip.arrival}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Date</span>
-                    <span>{new Date(bookingData.searchData.date).toLocaleDateString('fr-FR')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Heure</span>
-                    <span>{bookingData.trip.departureTime} - {bookingData.trip.arrivalTime}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Compagnie</span>
-                    <span>{bookingData.trip.company}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Siège</span>
-                    <span>N° {bookingData.selectedSeat}</span>
-                  </div>
-                </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Détails du passager</h2>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Nom</span>
+                <span className="font-medium">{`${passengerInfo?.firstName || ''} ${passengerInfo?.lastName || ''}`.trim() || '-'}</span>
               </div>
-
-              <div className="border-b pb-4">
-                <h3 className="font-semibold text-gray-900 mb-2">Passager</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Nom</span>
-                    <span>{bookingData.passengerInfo.firstName} {bookingData.passengerInfo.lastName}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Téléphone</span>
-                    <span>{bookingData.passengerInfo.phone}</span>
-                  </div>
-                  {bookingData.passengerInfo.email && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Email</span>
-                      <span>{bookingData.passengerInfo.email}</span>
-                    </div>
-                  )}
-                </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Téléphone</span>
+                <span className="font-medium">{passengerInfo?.phone || '-'}</span>
               </div>
-
-              <div className="pt-4">
-                <div className="flex justify-between text-lg font-bold">
-                  <span>Total à payer</span>
-                  <span className="text-green-600">{totalAmount.toLocaleString()} CFA</span>
-                </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Email</span>
+                <span className="font-medium">{passengerInfo?.email || '-'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Siège</span>
+                <span className="font-medium">{selectedSeat || '-'}</span>
               </div>
             </div>
           </div>

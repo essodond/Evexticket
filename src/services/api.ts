@@ -312,6 +312,10 @@ class ApiService {
     return this.request<Booking[]>('/bookings/');
   }
 
+  async getCompanyBookings(companyId: number): Promise<Booking[]> {
+    return this.request<Booking[]>(`/companies/${companyId}/bookings/`);
+  }
+
   async getBooking(id: number): Promise<Booking> {
     return this.request<Booking>(`/bookings/${id}/`);
   }

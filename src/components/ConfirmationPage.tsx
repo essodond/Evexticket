@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useRef } from 'react';
 // CONFIRMATION PAGE
 // Page affichée après un paiement réussi. `paymentData` contient les infos
 // transactionnelles (transactionId, seat, etc.). Dans une vraie app, ce composant
 // peut demander au backend le billet final ou le PDF à télécharger.
 import { Check, Download, Share, Calendar, MapPin, Clock, User, CreditCard } from 'lucide-react';
+import { QRCodeCanvas } from 'qrcode.react';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 interface ConfirmationPageProps {
   paymentData: any;
@@ -11,8 +14,61 @@ interface ConfirmationPageProps {
 }
 
 const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ paymentData, onNewBooking }) => {
-  // Generate QR Code placeholder
-  const qrCodeData = `TOGOBUS-${paymentData.transactionId}-${paymentData.selectedSeat}`;
+  // Generate QR Code content
+  const qrCodeData = JSON.stringify({
+    type: 'TogoBusTicket',
+    transactionId: paymentData?.transactionId,
+    bookingId: paymentData?.booking?.id || null,
+    seat: paymentData?.selectedSeat,
+    tripId: paymentData?.trip?.id || null,
+  });
+
+  // Normalisation des champs pour un affichage robuste
+  const trip = paymentData?.trip || {};
+  const searchData = paymentData?.searchData || {};
+
+  const formatTime = (timeStr?: string) => {
+    if (!timeStr) return '-';
+    const simple = /^\d{2}:\d{2}(:\d{2})?$/;
+    if (simple.test(timeStr)) {
+      const [h, m] = timeStr.split(':');
+      return `${h}:${m}`;
+    }
+    try {
+      const d = new Date(timeStr);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+    } catch {}
+    return String(timeStr);
+  };
+
+  const displayDeparture = trip.departure_city_name || trip.departure || searchData?.departure || trip.origin || '-';
+  const displayArrival = trip.arrival_city_name || trip.arrival || searchData?.arrival || trip.destination || '-';
+  const displayCompany = trip.company_name || trip.companyName || (trip.company !== undefined ? String(trip.company) : '-');
+  const displayDateStr = searchData?.date || searchData?.travel_date || trip.date;
+  const displayDate = displayDateStr ? new Date(displayDateStr).toLocaleDateString('fr-FR') : '-';
+  const displayDepartureTime = formatTime(trip.departure_time || trip.departureTime);
+  const priceNum = typeof trip.price === 'number' ? trip.price : parseFloat(String(trip.price));
+
+  const ticketRef = useRef<HTMLDivElement | null>(null);
+
+  const handleDownload = async () => {
+    if (!ticketRef.current) return;
+    try {
+      const canvas = await html2canvas(ticketRef.current, { scale: 2, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      const filename = `Billet-${paymentData?.booking?.id || paymentData?.transactionId || 'TogoBus'}.pdf`;
+      pdf.save(filename);
+    } catch (e) {
+      console.error('Erreur lors de la génération du PDF:', e);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -49,7 +105,7 @@ const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ paymentData, onNewB
         </div>
 
         {/* Ticket */}
-        <div className="bg-white rounded-2xl shadow-xl border overflow-hidden max-w-2xl mx-auto">
+        <div ref={ticketRef} className="bg-white rounded-2xl shadow-xl border overflow-hidden max-w-2xl mx-auto">
           {/* Ticket Header */}
           <div className="bg-gradient-to-r from-blue-600 to-green-600 text-white p-6">
             <div className="flex justify-between items-start">
@@ -77,25 +133,23 @@ const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ paymentData, onNewB
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
                       <span className="text-gray-600">De</span>
-                      <span className="font-medium">{paymentData.trip.departure}</span>
+                      <span className="font-medium">{displayDeparture}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-600">Vers</span>
-                      <span className="font-medium">{paymentData.trip.arrival}</span>
+                      <span className="font-medium">{displayArrival}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-600">Date</span>
-                      <span className="font-medium">
-                        {new Date(paymentData.searchData.date).toLocaleDateString('fr-FR')}
-                      </span>
+                      <span className="font-medium">{displayDate}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-600">Heure</span>
-                      <span className="font-medium">{paymentData.trip.departureTime}</span>
+                      <span className="font-medium">{displayDepartureTime}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-600">Compagnie</span>
-                      <span className="font-medium">{paymentData.trip.company}</span>
+                      <span className="font-medium">{displayCompany}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-600">Siège</span>
@@ -136,51 +190,27 @@ const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ paymentData, onNewB
                     <div className="flex justify-between items-center">
                       <span className="text-gray-600">Montant</span>
                       <span className="font-bold text-green-600">
-                        {paymentData.trip.price.toLocaleString()} CFA
+                        {!isNaN(priceNum) ? priceNum.toLocaleString('fr-FR') : '-'} CFA
                       </span>
                     </div>
                   </div>
+                  {paymentData?.booking?.id && (
+                    <div className="text-xs text-gray-500 mt-2">Réservation ID: {paymentData.booking.id} • Statut: {paymentData.booking.status || 'créée'}</div>
+                  )}
                 </div>
               </div>
 
               {/* Right Side - QR Code */}
               <div className="flex flex-col items-center justify-center">
                 <div className="w-48 h-48 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center mb-4">
-                  {/* QR Code Placeholder */}
-                  <div className="text-center">
-                    <div className="w-32 h-32 bg-black mx-auto mb-2 opacity-80 rounded" 
-                         style={{
-                           backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(`
-                             <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                               <rect width="100" height="100" fill="white"/>
-                               <g fill="black">
-                                 <rect x="0" y="0" width="10" height="10"/>
-                                 <rect x="20" y="0" width="10" height="10"/>
-                                 <rect x="40" y="0" width="10" height="10"/>
-                                 <rect x="60" y="0" width="10" height="10"/>
-                                 <rect x="80" y="0" width="10" height="10"/>
-                                 <rect x="0" y="20" width="10" height="10"/>
-                                 <rect x="80" y="20" width="10" height="10"/>
-                                 <rect x="0" y="40" width="10" height="10"/>
-                                 <rect x="20" y="40" width="10" height="10"/>
-                                 <rect x="40" y="40" width="10" height="10"/>
-                                 <rect x="60" y="40" width="10" height="10"/>
-                                 <rect x="80" y="40" width="10" height="10"/>
-                                 <rect x="0" y="60" width="10" height="10"/>
-                                 <rect x="80" y="60" width="10" height="10"/>
-                                 <rect x="0" y="80" width="10" height="10"/>
-                                 <rect x="20" y="80" width="10" height="10"/>
-                                 <rect x="40" y="80" width="10" height="10"/>
-                                 <rect x="60" y="80" width="10" height="10"/>
-                                 <rect x="80" y="80" width="10" height="10"/>
-                               </g>
-                             </svg>
-                           `)}")`,
-                           backgroundSize: 'cover'
-                         }}>
+                  {/* QR Code */}
+                    <div className="text-center">
+                      <div className="mx-auto mb-2">
+                        <QRCodeCanvas value={qrCodeData} size={128} level="H" includeMargin={true} />
+                      </div>
+-                      <p className="text-xs text-gray-500 font-mono break-all">{qrCodeData}</p>
++                      {/* Texte JSON du QR supprimé pour un rendu propre */}
                     </div>
-                    <p className="text-xs text-gray-500 font-mono">{qrCodeData}</p>
-                  </div>
                 </div>
                 <p className="text-sm text-gray-600 text-center max-w-48">
                   Scannez ce QR code lors de l'embarquement ou présentez ce billet
@@ -192,7 +222,7 @@ const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ paymentData, onNewB
           {/* Ticket Footer */}
           <div className="bg-gray-50 border-t px-6 py-4">
             <div className="flex flex-wrap gap-4 justify-center">
-              <button className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              <button onClick={handleDownload} className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                 <Download className="w-4 h-4 mr-2" />
                 Télécharger
               </button>

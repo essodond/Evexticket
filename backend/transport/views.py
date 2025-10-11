@@ -152,7 +152,12 @@ class CompanyViewSet(viewsets.ModelViewSet):
     def stats(self, request, pk=None):
         company = self.get_object()
         
-        total_trips = Trip.objects.filter(company=company).count()
+        # Ne compter que les voyages programmés
+        total_trips = Trip.objects.filter(
+            company=company,
+            scheduled_trips__isnull=False
+        ).distinct().count()
+        
         total_bookings = Booking.objects.filter(trip__company=company).count()
         
         total_revenue = Booking.objects.filter(
@@ -173,6 +178,19 @@ class CompanyViewSet(viewsets.ModelViewSet):
         }
         
         serializer = CompanyStatsSerializer(stats_data)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def bookings(self, request, pk=None):
+        """Liste des réservations pour une compagnie spécifique"""
+        company = self.get_object()
+        user = request.user
+        # Autoriser seulement staff ou administrateurs de la compagnie
+        is_admin_of_company = (company.admin_user_id == user.id) or company.admins.filter(id=user.id).exists()
+        if not user.is_staff and not is_admin_of_company:
+            return Response({'detail': 'Accès non autorisé'}, status=status.HTTP_403_FORBIDDEN)
+        qs = Booking.objects.filter(trip__company=company).select_related('trip', 'trip__departure_city', 'trip__arrival_city')
+        serializer = BookingSerializer(qs, many=True)
         return Response(serializer.data)
 
     def perform_create(self, serializer):
