@@ -399,6 +399,25 @@ def scheduled_trips_list(request):
     return Response(serializer.data)
 
 
+@api_view(['GET'])
+def booked_seats_list(request):
+    """Retourne la liste des numéros de sièges déjà réservés pour un trajet à une date donnée.
+
+    Query params attendus: `trip_id` (int), `travel_date` (YYYY-MM-DD)
+    On inclut les réservations en statut 'pending' et 'confirmed' pour éviter double-réservation.
+    """
+    trip_id = request.query_params.get('trip_id')
+    travel_date = request.query_params.get('travel_date')
+
+    if not trip_id or not travel_date:
+        return Response({'detail': 'trip_id et travel_date requis.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    qs = Booking.objects.filter(trip_id=trip_id, travel_date=travel_date, status__in=['pending', 'confirmed'])
+    seats = list(qs.values_list('seat_number', flat=True))
+    # Normaliser en liste simple
+    return Response(seats)
+
+
 class ScheduledTripSearchView(APIView):
     """Rechercher des voyages planifiés."""
     permission_classes = [AllowAny]

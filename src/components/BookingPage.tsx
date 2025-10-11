@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useEffect } from 'react';
+import apiService from '../services/api';
 import { ArrowLeft, CheckCircle } from 'lucide-react';
 
 interface Trip {
@@ -69,7 +71,14 @@ const BookingPage: React.FC<BookingPageProps> = ({ trip, searchData, onBack, onP
       occupiedCount = Math.max(Math.min(cap - avail, seatsCount), 0);
     }
   
-    const occupiedSeats = new Set<number>(Array.from({ length: occupiedCount }, (_, i) => i + 1));
+    // If we have explicit occupied seat numbers from the server, prefer them.
+    const explicitOccupied = occupiedSeatNumbers && occupiedSeatNumbers.size > 0
+      ? Array.from(occupiedSeatNumbers).map(s => parseInt(String(s), 10)).filter(n => !isNaN(n))
+      : null;
+
+    const occupiedSeats = explicitOccupied && explicitOccupied.length > 0
+      ? new Set<number>(explicitOccupied)
+      : new Set<number>(Array.from({ length: occupiedCount }, (_, i) => i + 1));
     for (let i = 1; i <= seatsCount; i++) {
       seats.push({ number: i, isOccupied: occupiedSeats.has(i), isSelected: selectedSeat === i });
     }
@@ -83,6 +92,29 @@ const BookingPage: React.FC<BookingPageProps> = ({ trip, searchData, onBack, onP
     if (!seat || seat.isOccupied) return;
     setSelectedSeat(n);
   };
+
+  // Fetch occupied seat numbers for this trip + date on mount / when trip or searchData changes
+  const [occupiedSeatNumbers, setOccupiedSeatNumbers] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    let mounted = true;
+    const tripId = Number(trip.id);
+    const travelDate = searchData?.date || searchData?.travel_date;
+    if (!tripId || !travelDate) return;
+
+    apiService.getBookedSeats(tripId, travelDate)
+      .then((seats) => {
+        if (!mounted) return;
+        // seats returned are strings; store them in a set for O(1) lookup
+        setOccupiedSeatNumbers(new Set((seats || []).map(s => String(s))));
+      })
+      .catch((err) => {
+        // On erreur, on garde le fallback local (capacity - available) — pas fatal
+        console.warn('Erreur en récupérant les sièges réservés:', err);
+      });
+
+    return () => { mounted = false; };
+  }, [trip.id, searchData?.date, searchData?.travel_date]);
 
   const handleProceed = () => {
     if (!selectedSeat) return;

@@ -312,6 +312,14 @@ class ApiService {
     return this.request<Booking[]>('/bookings/');
   }
 
+  /**
+   * Retourne une liste de numéros de sièges (strings) déjà réservés pour un trajet et une date.
+   */
+  async getBookedSeats(tripId: number, travelDate: string): Promise<string[]> {
+    const q = `?trip_id=${encodeURIComponent(String(tripId))}&travel_date=${encodeURIComponent(String(travelDate))}`;
+    return this.request<string[]>(`/booked_seats/${q}`);
+  }
+
   async getCompanyBookings(companyId: number): Promise<Booking[]> {
     return this.request<Booking[]>(`/companies/${companyId}/bookings/`);
   }

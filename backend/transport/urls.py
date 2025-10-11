@@ -18,4 +18,5 @@ urlpatterns = [
     path('me/', views.CurrentUserView.as_view(), name='current-user'),
     path('scheduled_trips/', views.scheduled_trips_list, name='scheduled-trips'),
     path('scheduled_trips/search/', views.ScheduledTripSearchView.as_view(), name='scheduled-trip-search'),
+    path('booked_seats/', views.booked_seats_list, name='booked-seats'),
 ]
