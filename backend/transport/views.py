@@ -332,6 +332,40 @@ class TripViewSet(viewsets.ModelViewSet):
 
         return queryset
 
+    def create(self, request, *args, **kwargs):
+        """Override create to return a friendly confirmation message and create notifications for company admins."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+
+        trip_obj = serializer.instance
+        # create notification for company admins
+        try:
+            company = trip_obj.company
+            admins = []
+            if company.admin_user:
+                admins.append(company.admin_user)
+            admins_qs = company.admins.all()
+            for a in admins_qs:
+                if a not in admins:
+                    admins.append(a)
+
+            for u in admins:
+                try:
+                    Notification.objects.create(
+                        user=u,
+                        title=f"Nouveau trajet créé: {company.name}",
+                        message=f"Un nouveau trajet {trip_obj.departure_city.name} → {trip_obj.arrival_city.name} a été créé pour la compagnie {company.name}.",
+                        notification_type='general'
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        return Response({'message': 'Trajet créé avec succès.', 'trip': serializer.data}, status=status.HTTP_201_CREATED, headers=headers)
+
     @action(detail=False, methods=['post'])
     def search(self, request):
         """Rechercher des trajets"""
