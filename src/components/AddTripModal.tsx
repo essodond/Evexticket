@@ -46,6 +46,9 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
     date: (editingTrip as any)?.date || ''
   });
 
+  // Stops state: array of { id?, city, sequence, segment_price }
+  const [stops, setStops] = useState<Array<any>>([]);
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
 
@@ -76,8 +79,25 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
         isActive: editingTrip.isActive ?? true,
         date: (editingTrip as any).date ?? ''
       });
+      // load stops if provided on editingTrip
+      const providedStops = (editingTrip as any).stops || [];
+      if (providedStops && Array.isArray(providedStops)) {
+        setStops(providedStops.map((s: any, idx: number) => ({
+          id: s.id,
+          city: s.city || s.city_id || s.cityId || s.cityId,
+          sequence: s.sequence ?? idx,
+          segment_price: s.segment_price != null ? Number(s.segment_price) : null
+        })));
+      }
     }
   }, [editingTrip]);
+
+  useEffect(() => {
+    // initialize stops when modal opens and no editingTrip
+    if (!editingTrip && isOpen) {
+      setStops([]);
+    }
+  }, [isOpen, editingTrip]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -109,6 +129,36 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
         duration: minutes
       }));
     }
+  };
+
+  const addStop = () => {
+    const nextSeq = stops.length > 0 ? Math.max(...stops.map(s => s.sequence)) + 1 : 0;
+    setStops(prev => [...prev, { city: '', sequence: nextSeq, segment_price: null }]);
+  };
+
+  const updateStop = (index: number, patch: Partial<any>) => {
+    setStops(prev => prev.map((s, i) => i === index ? { ...s, ...patch } : s));
+  };
+
+  const removeStop = (index: number) => {
+    setStops(prev => {
+      const copy = [...prev];
+      copy.splice(index, 1);
+      // re-sequence
+      return copy.map((s, i) => ({ ...s, sequence: i }));
+    });
+  };
+
+  const moveStop = (index: number, dir: number) => {
+    setStops(prev => {
+      const copy = [...prev];
+      const newIndex = index + dir;
+      if (newIndex < 0 || newIndex >= copy.length) return prev;
+      const tmp = copy[newIndex];
+      copy[newIndex] = copy[index];
+      copy[index] = tmp;
+      return copy.map((s, i) => ({ ...s, sequence: i }));
+    });
   };
 
   const validateForm = () => {
@@ -192,6 +242,16 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
       capacity: Number(formData.capacity),
       is_active: Boolean(formData.isActive),
     };
+
+    // include stops if any
+    if (stops && stops.length > 0) {
+      payload.stops = stops.map(s => ({
+        id: s.id,
+        city: s.city ? Number(s.city) : null,
+        sequence: Number.isFinite(Number(s.sequence)) ? Number(s.sequence) : 0,
+        segment_price: s.segment_price != null ? Number(s.segment_price) : null
+      }));
+    }
 
     // Simuler requête API locale (AdminDashboard appellera apiService)
     // setTimeout(() => {
@@ -484,6 +544,45 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
                   Trajet actif
                 </span>
               </label>
+            </div>
+          </div>
+
+          {/* Stops editor */}
+          <div className="md:col-span-2 bg-white p-4 rounded-lg border">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-medium">Arrêts / Escales</h3>
+              <button type="button" onClick={addStop} className="text-sm px-3 py-1 bg-blue-600 text-white rounded">Ajouter un arrêt</button>
+            </div>
+
+            {stops.length === 0 && (
+              <p className="text-sm text-gray-500">Aucun arrêt défini. Les trajets sans arrêts seront traités comme parcours direct.</p>
+            )}
+
+            <div className="space-y-3">
+              {stops.map((s, idx) => (
+                <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                  <div className="col-span-5">
+                    <label className="text-sm text-gray-700">Ville</label>
+                    <select value={s.city || ''} onChange={(e) => updateStop(idx, { city: e.target.value })} className="w-full px-2 py-2 border rounded">
+                      <option value="">Sélectionner une ville</option>
+                      { propCities && propCities.map((c: any) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      )) }
+                    </select>
+                  </div>
+
+                  <div className="col-span-4">
+                    <label className="text-sm text-gray-700">Prix du segment</label>
+                    <input type="number" value={s.segment_price ?? ''} onChange={(e) => updateStop(idx, { segment_price: e.target.value === '' ? null : Number(e.target.value) })} className="w-full px-2 py-2 border rounded" placeholder="0" />
+                  </div>
+
+                  <div className="col-span-3 flex items-end space-x-2">
+                    <button type="button" onClick={() => moveStop(idx, -1)} className="px-2 py-1 bg-gray-100 rounded">▲</button>
+                    <button type="button" onClick={() => moveStop(idx, 1)} className="px-2 py-1 bg-gray-100 rounded">▼</button>
+                    <button type="button" onClick={() => removeStop(idx)} className="px-2 py-1 bg-red-100 text-red-700 rounded">Suppr</button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
