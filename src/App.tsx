@@ -65,20 +65,84 @@ function App() {
     }
   };
 
+  // Consolidate localStorage restoration into a single useEffect
+  useEffect(() => {
+    // Restore data from localStorage with validation
+    try {
+      const storedSearchData = localStorage.getItem('searchData');
+      const storedSearchResults = localStorage.getItem('searchResults');
+      const storedSelectedTrip = localStorage.getItem('selectedTrip');
+      const storedBookingData = localStorage.getItem('bookingData');
+      const storedPaymentData = localStorage.getItem('paymentData');
+
+      if (storedSearchData) {
+        const parsedSearchData = JSON.parse(storedSearchData);
+        setSearchData(parsedSearchData);
+      }
+      if (storedSearchResults) {
+        const parsedSearchResults = JSON.parse(storedSearchResults);
+        setSearchResults(parsedSearchResults);
+      }
+      if (storedSelectedTrip) {
+        const parsedSelectedTrip = JSON.parse(storedSelectedTrip);
+        // Validate required trip properties
+        if (parsedSelectedTrip && parsedSelectedTrip.id) {
+          setSelectedTrip(parsedSelectedTrip);
+        } else {
+          localStorage.removeItem('selectedTrip');
+        }
+      }
+      if (storedBookingData) {
+        const parsedBookingData = JSON.parse(storedBookingData);
+        setBookingData(parsedBookingData);
+      }
+      if (storedPaymentData) {
+        const parsedPaymentData = JSON.parse(storedPaymentData);
+        setPaymentData(parsedPaymentData);
+      }
+
+      // Check current route against available data
+      const currentPath = window.location.pathname;
+      if (currentPath === '/booking' && !storedSelectedTrip) {
+        navigate('/');
+      }
+      if (currentPath === '/payment' && !storedBookingData) {
+        navigate('/');
+      }
+      if (currentPath === '/confirmation' && !storedPaymentData) {
+        navigate('/');
+      }
+    } catch (e) {
+      console.error('Error restoring data from localStorage:', e);
+      // Clear potentially corrupted data
+      localStorage.removeItem('searchData');
+      localStorage.removeItem('searchResults');
+      localStorage.removeItem('selectedTrip');
+      localStorage.removeItem('bookingData');
+      localStorage.removeItem('paymentData');
+      if (window.location.pathname !== '/') {
+        navigate('/');
+      }
+    }
+  }, [navigate]); // Only depend on navigate function
+
   const handleTripSelect = (trip: any) => {
     setSelectedTrip(trip);
+    localStorage.setItem('selectedTrip', JSON.stringify(trip));
     localStorage.setItem('currentView', 'booking');
     navigate('/booking');
   };
 
   const handleProceedToPayment = (data: any) => {
     setBookingData(data);
+    localStorage.setItem('bookingData', JSON.stringify(data));
     localStorage.setItem('currentView', 'payment');
     navigate('/payment');
   };
 
   const handlePaymentSuccess = (data: any) => {
     setPaymentData(data);
+    localStorage.setItem('paymentData', JSON.stringify(data));
     localStorage.setItem('currentView', 'confirmation');
     navigate('/confirmation');
   };
@@ -90,8 +154,27 @@ function App() {
     setPaymentData(null);
     localStorage.removeItem('searchData');
     localStorage.removeItem('searchResults');
+    localStorage.removeItem('selectedTrip');
+    localStorage.removeItem('bookingData');
+    localStorage.removeItem('paymentData');
     localStorage.setItem('currentView', 'home');
     navigate('/');
+  };
+
+  const handleLogout = () => {
+    // Delegate to AuthContext logout
+    authLogout();
+    localStorage.removeItem('searchData');
+    localStorage.removeItem('searchResults');
+    localStorage.removeItem('selectedTrip');
+    localStorage.removeItem('bookingData');
+    localStorage.removeItem('paymentData');
+    localStorage.setItem('currentView', 'landing');
+    navigate('/');
+    setSearchData(null);
+    setSelectedTrip(null);
+    setBookingData(null);
+    setPaymentData(null);
   };
 
   const handleNavigateToAuth = (mode: AuthMode) => {
@@ -116,19 +199,6 @@ function App() {
     }
     localStorage.setItem('currentView', 'home');
     navigate('/home');
-  };
-
-  const handleLogout = () => {
-    // Delegate to AuthContext logout
-    authLogout();
-    localStorage.removeItem('searchData');
-    localStorage.removeItem('searchResults');
-    localStorage.setItem('currentView', 'landing');
-    navigate('/');
-    setSearchData(null);
-    setSelectedTrip(null);
-    setBookingData(null);
-    setPaymentData(null);
   };
 
   // App now uses AuthProvider to bootstrap auth state; we keep currentView persistence logic

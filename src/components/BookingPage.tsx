@@ -29,9 +29,7 @@ interface BookingPageProps {
 }
 
 const BookingPage: React.FC<BookingPageProps> = ({ trip, searchData, onBack, onProceedToPayment }) => {
-  const [selectedSeat, setSelectedSeat] = useState<number | null>(null);
-  const [passengerInfo, setPassengerInfo] = useState({ firstName: '', lastName: '', phone: '', email: '' });
-
+  // Utility functions
   const formatTime = (timeStr?: string) => {
     if (!timeStr) return '-';
     const simple = /^\d{2}:\d{2}(:\d{2})?$/;
@@ -58,32 +56,78 @@ const BookingPage: React.FC<BookingPageProps> = ({ trip, searchData, onBack, onP
     return m > 0 ? `${h} h ${m} min` : `${h} h`;
   };
 
+  // Initialize all state variables first
+  const [selectedSeat, setSelectedSeat] = useState<number | null>(null);
+  const [passengerInfo, setPassengerInfo] = useState({ firstName: '', lastName: '', phone: '', email: '' });
+  const [isLoading, setIsLoading] = useState(true);
+  const [occupiedSeatNumbers, setOccupiedSeatNumbers] = useState<Set<string>>(new Set());
+
+  // Fetch occupied seat numbers
+  useEffect(() => {
+    let mounted = true;
+    const tripId = Number(trip?.id);
+    const travelDate = searchData?.date || searchData?.travel_date;
+    if (!tripId || !travelDate) return;
+
+    apiService.getBookedSeats(tripId, travelDate)
+      .then((seats) => {
+        if (!mounted) return;
+        setOccupiedSeatNumbers(new Set((seats || []).map(s => String(s))));
+      })
+      .catch((err) => {
+        console.warn('Erreur en récupérant les sièges réservés:', err);
+      });
+
+    return () => { mounted = false; };
+  }, [trip?.id, searchData?.date, searchData?.travel_date]);
+
+  // Check trip availability
+  useEffect(() => {
+    if (trip) {
+      setIsLoading(false);
+    } else {
+      onBack();
+    }
+  }, [trip, onBack]);
+
   const generateSeats = () => {
+    if (!trip) return [];
     const seats: { number: number; isOccupied: boolean; isSelected: boolean }[] = [];
     const seatsCount = Number(trip.totalSeats ?? trip.capacity ?? 50) || 50;
     const cap = Number(trip.capacity ?? trip.totalSeats ?? seatsCount);
     const availRaw = trip.available_seats ?? trip.availableSeats;
     const avail = typeof availRaw === 'number' ? availRaw : (Number.isFinite(cap) ? cap : seatsCount);
   
-    // Par défaut, aucun siège occupé si les données ne permettent pas de calculer
     let occupiedCount = 0;
     if (Number.isFinite(cap) && typeof avail === 'number') {
       occupiedCount = Math.max(Math.min(cap - avail, seatsCount), 0);
     }
   
-    // If we have explicit occupied seat numbers from the server, prefer them.
-    const explicitOccupied = occupiedSeatNumbers && occupiedSeatNumbers.size > 0
+    const explicitOccupied = occupiedSeatNumbers.size > 0
       ? Array.from(occupiedSeatNumbers).map(s => parseInt(String(s), 10)).filter(n => !isNaN(n))
       : null;
 
     const occupiedSeats = explicitOccupied && explicitOccupied.length > 0
       ? new Set<number>(explicitOccupied)
       : new Set<number>(Array.from({ length: occupiedCount }, (_, i) => i + 1));
+
     for (let i = 1; i <= seatsCount; i++) {
       seats.push({ number: i, isOccupied: occupiedSeats.has(i), isSelected: selectedSeat === i });
     }
     return seats;
   };
+
+  // Show loading state
+  if (isLoading || !trip) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement des détails du voyage...</p>
+        </div>
+      </div>
+    );
+  }
 
   const seats = generateSeats();
 
@@ -92,29 +136,6 @@ const BookingPage: React.FC<BookingPageProps> = ({ trip, searchData, onBack, onP
     if (!seat || seat.isOccupied) return;
     setSelectedSeat(n);
   };
-
-  // Fetch occupied seat numbers for this trip + date on mount / when trip or searchData changes
-  const [occupiedSeatNumbers, setOccupiedSeatNumbers] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    let mounted = true;
-    const tripId = Number(trip.id);
-    const travelDate = searchData?.date || searchData?.travel_date;
-    if (!tripId || !travelDate) return;
-
-    apiService.getBookedSeats(tripId, travelDate)
-      .then((seats) => {
-        if (!mounted) return;
-        // seats returned are strings; store them in a set for O(1) lookup
-        setOccupiedSeatNumbers(new Set((seats || []).map(s => String(s))));
-      })
-      .catch((err) => {
-        // On erreur, on garde le fallback local (capacity - available) — pas fatal
-        console.warn('Erreur en récupérant les sièges réservés:', err);
-      });
-
-    return () => { mounted = false; };
-  }, [trip.id, searchData?.date, searchData?.travel_date]);
 
   const handleProceed = () => {
     if (!selectedSeat) return;
