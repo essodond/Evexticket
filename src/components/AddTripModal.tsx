@@ -51,6 +51,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const busTypes = [
     { value: 'Standard', label: 'Standard' },
@@ -263,12 +264,24 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
     try {
       if (editingTrip) {
         const updated = await apiService.updateTrip(Number(editingTrip.id), payload);
+        setSuccessMessage('Trajet modifié avec succès.');
         onSave({ ...editingTrip, ...updated } as any);
       } else {
-        const created = await apiService.createTrip(payload as any);
-        onSave(created as any);
+        const resp = await apiService.createTrip(payload as any);
+        // backend returns { message, trip }
+        if ((resp as any).trip) {
+          setSuccessMessage('Trajet créé avec succès.');
+          onSave((resp as any).trip as any);
+        } else {
+          setSuccessMessage('Trajet créé.');
+          onSave(resp as any);
+        }
       }
-      onClose();
+      // close after short delay to show confirmation
+      setTimeout(() => {
+        setSuccessMessage(null);
+        onClose();
+      }, 900);
     } catch (error) {
       console.error('Erreur lors de la sauvegarde du trajet:', error);
     } finally {
@@ -553,6 +566,10 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
               <h3 className="text-lg font-medium">Arrêts / Escales</h3>
               <button type="button" onClick={addStop} className="text-sm px-3 py-1 bg-blue-600 text-white rounded">Ajouter un arrêt</button>
             </div>
+
+            {successMessage && (
+              <div className="mb-3 p-3 bg-green-50 border border-green-200 text-green-800 rounded">{successMessage}</div>
+            )}
 
             {stops.length === 0 && (
               <p className="text-sm text-gray-500">Aucun arrêt défini. Les trajets sans arrêts seront traités comme parcours direct.</p>
