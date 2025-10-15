@@ -250,11 +250,24 @@ class ApiService {
     return this.request<Trip>(`/trips/${id}/`);
   }
 
+  // Backwards-compatible aliases expected by frontend components/hooks
+  async getTrip(id: number): Promise<Trip> {
+    return this.getRoute(id);
+  }
+
+  async getTrips(companyId?: number): Promise<Trip[]> {
+    return this.getRoutes(companyId);
+  }
+
   async createRoute(trip: Omit<Trip, 'arrival_city_name' | 'available_seats' | 'bookings_count' | 'company_name' | 'created_at' | 'departure_city_name' | 'id' | 'updated_at'>): Promise<Trip> {
     return this.request<Trip>('/trips/', {
       method: 'POST',
       body: JSON.stringify(trip),
     });
+  }
+
+  async createTrip(trip: Omit<Trip, 'arrival_city_name' | 'available_seats' | 'bookings_count' | 'company_name' | 'created_at' | 'departure_city_name' | 'id' | 'updated_at'>): Promise<Trip> {
+    return this.createRoute(trip);
   }
 
   async updateRoute(id: number, trip: Partial<Trip>): Promise<Trip> {
@@ -264,10 +277,18 @@ class ApiService {
     });
   }
 
+  async updateTrip(id: number, trip: Partial<Trip>): Promise<Trip> {
+    return this.updateRoute(id, trip);
+  }
+
   async deleteRoute(id: number): Promise<void> {
     return this.request<void>(`/trips/${id}/`, {
       method: 'DELETE',
     });
+  }
+
+  async deleteTrip(id: number): Promise<void> {
+    return this.deleteRoute(id);
   }
 
   async searchScheduledTrips(params: TripSearchParams): Promise<ScheduledTrip[]> {
