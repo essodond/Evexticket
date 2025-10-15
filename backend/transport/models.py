@@ -2,6 +2,9 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
+from datetime import timedelta
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 
 class Company(models.Model):
@@ -338,3 +341,27 @@ class ScheduledTrip(models.Model):
         if self.available_seats is None:
             self.available_seats = self.trip.capacity
         super().save(*args, **kwargs)
+
+
+# Lorsque un Trip est créé via l'admin ou API, créer automatiquement les
+# ScheduledTrip pour les 14 prochains jours (fenêtre glissante).
+@receiver(post_save, sender=Trip)
+def create_scheduled_trips_on_trip_creation(sender, instance, created, **kwargs):
+    if not created:
+        return
+    try:
+        start_offset = 1
+        days = 14
+        today = timezone.localdate()
+        start_date = today + timedelta(days=start_offset)
+        for n in range(days):
+            d = start_date + timedelta(days=n)
+            # importer ici ScheduledTrip qui est défini dans ce même module
+            ScheduledTrip.objects.get_or_create(
+                trip=instance,
+                date=d,
+                defaults={'is_active': True, 'available_seats': instance.capacity}
+            )
+    except Exception:
+        # Ne pas lever d'exception lors de la sauvegarde du Trip — log possible si besoin
+        pass

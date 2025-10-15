@@ -122,6 +122,36 @@ class CurrentUserView(APIView):
         return Response(data)
 
 
+
+
+def create_scheduled_trips_for_trip(trip, days=14, start_offset=1):
+    """Utility: create ScheduledTrip instances for a Trip for the next `days` days.
+
+    This will create (if not existing) ScheduledTrip objects starting from
+    today + start_offset (default: tomorrow) for `days` consecutive days.
+    Returns the number created.
+    """
+    try:
+        from .models import ScheduledTrip
+        from django.utils import timezone
+    except Exception:
+        return 0
+
+    today = timezone.localdate()
+    start_date = today + timedelta(days=start_offset)
+    created = 0
+    for n in range(days):
+        d = start_date + timedelta(days=n)
+        obj, was_created = ScheduledTrip.objects.get_or_create(
+            trip=trip,
+            date=d,
+            defaults={'is_active': True, 'available_seats': trip.capacity}
+        )
+        if was_created:
+            created += 1
+    return created
+
+
 class CityViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet pour les villes (lecture seule)"""
     queryset = City.objects.filter(is_active=True)
@@ -222,7 +252,13 @@ class TripViewSet(viewsets.ModelViewSet):
         user = self.request.user
         # Staff can create for any company
         if user.is_staff:
-            return serializer.save()
+            trip = serializer.save()
+            # After creating a trip, create scheduled runs for the next 14 days
+            try:
+                create_scheduled_trips_for_trip(trip, days=14, start_offset=1)
+            except Exception:
+                pass
+            return trip
 
         # Non-staff: must be admin of a company
         companies_for_user = Company.objects.filter(Q(admin_user=user) | Q(admins=user))
@@ -247,10 +283,20 @@ class TripViewSet(viewsets.ModelViewSet):
                 from rest_framework.exceptions import PermissionDenied
                 raise PermissionDenied("Vous ne pouvez créer que des trajets pour vos compagnies.")
 
-            return serializer.save()
+            trip = serializer.save()
+            try:
+                create_scheduled_trips_for_trip(trip, days=14, start_offset=1)
+            except Exception:
+                pass
+            return trip
 
         # No company provided: default to the first company the user administers
-        return serializer.save(company=companies_for_user.first())
+        trip = serializer.save(company=companies_for_user.first())
+        try:
+            create_scheduled_trips_for_trip(trip, days=14, start_offset=1)
+        except Exception:
+            pass
+        return trip
 
     def perform_update(self, serializer):
         user = self.request.user
