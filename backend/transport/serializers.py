@@ -145,7 +145,13 @@ class TripSerializer(serializers.ModelSerializer):
         # include stops ordered for frontend convenience
         stops = TripStop.objects.filter(trip=instance).order_by('sequence')
         data['stops'] = [
-            {'id': s.id, 'city_id': s.city_id, 'city_name': s.city.name, 'sequence': s.sequence, 'price_from_start': str(s.price_from_start)}
+            {
+                'id': s.id,
+                'city_id': s.city_id,
+                'city_name': s.city.name,
+                'sequence': s.sequence,
+                'segment_price': (str(s.segment_price) if s.segment_price is not None else None)
+            }
             for s in stops
         ]
         return data
@@ -165,7 +171,7 @@ class BookingSerializer(serializers.ModelSerializer):
         model = Booking
         fields = [
             'id', 'trip', 'trip_details', 'passenger_name', 'passenger_email',
-            'passenger_phone', 'seat_number', 'status', 'payment_method',
+            'passenger_phone', 'seat_number', 'origin_stop', 'destination_stop', 'status', 'payment_method',
             'total_price', 'booking_date', 'travel_date', 'notes', 'user',
             'passenger_full_name'
         ]
@@ -277,12 +283,37 @@ class BookingCreateSerializer(serializers.ModelSerializer):
         model = Booking
         fields = [
             'trip', 'passenger_name', 'passenger_email', 'passenger_phone',
-            'seat_number', 'payment_method', 'travel_date', 'notes'
+            'seat_number', 'origin_stop', 'destination_stop', 'payment_method', 'travel_date', 'notes'
         ]
 
     def create(self, validated_data):
         trip = validated_data['trip']
-        validated_data['total_price'] = trip.price
+        origin = validated_data.get('origin_stop')
+        destination = validated_data.get('destination_stop')
+
+        total = None
+        try:
+            if origin and destination:
+                # Ensure origin and destination belong to the trip
+                if origin.trip_id != trip.id or destination.trip_id != trip.id:
+                    raise serializers.ValidationError('Origin/Destination stops must belong to the selected trip.')
+                if origin.sequence >= destination.sequence:
+                    raise serializers.ValidationError('Origin must be before destination.')
+
+                # Sum segment_price for sequences [origin.sequence, destination.sequence)
+                segments = TripStop.objects.filter(trip=trip, sequence__gte=origin.sequence, sequence__lt=destination.sequence)
+                prices = [s.segment_price for s in segments]
+                if any(p is None for p in prices):
+                    # Fallback to trip.price if some segments lack pricing
+                    total = trip.price
+                else:
+                    total = sum(prices)
+            else:
+                total = trip.price
+        except Exception:
+            total = trip.price
+
+        validated_data['total_price'] = total
         validated_data['status'] = 'pending'
         return super().create(validated_data)
 

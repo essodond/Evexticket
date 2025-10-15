@@ -140,7 +140,9 @@ class TripStop(models.Model):
     trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='stops')
     city = models.ForeignKey(City, on_delete=models.CASCADE, verbose_name='Ville')
     sequence = models.PositiveIntegerField(verbose_name='Ordre')
-    price_from_start = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # Prix du segment partant de cette escale vers l'escale suivante.
+    # Les compagnies doivent renseigner ces prix manuellement.
+    segment_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name="Prix du segment vers l'arrêt suivant")
 
     class Meta:
         unique_together = ('trip', 'sequence')
