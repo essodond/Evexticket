@@ -130,6 +130,26 @@ class Trip(models.Model):
             raise ValidationError("La ville de départ et d'arrivée doivent être différentes.")
 
 
+class TripStop(models.Model):
+    """Une escale (stop) pour un Trip, ordonnée par `sequence`.
+
+    On stocke un prix cumulatif `price_from_start` qui représente le tarif
+    depuis le premier arrêt du trajet jusqu'à cette escale. Le prix entre
+    deux escales est la différence des `price_from_start`.
+    """
+    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='stops')
+    city = models.ForeignKey(City, on_delete=models.CASCADE, verbose_name='Ville')
+    sequence = models.PositiveIntegerField(verbose_name='Ordre')
+    price_from_start = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    class Meta:
+        unique_together = ('trip', 'sequence')
+        ordering = ['trip', 'sequence']
+
+    def __str__(self):
+        return f"{self.trip} - {self.city.name} (#{self.sequence})"
+
+
 class Booking(models.Model):
     """Modèle pour les réservations"""
     STATUS_CHOICES = [
@@ -155,6 +175,9 @@ class Booking(models.Model):
     passenger_email = models.EmailField(verbose_name="Email du passager")
     passenger_phone = models.CharField(max_length=20, verbose_name="Téléphone du passager")
     seat_number = models.CharField(max_length=10, verbose_name="Numéro de siège")
+    # Optional origin/destination stops for segment bookings
+    origin_stop = models.ForeignKey('TripStop', on_delete=models.SET_NULL, null=True, blank=True, related_name='origin_bookings')
+    destination_stop = models.ForeignKey('TripStop', on_delete=models.SET_NULL, null=True, blank=True, related_name='destination_bookings')
     status = models.CharField(
         max_length=20, 
         choices=STATUS_CHOICES, 

@@ -6,6 +6,7 @@ from rest_framework import serializers
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import Company, City, Trip, Booking, Payment, Review, Notification, ScheduledTrip
+from .models import TripStop
 
 # Serializer pour l'inscription d'utilisateur
 class RegisterSerializer(serializers.ModelSerializer):
@@ -139,6 +140,16 @@ class TripSerializer(serializers.ModelSerializer):
         confirmed_bookings = obj.bookings.filter(status='confirmed').count()
         return obj.capacity - confirmed_bookings
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # include stops ordered for frontend convenience
+        stops = TripStop.objects.filter(trip=instance).order_by('sequence')
+        data['stops'] = [
+            {'id': s.id, 'city_id': s.city_id, 'city_name': s.city.name, 'sequence': s.sequence, 'price_from_start': str(s.price_from_start)}
+            for s in stops
+        ]
+        return data
+
     def validate(self, data):
         if data['departure_city'] == data['arrival_city']:
             raise serializers.ValidationError("La ville de départ et d'arrivée doivent être différentes.")
@@ -165,6 +176,20 @@ class BookingSerializer(serializers.ModelSerializer):
 
     def validate_seat_number(self, value):
         # Vérifier que le siège n'est pas déjà pris pour ce trajet et cette date
+        # If booking includes origin/destination stops, we must check overlap by sequence indices
+        origin = None
+        destination = None
+        if self.initial_data.get('origin_stop'):
+            try:
+                origin = TripStop.objects.get(pk=self.initial_data.get('origin_stop'))
+            except TripStop.DoesNotExist:
+                origin = None
+        if self.initial_data.get('destination_stop'):
+            try:
+                destination = TripStop.objects.get(pk=self.initial_data.get('destination_stop'))
+            except TripStop.DoesNotExist:
+                destination = None
+
         if self.instance:
             # Mode édition
             existing_booking = Booking.objects.filter(
@@ -178,12 +203,21 @@ class BookingSerializer(serializers.ModelSerializer):
             trip = self.initial_data.get('trip')
             travel_date = self.initial_data.get('travel_date')
             if trip and travel_date:
-                existing_booking = Booking.objects.filter(
-                    trip=trip,
-                    travel_date=travel_date,
-                    seat_number=value,
-                    status__in=['confirmed', 'pending']
-                )
+                # If origin/destination provided, determine overlapping bookings by stop sequence
+                qs = Booking.objects.filter(trip=trip, travel_date=travel_date, seat_number=value, status__in=['confirmed', 'pending'])
+                if origin and destination:
+                    # bookings that overlap segment [origin.sequence, destination.sequence)
+                    overlapping = []
+                    for b in qs.select_related('origin_stop', 'destination_stop'):
+                        if b.origin_stop and b.destination_stop:
+                            if not (b.destination_stop.sequence <= origin.sequence or b.origin_stop.sequence >= destination.sequence):
+                                overlapping.append(b)
+                        else:
+                            # If existing booking has no stops, treat as full-journey conflict
+                            overlapping.append(b)
+                    existing_booking = Trip.objects.none() if not overlapping else qs.filter(id__in=[bb.id for bb in overlapping])
+                else:
+                    existing_booking = qs
             else:
                 existing_booking = Booking.objects.none()
 
