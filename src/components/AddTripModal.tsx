@@ -189,9 +189,8 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
       newErrors.arrivalTime = 'L\'heure d\'arrivée est requise';
     }
 
-    if (!formData.date) {
-      newErrors.date = 'La date du trajet est requise';
-    }
+    // Note: Trip model does not include a 'date' field (ScheduledTrip handles dated runs).
+    // We keep the date input optional for UI use but do not require it here.
 
     // Calculer et valider que la durée est strictement positive (en minutes)
     const minutes = computeDurationMinutes(formData.departureTime, formData.arrivalTime);
@@ -236,7 +235,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
       arrival_city: formData.arrivalCity ? Number(formData.arrivalCity) : null,
       departure_time: formData.departureTime,
       arrival_time: formData.arrivalTime,
-      date: formData.date,
+  // do not include date in Trip payload; dated runs are created server-side
       price: Number(formData.price),
       duration: Number(minutes),
       bus_type: formData.busType,
