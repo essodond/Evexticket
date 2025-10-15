@@ -8,6 +8,13 @@ from django.contrib.auth.models import User
 from .models import Company, City, Trip, Booking, Payment, Review, Notification, ScheduledTrip
 from .models import TripStop
 
+
+class TripStopSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TripStop
+        fields = ['id', 'city', 'sequence', 'segment_price']
+        read_only_fields = ['id']
+
 # Serializer pour l'inscription d'utilisateur
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
@@ -122,6 +129,8 @@ class TripSerializer(serializers.ModelSerializer):
     arrival_city_name = serializers.CharField(source='arrival_city.name', read_only=True)
     bookings_count = serializers.SerializerMethodField()
     available_seats = serializers.SerializerMethodField()
+    # Allow reading and writing stops as nested objects
+    stops = TripStopSerializer(many=True, required=False)
     
     class Meta:
         model = Trip
@@ -155,6 +164,36 @@ class TripSerializer(serializers.ModelSerializer):
             for s in stops
         ]
         return data
+
+    def create(self, validated_data):
+        stops_data = validated_data.pop('stops', None)
+        trip = super().create(validated_data)
+        # create stops if provided
+        if stops_data:
+            # delete any pre-existing (shouldn't exist on create) and recreate
+            for s in stops_data:
+                TripStop.objects.create(
+                    trip=trip,
+                    city_id=s.get('city'),
+                    sequence=s.get('sequence') if s.get('sequence') is not None else 0,
+                    segment_price=s.get('segment_price')
+                )
+        return trip
+
+    def update(self, instance, validated_data):
+        stops_data = validated_data.pop('stops', None)
+        trip = super().update(instance, validated_data)
+        if stops_data is not None:
+            # Simple approach: remove existing stops and recreate from provided list
+            TripStop.objects.filter(trip=trip).delete()
+            for s in stops_data:
+                TripStop.objects.create(
+                    trip=trip,
+                    city_id=s.get('city'),
+                    sequence=s.get('sequence') if s.get('sequence') is not None else 0,
+                    segment_price=s.get('segment_price')
+                )
+        return trip
 
     def validate(self, data):
         if data['departure_city'] == data['arrival_city']:
