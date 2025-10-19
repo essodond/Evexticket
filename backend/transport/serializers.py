@@ -177,15 +177,22 @@ class TripSerializer(serializers.ModelSerializer):
                     if isinstance(city_id, int) or (isinstance(city_id, str) and city_id.isdigit()):
                         resolved_city_id = int(city_id)
                     else:
-                        # try to lookup by name (case-insensitive)
-                        c = CityModel.objects.filter(name__iexact=str(city_id)).first()
+                        raw = str(city_id).strip()
+                        # normalize by removing parenthetical suffixes: 'Mango (Savanes)' -> 'Mango'
+                        import re
+                        normalized = re.sub(r"\s*\(.*\)\s*", "", raw).strip()
+                        # try exact
+                        c = CityModel.objects.filter(name__iexact=raw).first()
+                        if not c:
+                            c = CityModel.objects.filter(name__iexact=normalized).first()
+                        # startswith
+                        if not c:
+                            c = CityModel.objects.filter(name__istartswith=normalized).first()
+                        # contains
+                        if not c:
+                            c = CityModel.objects.filter(name__icontains=normalized).first()
                         if c:
                             resolved_city_id = c.id
-                        else:
-                            # try fuzzy: startswith
-                            c2 = CityModel.objects.filter(name__istartswith=str(city_id)).first()
-                            if c2:
-                                resolved_city_id = c2.id
                 except Exception:
                     resolved_city_id = None
 
@@ -222,13 +229,18 @@ class TripSerializer(serializers.ModelSerializer):
                     if isinstance(city_id, int) or (isinstance(city_id, str) and city_id.isdigit()):
                         resolved_city_id = int(city_id)
                     else:
-                        c = CityModel.objects.filter(name__iexact=str(city_id)).first()
+                        raw = str(city_id).strip()
+                        import re
+                        normalized = re.sub(r"\s*\(.*\)\s*", "", raw).strip()
+                        c = CityModel.objects.filter(name__iexact=raw).first()
+                        if not c:
+                            c = CityModel.objects.filter(name__iexact=normalized).first()
+                        if not c:
+                            c = CityModel.objects.filter(name__istartswith=normalized).first()
+                        if not c:
+                            c = CityModel.objects.filter(name__icontains=normalized).first()
                         if c:
                             resolved_city_id = c.id
-                        else:
-                            c2 = CityModel.objects.filter(name__istartswith=str(city_id)).first()
-                            if c2:
-                                resolved_city_id = c2.id
                 except Exception:
                     resolved_city_id = None
 

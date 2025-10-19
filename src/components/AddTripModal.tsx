@@ -230,10 +230,24 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
     setIsLoading(true);
     
     // Préparer payload normalisé attendu par l'API (durée en minutes)
+    const resolveTopCity = (value: any) => {
+      if (!value && value !== 0) return null;
+      if (typeof value === 'number') return value;
+      if (typeof value === 'string') {
+        if (/^\d+$/.test(value)) return Number(value);
+        if (propCities && Array.isArray(propCities)) {
+          const found = propCities.find((c:any) => (c.name || '').toLowerCase() === value.toLowerCase() || String(c.id) === value);
+          if (found) return found.id;
+        }
+        return null;
+      }
+      return null;
+    };
+
     const payload: any = {
       company: formData.companyId ? Number(formData.companyId) : null,
-      departure_city: formData.departureCity ? Number(formData.departureCity) : null,
-      arrival_city: formData.arrivalCity ? Number(formData.arrivalCity) : null,
+      departure_city: resolveTopCity(formData.departureCity),
+      arrival_city: resolveTopCity(formData.arrivalCity),
       departure_time: formData.departureTime,
       arrival_time: formData.arrivalTime,
   // do not include date in Trip payload; dated runs are created server-side
@@ -246,11 +260,36 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
 
     // include stops if any
     if (stops && stops.length > 0) {
+      const resolveCityId = (value: any) => {
+        // value may be: number, numeric-string, object with id, or city name string
+        if (!value && value !== 0) return null;
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string') {
+          if (/^\d+$/.test(value)) return Number(value);
+          // try to find matching city from propCities by exact or startsWith match
+          if (propCities && Array.isArray(propCities)) {
+            const exact = propCities.find((c: any) => String(c.id) === value || (c.name || '').toLowerCase() === value.toLowerCase());
+            if (exact) return exact.id;
+            const starts = propCities.find((c: any) => (c.name || '').toLowerCase().startsWith(value.toLowerCase()));
+            if (starts) return starts.id;
+            // try contains
+            const contains = propCities.find((c: any) => (c.name || '').toLowerCase().includes(value.toLowerCase()));
+            if (contains) return contains.id;
+          }
+          return null;
+        }
+        if (typeof value === 'object' && value !== null) {
+          if ('id' in value) return value.id;
+          if ('pk' in value) return value.pk;
+        }
+        return null;
+      };
+
       payload.stops = stops.map(s => ({
         id: s.id,
-        city: s.city ? Number(s.city) : null,
+        city: resolveCityId(s.city),
         sequence: Number.isFinite(Number(s.sequence)) ? Number(s.sequence) : 0,
-        segment_price: s.segment_price != null ? Number(s.segment_price) : null
+        segment_price: s.segment_price != null && s.segment_price !== '' ? Number(s.segment_price) : null
       }));
     }
 
