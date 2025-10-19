@@ -267,6 +267,9 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
         setSuccessMessage('Trajet modifié avec succès.');
         onSave({ ...editingTrip, ...updated } as any);
       } else {
+        // Debug: log payload sent to backend to inspect 500 errors
+        // eslint-disable-next-line no-console
+        console.debug('Creating trip payload:', payload);
         const resp = await apiService.createTrip(payload as any);
         // backend returns { message, trip }
         if ((resp as any).trip) {

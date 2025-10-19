@@ -162,13 +162,47 @@ class TripSerializer(serializers.ModelSerializer):
         # create stops if provided
         if stops_data:
             # delete any pre-existing (shouldn't exist on create) and recreate
-            for s in stops_data:
-                TripStop.objects.create(
-                    trip=trip,
-                    city_id=s.get('city'),
-                    sequence=s.get('sequence') if s.get('sequence') is not None else 0,
-                    segment_price=s.get('segment_price')
-                )
+            for idx, s in enumerate(stops_data):
+                city_id = s.get('city')
+                # allow either numeric id or city name from frontend
+                if not city_id and city_id != 0:
+                    # Rollback the trip creation by deleting it to avoid inconsistent state
+                    trip.delete()
+                    raise serializers.ValidationError({f'stops[{idx}].city': 'La ville de l\'arrêt est requise.'})
+                # If city_id looks like a name (string non-numeric), try to resolve to a City id
+                from .models import City as CityModel
+                resolved_city_id = None
+                try:
+                    # if it's numeric-like, coerce
+                    if isinstance(city_id, int) or (isinstance(city_id, str) and city_id.isdigit()):
+                        resolved_city_id = int(city_id)
+                    else:
+                        # try to lookup by name (case-insensitive)
+                        c = CityModel.objects.filter(name__iexact=str(city_id)).first()
+                        if c:
+                            resolved_city_id = c.id
+                        else:
+                            # try fuzzy: startswith
+                            c2 = CityModel.objects.filter(name__istartswith=str(city_id)).first()
+                            if c2:
+                                resolved_city_id = c2.id
+                except Exception:
+                    resolved_city_id = None
+
+                if not resolved_city_id:
+                    trip.delete()
+                    raise serializers.ValidationError({f'stops[{idx}].city': f"Ville d'arrêt invalide: {city_id}"})
+
+                try:
+                    TripStop.objects.create(
+                        trip=trip,
+                        city_id=resolved_city_id,
+                        sequence=s.get('sequence') if s.get('sequence') is not None else idx,
+                        segment_price=s.get('segment_price')
+                    )
+                except Exception as e:
+                    trip.delete()
+                    raise serializers.ValidationError({'stops': f'Impossible de créer l\'arrêt: {str(e)}'})
         return trip
 
     def update(self, instance, validated_data):
@@ -177,18 +211,58 @@ class TripSerializer(serializers.ModelSerializer):
         if stops_data is not None:
             # Simple approach: remove existing stops and recreate from provided list
             TripStop.objects.filter(trip=trip).delete()
-            for s in stops_data:
-                TripStop.objects.create(
-                    trip=trip,
-                    city_id=s.get('city'),
-                    sequence=s.get('sequence') if s.get('sequence') is not None else 0,
-                    segment_price=s.get('segment_price')
-                )
+            for idx, s in enumerate(stops_data):
+                city_id = s.get('city')
+                if not city_id and city_id != 0:
+                    raise serializers.ValidationError({f'stops[{idx}].city': 'La ville de l\'arrêt est requise.'})
+
+                from .models import City as CityModel
+                resolved_city_id = None
+                try:
+                    if isinstance(city_id, int) or (isinstance(city_id, str) and city_id.isdigit()):
+                        resolved_city_id = int(city_id)
+                    else:
+                        c = CityModel.objects.filter(name__iexact=str(city_id)).first()
+                        if c:
+                            resolved_city_id = c.id
+                        else:
+                            c2 = CityModel.objects.filter(name__istartswith=str(city_id)).first()
+                            if c2:
+                                resolved_city_id = c2.id
+                except Exception:
+                    resolved_city_id = None
+
+                if not resolved_city_id:
+                    raise serializers.ValidationError({f'stops[{idx}].city': f"Ville d'arrêt invalide: {city_id}"})
+
+                try:
+                    TripStop.objects.create(
+                        trip=trip,
+                        city_id=resolved_city_id,
+                        sequence=s.get('sequence') if s.get('sequence') is not None else idx,
+                        segment_price=s.get('segment_price')
+                    )
+                except Exception as e:
+                    raise serializers.ValidationError({'stops': f'Impossible de créer l\'arrêt: {str(e)}'})
         return trip
 
     def validate(self, data):
-        if data['departure_city'] == data['arrival_city']:
+        # Use .get to avoid KeyError and provide nicer errors
+        dep = data.get('departure_city')
+        arr = data.get('arrival_city')
+        if dep is not None and arr is not None and dep == arr:
             raise serializers.ValidationError("La ville de départ et d'arrivée doivent être différentes.")
+
+        # Validate stops if provided
+        stops = data.get('stops')
+        if stops is not None:
+            if not isinstance(stops, list):
+                raise serializers.ValidationError({'stops': 'La valeur des arrêts doit être une liste.'})
+            for idx, s in enumerate(stops):
+                # s is expected to be a dict with key 'city' (id)
+                city_id = s.get('city') if isinstance(s, dict) else None
+                if not city_id:
+                    raise serializers.ValidationError({f'stops[{idx}].city': 'La ville de l\'arrêt est requise.'})
         return data
 
 

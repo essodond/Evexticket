@@ -336,7 +336,19 @@ class TripViewSet(viewsets.ModelViewSet):
         """Override create to return a friendly confirmation message and create notifications for company admins."""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
+        try:
+            self.perform_create(serializer)
+        except Exception as e:
+            # Return a 400 with the error message to help frontend debugging instead of 500
+            import traceback, logging
+            logger = logging.getLogger(__name__)
+            tb = traceback.format_exc()
+            logger.error('Error creating Trip: %s\n%s', str(e), tb)
+            # If DRF ValidationError, re-raise to keep normal handling
+            from rest_framework.exceptions import ValidationError
+            if isinstance(e, ValidationError):
+                raise
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         headers = self.get_success_headers(serializer.data)
 
         trip_obj = serializer.instance
