@@ -91,7 +91,7 @@ from django.db.models import Q, Count, Sum, Avg
 from django.utils import timezone
 from datetime import datetime, timedelta
 from django.contrib.auth.models import User
-from .models import Company, City, Trip, Booking, Payment, Review, Notification
+from .models import Company, City, Trip, Booking, Payment, Review, Notification, TripStop
 from .serializers import (
     CompanySerializer, CitySerializer, TripSerializer, BookingSerializer,
     PaymentSerializer, ReviewSerializer, NotificationSerializer,
@@ -375,26 +375,108 @@ class TripViewSet(viewsets.ModelViewSet):
             arrival_city = serializer.validated_data['arrival_city']
             travel_date = serializer.validated_data['travel_date']
             passengers = serializer.validated_data['passengers']
-            
-            trips = Trip.objects.filter(
-                departure_city__name__icontains=departure_city,
-                arrival_city__name__icontains=arrival_city,
-                is_active=True
-            ).select_related('company', 'departure_city', 'arrival_city')
-            
-            available_trips = []
+            # Consider any active trip which either directly matches OR contains the
+            # requested cities as ordered stops. We'll compute segment info when present.
+            trips = Trip.objects.filter(is_active=True).select_related('company', 'departure_city', 'arrival_city')
+
+            results = []
             for trip in trips:
-                confirmed_bookings = Booking.objects.filter(
-                    trip=trip,
-                    travel_date=travel_date,
-                    status='confirmed'
-                ).count()
-                
-                if (trip.capacity - confirmed_bookings) >= passengers:
-                    available_trips.append(trip)
-            
-            trip_serializer = TripSerializer(available_trips, many=True)
-            return Response(trip_serializer.data)
+                # Gather ordered stops
+                stops = list(TripStop.objects.filter(trip=trip).select_related('city').order_by('sequence'))
+
+                # Helper to compute segment price and available seats given origin/destination indices
+                def compute_segment_info(origin_seq, dest_seq):
+                    # sum segment_price for sequence in [origin_seq, dest_seq)
+                    segments = [s for s in stops if s.sequence >= origin_seq and s.sequence < dest_seq]
+                    prices = [s.segment_price for s in segments]
+                    if any(p is None for p in prices) or len(prices) == 0:
+                        total_price = trip.price
+                    else:
+                        total_price = sum(prices)
+
+                    # determine occupied seats for this segment
+
+                # We'll search scheduled trips for the date and try to match segments similarly to Trip.search
+                scheduled_trips = ScheduledTrip.objects.filter(date=travel_date, trip__is_active=True).select_related('trip__company', 'trip__departure_city', 'trip__arrival_city')
+
+                results = []
+                for st in scheduled_trips:
+                    trip = st.trip
+                    stops = list(TripStop.objects.filter(trip=trip).select_related('city').order_by('sequence'))
+
+                    def compute_segment_info(origin_seq, dest_seq):
+                        segments = [s for s in stops if s.sequence >= origin_seq and s.sequence < dest_seq]
+                        prices = [s.segment_price for s in segments]
+                        if any(p is None for p in prices) or len(prices) == 0:
+                            total_price = trip.price
+                        else:
+                            total_price = sum(prices)
+
+                        qs = Booking.objects.filter(trip=trip, travel_date=st.date, status__in=['confirmed', 'pending']).select_related('origin_stop', 'destination_stop')
+                        conflicting_seats = set()
+                        for b in qs:
+                            try:
+                                if b.origin_stop and b.destination_stop:
+                                    if not (b.destination_stop.sequence <= origin_seq or b.origin_stop.sequence >= dest_seq):
+                                        conflicting_seats.add(b.seat_number)
+                                else:
+                                    conflicting_seats.add(b.seat_number)
+                            except Exception:
+                                conflicting_seats.add(b.seat_number)
+                        available = max(trip.capacity - len(conflicting_seats), 0)
+                        return total_price, available
+
+                    # direct endpoints
+                    if departure_city.lower() in (trip.departure_city.name or '').lower() and arrival_city.lower() in (trip.arrival_city.name or '').lower():
+                        total_price = trip.price
+                        confirmed = Booking.objects.filter(trip=trip, travel_date=st.date, status__in=['confirmed','pending']).values_list('seat_number', flat=True)
+                        available = max(trip.capacity - len(set(confirmed)), 0)
+                        if available >= passengers:
+                            results.append({'scheduled_trip': ScheduledTripSerializer(st).data, 'origin_stop': None, 'destination_stop': None, 'segment_price': total_price, 'available_seats': available})
+                            continue
+
+                    origin_candidates = [s for s in stops if departure_city.lower() in (s.city.name or '').lower()]
+                    dest_candidates = [s for s in stops if arrival_city.lower() in (s.city.name or '').lower()]
+                    matched = False
+                    for o in origin_candidates:
+                        for d in dest_candidates:
+                            if o.sequence < d.sequence:
+                                total_price, available = compute_segment_info(o.sequence, d.sequence)
+                                if available >= passengers:
+                                    matched = True
+                                    results.append({'scheduled_trip': ScheduledTripSerializer(st).data, 'origin_stop': {'id': o.id, 'city_id': o.city_id, 'city_name': o.city.name, 'sequence': o.sequence}, 'destination_stop': {'id': d.id, 'city_id': d.city_id, 'city_name': d.city.name, 'sequence': d.sequence}, 'segment_price': total_price, 'available_seats': available})
+                                    break
+                        if matched:
+                            break
+
+                return Response(results)
+                if departure_city.lower() in (trip.departure_city.name or '').lower() and arrival_city.lower() in (trip.arrival_city.name or '').lower():
+                    # compute availability for full trip
+                    total_price = trip.price
+                    confirmed = Booking.objects.filter(trip=trip, travel_date=travel_date, status__in=['confirmed','pending']).values_list('seat_number', flat=True)
+                    available = max(trip.capacity - len(set(confirmed)), 0)
+                    if available >= passengers:
+                        matched = True
+                        results.append({ 'trip': TripSerializer(trip).data, 'origin_stop': None, 'destination_stop': None, 'segment_price': total_price, 'available_seats': available })
+
+                if matched:
+                    continue
+
+                # 2) try to find stops matching departure and arrival in order
+                origin_candidates = [s for s in stops if departure_city.lower() in (s.city.name or '').lower()]
+                dest_candidates = [s for s in stops if arrival_city.lower() in (s.city.name or '').lower()]
+                for o in origin_candidates:
+                    for d in dest_candidates:
+                        if o.sequence < d.sequence:
+                            total_price, available = compute_segment_info(o.sequence, d.sequence)
+                            if available >= passengers:
+                                matched = True
+                                results.append({ 'trip': TripSerializer(trip).data, 'origin_stop': {'id': o.id, 'city_id': o.city_id, 'city_name': o.city.name, 'sequence': o.sequence}, 'destination_stop': {'id': d.id, 'city_id': d.city_id, 'city_name': d.city.name, 'sequence': d.sequence}, 'segment_price': total_price, 'available_seats': available })
+                                break
+                    if matched:
+                        break
+
+            return Response(results)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

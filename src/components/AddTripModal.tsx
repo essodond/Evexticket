@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { X, MapPin, Clock, DollarSign, Bus, AlertCircle, CheckCircle } from 'lucide-react';
 import apiService from '../services/api';
-import { City, Trip as SharedTrip } from '../types';
+import { City, Trip as SharedTrip, Company } from '../types';
 
 interface AddTripModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (trip: SharedTrip) => void;
   editingTrip: SharedTrip | null;
-  companyId: string | number;
+  companyId?: string | number;
+  companies?: Company[];
   cities?: City[];
 }
 
