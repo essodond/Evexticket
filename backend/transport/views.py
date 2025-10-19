@@ -510,9 +510,25 @@ class ScheduledTripSearchView(APIView):
             travel_date = serializer.validated_data['travel_date']
             passengers = serializer.validated_data['passengers']
 
+            # Rechercher d'abord les villes par leur nom (insensible à la casse et aux accents)
+            from django.db.models import Q
+            from unidecode import unidecode
+
+            # Normaliser les noms de villes pour la recherche
+            departure_city_norm = unidecode(departure_city).lower()
+            arrival_city_norm = unidecode(arrival_city).lower()
+
+            # Rechercher les villes avec les noms normalisés
+            all_cities = City.objects.all()
+            departure_cities = [city for city in all_cities if unidecode(city.name).lower().startswith(departure_city_norm)]
+            arrival_cities = [city for city in all_cities if unidecode(city.name).lower().startswith(arrival_city_norm)]
+
+            if not departure_cities or not arrival_cities:
+                return Response({'detail': 'Ville de départ ou d\'arrivée non trouvée.'}, status=status.HTTP_400_BAD_REQUEST)
+
             scheduled_trips = ScheduledTrip.objects.filter(
-                trip__departure_city__name__icontains=departure_city,
-                trip__arrival_city__name__icontains=arrival_city,
+                trip__departure_city__in=departure_cities,
+                trip__arrival_city__in=arrival_cities,
                 date=travel_date,  # Filter by the exact date
                 trip__is_active=True
             ).select_related('trip__company', 'trip__departure_city', 'trip__arrival_city')

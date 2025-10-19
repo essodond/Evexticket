@@ -138,7 +138,7 @@ class TripSerializer(serializers.ModelSerializer):
             'id', 'company', 'company_name', 'departure_city', 'departure_city_name',
             'arrival_city', 'arrival_city_name', 'departure_time', 'arrival_time',
             'price', 'duration', 'bus_type', 'capacity', 'is_active',
-            'created_at', 'updated_at', 'bookings_count', 'available_seats'
+            'created_at', 'updated_at', 'bookings_count', 'available_seats', 'stops'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'bookings_count', 'available_seats']
 
@@ -153,16 +153,7 @@ class TripSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         # include stops ordered for frontend convenience
         stops = TripStop.objects.filter(trip=instance).order_by('sequence')
-        data['stops'] = [
-            {
-                'id': s.id,
-                'city_id': s.city_id,
-                'city_name': s.city.name,
-                'sequence': s.sequence,
-                'segment_price': (str(s.segment_price) if s.segment_price is not None else None)
-            }
-            for s in stops
-        ]
+        data['stops'] = TripStopSerializer(stops, many=True).data
         return data
 
     def create(self, validated_data):
@@ -377,8 +368,19 @@ class CompanyStatsSerializer(serializers.Serializer):
 
 class ScheduledTripSerializer(serializers.ModelSerializer):
     trip_info = TripSerializer(source='trip', read_only=True)
+    available_seats = serializers.SerializerMethodField()
 
     class Meta:
         model = ScheduledTrip
         fields = ['id', 'trip', 'trip_info', 'date', 'is_active', 'available_seats', 'created_at']
-        read_only_fields = ['id', 'created_at']
+        read_only_fields = ['id', 'created_at', 'available_seats']
+
+    def get_available_seats(self, obj):
+        try:
+            confirmed_bookings = obj.trip.bookings.filter(
+                travel_date=obj.date,
+                status='confirmed'
+            ).count()
+            return max(0, obj.trip.capacity - confirmed_bookings)
+        except Exception:
+            return obj.trip.capacity
