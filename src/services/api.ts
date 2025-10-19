@@ -341,6 +341,13 @@ class ApiService {
     return this.request<string[]>(`/booked_seats/${q}`);
   }
 
+  async getAvailability(tripId: number, travelDate: string, originStop?: number | null, destinationStop?: number | null): Promise<{ occupied_seats: string[]; available_seats: number; capacity: number }> {
+    let q = `?trip_id=${encodeURIComponent(String(tripId))}&travel_date=${encodeURIComponent(String(travelDate))}`;
+    if (originStop) q += `&origin_stop=${encodeURIComponent(String(originStop))}`;
+    if (destinationStop) q += `&destination_stop=${encodeURIComponent(String(destinationStop))}`;
+    return this.request<{ occupied_seats: string[]; available_seats: number; capacity: number }>(`/availability/${q}`);
+  }
+
   async getCompanyBookings(companyId: number): Promise<Booking[]> {
     return this.request<Booking[]>(`/companies/${companyId}/bookings/`);
   }

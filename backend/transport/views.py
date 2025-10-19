@@ -592,6 +592,62 @@ def booked_seats_list(request):
     return Response(seats)
 
 
+@api_view(['GET'])
+def availability_view(request):
+    """Return occupied seats and available seats for a trip on a date.
+
+    Query params: trip_id (required), travel_date (required, YYYY-MM-DD), origin_stop (opt), destination_stop (opt)
+    If origin_stop and destination_stop are provided, compute conflicts for the segment [origin.sequence, destination.sequence).
+    Returns: { occupied_seats: [...], available_seats: N, capacity: X }
+    """
+    trip_id = request.query_params.get('trip_id')
+    travel_date = request.query_params.get('travel_date')
+    origin_stop = request.query_params.get('origin_stop')
+    destination_stop = request.query_params.get('destination_stop')
+
+    if not trip_id or not travel_date:
+        return Response({'detail': 'trip_id and travel_date are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        trip = Trip.objects.get(pk=trip_id)
+    except Trip.DoesNotExist:
+        return Response({'detail': 'Trip not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    qs = Booking.objects.filter(trip=trip, travel_date=travel_date, status__in=['confirmed', 'pending']).select_related('origin_stop', 'destination_stop')
+
+    occupied = set()
+    if origin_stop and destination_stop:
+        try:
+            o = TripStop.objects.get(pk=int(origin_stop))
+            d = TripStop.objects.get(pk=int(destination_stop))
+            if o.trip_id != trip.id or d.trip_id != trip.id:
+                return Response({'detail': 'Origin/destination stops do not belong to this trip.'}, status=status.HTTP_400_BAD_REQUEST)
+            if o.sequence >= d.sequence:
+                return Response({'detail': 'Origin must come before destination.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            for b in qs:
+                try:
+                    if b.origin_stop and b.destination_stop:
+                        # overlap if not (b.destination <= o or b.origin >= d)
+                        if not (b.destination_stop.sequence <= o.sequence or b.origin_stop.sequence >= d.sequence):
+                            occupied.add(b.seat_number)
+                    else:
+                        # full-trip booking or missing stops: consider occupied
+                        occupied.add(b.seat_number)
+                except Exception:
+                    occupied.add(b.seat_number)
+        except TripStop.DoesNotExist:
+            return Response({'detail': 'Origin or destination stop not found.'}, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        # no segment specified; all bookings occupy seats
+        occupied = set(qs.values_list('seat_number', flat=True))
+
+    occupied_list = list(map(str, occupied))
+    capacity = trip.capacity
+    available = max(0, capacity - len(occupied_list))
+    return Response({'occupied_seats': occupied_list, 'available_seats': available, 'capacity': capacity})
+
+
 class ScheduledTripSearchView(APIView):
     """Rechercher des voyages planifiés."""
     permission_classes = [AllowAny]
