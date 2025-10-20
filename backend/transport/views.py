@@ -617,27 +617,60 @@ def availability_view(request):
 
     occupied = set()
     if origin_stop and destination_stop:
-        try:
-            o = TripStop.objects.get(pk=int(origin_stop))
-            d = TripStop.objects.get(pk=int(destination_stop))
-            if o.trip_id != trip.id or d.trip_id != trip.id:
-                return Response({'detail': 'Origin/destination stops do not belong to this trip.'}, status=status.HTTP_400_BAD_REQUEST)
-            if o.sequence >= d.sequence:
-                return Response({'detail': 'Origin must come before destination.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Resolve origin/destination to TripStop objects. Accept either TripStop PK, City id, or city name.
+        def resolve_stop(value):
+            # try as pk first
+            try:
+                return TripStop.objects.get(pk=int(value))
+            except Exception:
+                pass
 
-            for b in qs:
-                try:
-                    if b.origin_stop and b.destination_stop:
-                        # overlap if not (b.destination <= o or b.origin >= d)
-                        if not (b.destination_stop.sequence <= o.sequence or b.origin_stop.sequence >= d.sequence):
-                            occupied.add(b.seat_number)
-                    else:
-                        # full-trip booking or missing stops: consider occupied
+            # try by city id
+            try:
+                v = int(value)
+                st = TripStop.objects.filter(trip=trip, city_id=v).order_by('sequence').first()
+                if st:
+                    return st
+            except Exception:
+                pass
+
+            # try by city name (contains / normalized)
+            try:
+                from unidecode import unidecode
+                val = str(value).strip()
+                norm = unidecode(val).lower()
+                sts = TripStop.objects.filter(trip=trip).select_related('city')
+                for s in sts:
+                    if unidecode(s.city.name).lower() == norm:
+                        return s
+                for s in sts:
+                    if unidecode(s.city.name).lower().startswith(norm) or norm in unidecode(s.city.name).lower():
+                        return s
+            except Exception:
+                pass
+
+            return None
+
+        o = resolve_stop(origin_stop)
+        d = resolve_stop(destination_stop)
+        if not o or not d:
+            return Response({'detail': 'Origin or destination stop not found for this trip.'}, status=status.HTTP_400_BAD_REQUEST)
+        if o.trip_id != trip.id or d.trip_id != trip.id:
+            return Response({'detail': 'Origin/destination stops do not belong to this trip.'}, status=status.HTTP_400_BAD_REQUEST)
+        if o.sequence >= d.sequence:
+            return Response({'detail': 'Origin must come before destination.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        for b in qs:
+            try:
+                if b.origin_stop and b.destination_stop:
+                    # overlap if not (b.destination <= o or b.origin >= d)
+                    if not (b.destination_stop.sequence <= o.sequence or b.origin_stop.sequence >= d.sequence):
                         occupied.add(b.seat_number)
-                except Exception:
+                else:
+                    # full-trip booking or missing stops: consider occupied
                     occupied.add(b.seat_number)
-        except TripStop.DoesNotExist:
-            return Response({'detail': 'Origin or destination stop not found.'}, status=status.HTTP_400_BAD_REQUEST)
+            except Exception:
+                occupied.add(b.seat_number)
     else:
         # no segment specified; all bookings occupy seats
         occupied = set(qs.values_list('seat_number', flat=True))
