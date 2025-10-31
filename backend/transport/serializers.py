@@ -462,11 +462,44 @@ class ScheduledTripSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'available_seats']
 
     def get_available_seats(self, obj):
+        """Calcule les places disponibles.
+        - Si le contexte fournit origin_city et destination_city, calculer par segment (escales) en tenant compte des chevauchements.
+        - Sinon, calculer sur l'ensemble du trajet (réservations pending+confirmed).
+        """
         try:
-            confirmed_bookings = obj.trip.bookings.filter(
+            origin_city = self.context.get('origin_city')
+            destination_city = self.context.get('destination_city')
+            from unidecode import unidecode
+            if origin_city and destination_city:
+                dep_norm = unidecode(origin_city).lower()
+                arr_norm = unidecode(destination_city).lower()
+                stops = list(TripStop.objects.filter(trip=obj.trip).select_related('city').order_by('sequence'))
+                origin_candidates = [s for s in stops if dep_norm in unidecode(s.city.name or '').lower()]
+                dest_candidates = [s for s in stops if arr_norm in unidecode(s.city.name or '').lower()]
+                for o in origin_candidates:
+                    for d in dest_candidates:
+                        if o.sequence < d.sequence:
+                            qs = Booking.objects.filter(
+                                trip=obj.trip,
+                                travel_date=obj.date,
+                                status__in=['confirmed', 'pending']
+                            ).select_related('origin_stop', 'destination_stop')
+                            occupied = set()
+                            for b in qs:
+                                try:
+                                    if b.origin_stop and b.destination_stop:
+                                        if not (b.destination_stop.sequence <= o.sequence or b.origin_stop.sequence >= d.sequence):
+                                            occupied.add(b.seat_number)
+                                    else:
+                                        occupied.add(b.seat_number)
+                                except Exception:
+                                    occupied.add(b.seat_number)
+                            return max(0, obj.trip.capacity - len(occupied))
+            # Fallback: calcul global
+            confirmed = obj.trip.bookings.filter(
                 travel_date=obj.date,
-                status='confirmed'
-            ).count()
-            return max(0, obj.trip.capacity - confirmed_bookings)
+                status__in=['confirmed', 'pending']
+            ).values_list('seat_number', flat=True)
+            return max(0, obj.trip.capacity - len(set(confirmed)))
         except Exception:
             return obj.trip.capacity

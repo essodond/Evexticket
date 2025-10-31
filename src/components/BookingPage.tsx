@@ -65,15 +65,15 @@ const BookingPage: React.FC<BookingPageProps> = ({ trip, searchData, onBack, onP
   // Fetch occupied seat numbers
   useEffect(() => {
     let mounted = true;
-    const tripId = Number(trip?.id);
+    const tripId = Number((trip as any)?.trip ?? (trip as any)?.id ?? (trip as any));
     const travelDate = searchData?.date || searchData?.travel_date;
     if (!tripId || !travelDate) return;
 
     // Prefer availability endpoint which can restrict to a segment
-    const originStop = searchData?.origin_stop || searchData?.origin_stop_id || searchData?.originStop;
-    const destinationStop = searchData?.destination_stop || searchData?.destination_stop_id || searchData?.destinationStop;
+    const originStop = searchData?.origin_stop || searchData?.origin_stop_id || searchData?.originStop || searchData?.departure_city || searchData?.departure;
+    const destinationStop = searchData?.destination_stop || searchData?.destination_stop_id || searchData?.destinationStop || searchData?.arrival_city || searchData?.arrival;
 
-    apiService.getAvailability(tripId, travelDate, originStop, destinationStop)
+    apiService.getAvailability(tripId, travelDate, originStop as any, destinationStop as any)
       .then((resp) => {
         if (!mounted) return;
         const seats = (resp && resp.occupied_seats) ? resp.occupied_seats : [];
@@ -89,7 +89,7 @@ const BookingPage: React.FC<BookingPageProps> = ({ trip, searchData, onBack, onP
       });
 
     return () => { mounted = false; };
-  }, [trip?.id, searchData?.date, searchData?.travel_date]);
+  }, [trip?.id, (trip as any)?.trip, searchData?.date, searchData?.travel_date]);
 
   // Check trip availability
   useEffect(() => {

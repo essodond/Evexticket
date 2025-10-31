@@ -341,10 +341,19 @@ class ApiService {
     return this.request<string[]>(`/booked_seats/${q}`);
   }
 
-  async getAvailability(tripId: number, travelDate: string, originStop?: number | null, destinationStop?: number | null): Promise<{ occupied_seats: string[]; available_seats: number; capacity: number }> {
-    let q = `?trip_id=${encodeURIComponent(String(tripId))}&travel_date=${encodeURIComponent(String(travelDate))}`;
-    if (originStop) q += `&origin_stop=${encodeURIComponent(String(originStop))}`;
-    if (destinationStop) q += `&destination_stop=${encodeURIComponent(String(destinationStop))}`;
+  async getAvailability(
+    tripId: number,
+    travelDate: string,
+    originStop?: number | string | null,
+    destinationStop?: number | string | null,
+  ): Promise<{ occupied_seats: string[]; available_seats: number; capacity: number }> {
+    const params = new URLSearchParams({
+      trip_id: String(tripId),
+      travel_date: travelDate,
+    });
+    if (originStop !== undefined && originStop !== null) params.append('origin_stop', String(originStop));
+    if (destinationStop !== undefined && destinationStop !== null) params.append('destination_stop', String(destinationStop));
+    const q = `?${params.toString()}`;
     return this.request<{ occupied_seats: string[]; available_seats: number; capacity: number }>(`/availability/${q}`);
   }
 

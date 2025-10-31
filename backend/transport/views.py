@@ -615,7 +615,11 @@ def availability_view(request):
 
     qs = Booking.objects.filter(trip=trip, travel_date=travel_date, status__in=['confirmed', 'pending']).select_related('origin_stop', 'destination_stop')
 
-    occupied = set()
+    # D'abord, récupérer tous les sièges des réservations complètes (sans escales)
+    full_trip_bookings = qs.filter(origin_stop__isnull=True, destination_stop__isnull=True)
+    occupied = set(full_trip_bookings.values_list('seat_number', flat=True))
+
+    # Ensuite, traiter les réservations avec escales si on recherche pour un segment spécifique
     if origin_stop and destination_stop:
         # Resolve origin/destination to TripStop objects. Accept either TripStop PK, City id, or city name.
         def resolve_stop(value):
@@ -660,19 +664,20 @@ def availability_view(request):
         if o.sequence >= d.sequence:
             return Response({'detail': 'Origin must come before destination.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        for b in qs:
+        # Récupérer toutes les réservations avec escales
+        segment_bookings = qs.filter(origin_stop__isnull=False, destination_stop__isnull=False)
+        
+        # Vérifier les chevauchements pour chaque réservation avec escales
+        for b in segment_bookings:
             try:
-                if b.origin_stop and b.destination_stop:
-                    # overlap if not (b.destination <= o or b.origin >= d)
-                    if not (b.destination_stop.sequence <= o.sequence or b.origin_stop.sequence >= d.sequence):
-                        occupied.add(b.seat_number)
-                else:
-                    # full-trip booking or missing stops: consider occupied
+                # Une réservation chevauche si elle n'est pas entièrement avant ou après le segment demandé
+                if not (b.destination_stop.sequence <= o.sequence or b.origin_stop.sequence >= d.sequence):
                     occupied.add(b.seat_number)
             except Exception:
+                # En cas d'erreur, considérer le siège comme occupé par sécurité
                 occupied.add(b.seat_number)
     else:
-        # no segment specified; all bookings occupy seats
+        # Si pas de segment spécifié, tous les sièges réservés sont considérés comme occupés
         occupied = set(qs.values_list('seat_number', flat=True))
 
     occupied_list = list(map(str, occupied))
@@ -682,7 +687,7 @@ def availability_view(request):
 
 
 class ScheduledTripSearchView(APIView):
-    """Rechercher des voyages planifiés."""
+    """Rechercher des voyages planifiés avec prise en compte des escales (segments)."""
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
@@ -693,41 +698,79 @@ class ScheduledTripSearchView(APIView):
             travel_date = serializer.validated_data['travel_date']
             passengers = serializer.validated_data['passengers']
 
-            # Rechercher d'abord les villes par leur nom (insensible à la casse et aux accents)
-            from django.db.models import Q
             from unidecode import unidecode
 
-            # Normaliser les noms de villes pour la recherche
-            departure_city_norm = unidecode(departure_city).lower()
-            arrival_city_norm = unidecode(arrival_city).lower()
+            dep_norm = unidecode(departure_city).lower()
+            arr_norm = unidecode(arrival_city).lower()
 
-            # Rechercher les villes avec les noms normalisés
-            all_cities = City.objects.all()
-            departure_cities = [city for city in all_cities if unidecode(city.name).lower().startswith(departure_city_norm)]
-            arrival_cities = [city for city in all_cities if unidecode(city.name).lower().startswith(arrival_city_norm)]
-
-            if not departure_cities or not arrival_cities:
-                return Response({'detail': 'Ville de départ ou d\'arrivée non trouvée.'}, status=status.HTTP_400_BAD_REQUEST)
-
+            # Récupérer tous les voyages planifiés pour la date donnée
             scheduled_trips = ScheduledTrip.objects.filter(
-                trip__departure_city__in=departure_cities,
-                trip__arrival_city__in=arrival_cities,
-                date=travel_date,  # Filter by the exact date
+                date=travel_date,
                 trip__is_active=True
             ).select_related('trip__company', 'trip__departure_city', 'trip__arrival_city')
 
-            available_scheduled_trips = []
+            matches = []
             for st in scheduled_trips:
-                confirmed_bookings = Booking.objects.filter(
-                    trip=st.trip,
-                    travel_date=st.date,
-                    status='confirmed'
-                ).count()
+                trip = st.trip
+                # Récupérer les escales ordonnées
+                stops = list(TripStop.objects.filter(trip=trip).select_related('city').order_by('sequence'))
 
-                if (st.trip.capacity - confirmed_bookings) >= passengers:
-                    available_scheduled_trips.append(st)
+                # Cas 1: correspondance directe aux extrémités du trajet
+                direct_match = (
+                    dep_norm in unidecode((trip.departure_city.name or '')).lower() and
+                    arr_norm in unidecode((trip.arrival_city.name or '')).lower()
+                )
+                if direct_match:
+                    booked = Booking.objects.filter(
+                        trip=trip,
+                        travel_date=st.date,
+                        status__in=['confirmed', 'pending']
+                    ).values_list('seat_number', flat=True)
+                    available = max(trip.capacity - len(set(booked)), 0)
+                    if available >= passengers:
+                        matches.append(st)
+                        continue
 
-            st_serializer = ScheduledTripSerializer(available_scheduled_trips, many=True)
+                # Cas 2: recherche par escales (segments)
+                origin_candidates = [s for s in stops if dep_norm in unidecode(s.city.name or '').lower()]
+                dest_candidates = [s for s in stops if arr_norm in unidecode(s.city.name or '').lower()]
+                found = False
+                for o in origin_candidates:
+                    for d in dest_candidates:
+                        if o.sequence < d.sequence:
+                            qs = Booking.objects.filter(
+                                trip=trip,
+                                travel_date=st.date,
+                                status__in=['confirmed', 'pending']
+                            ).select_related('origin_stop', 'destination_stop')
+
+                            occupied = set()
+                            for b in qs:
+                                try:
+                                    if b.origin_stop and b.destination_stop:
+                                        # chevauchement si NOT (b.dest <= o OR b.orig >= d)
+                                        if not (b.destination_stop.sequence <= o.sequence or b.origin_stop.sequence >= d.sequence):
+                                            occupied.add(b.seat_number)
+                                    else:
+                                        # réservation sans escales: considérer comme occupant toutes les sections
+                                        occupied.add(b.seat_number)
+                                except Exception:
+                                    occupied.add(b.seat_number)
+
+                            available = max(trip.capacity - len(occupied), 0)
+                            if available >= passengers:
+                                matches.append(st)
+                                found = True
+                                break
+                    if found:
+                        break
+
+            # Sérialiser avec le contexte pour calculer available_seats par segment
+            st_serializer = ScheduledTripSerializer(
+                matches,
+                many=True,
+                context={'origin_city': departure_city, 'destination_city': arrival_city}
+            )
             return Response(st_serializer.data)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
