@@ -47,12 +47,27 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode, onBack, onSuccess, onSwitchMo
       if (!formData.firstName.trim()) newErrors.firstName = 'Le prénom est requis';
       if (!formData.lastName.trim()) newErrors.lastName = 'Le nom est requis';
       if (!formData.phone.trim()) newErrors.phone = 'Le téléphone est requis';
-    }
-
-    if (!formData.email.trim()) {
-      newErrors.email = 'L\'email est requis';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'L\'email n\'est pas valide';
+      // Validation de l'email en mode inscription
+      if (!formData.email.trim()) {
+        newErrors.email = "L'email est requis";
+      } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+        newErrors.email = "L'email n'est pas valide";
+      }
+    } else {
+      // Mode login: identifiant peut être email ou numéro de téléphone
+      const ident = formData.email.trim();
+      if (!ident) {
+        newErrors.email = 'Identifiant requis';
+      } else if (ident.includes('@')) {
+        if (!/\S+@\S+\.\S+/.test(ident)) {
+          newErrors.email = "Email invalide";
+        }
+      } else {
+        const digits = ident.replace(/[^0-9]/g, '');
+        if (digits.length < 6) {
+          newErrors.email = 'Numéro de téléphone invalide';
+        }
+      }
     }
 
     if (!formData.password) {
@@ -221,18 +236,18 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode, onBack, onSuccess, onSwitchMo
 
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-black">
-                Email
+                {mode === 'login' ? 'Email ou numéro de téléphone' : 'Email'}
               </label>
               <input
                 id="email"
                 name="email"
-                type="email"
+                type={mode === 'login' ? 'text' : 'email'}
                 value={formData.email}
                 onChange={handleInputChange}
                 className={`mt-1 block w-full px-3 py-2 text-black border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   errors.email ? 'border-red-500' : 'border-gray-300'
                 }`}
-                placeholder="votre@email.com"
+                placeholder={mode === 'login' ? 'email@exemple.com ou +228 XX XX XX XX' : 'votre@email.com'}
               />
               {errors.email && (
                 <p className="mt-1 text-sm text-red-600 flex items-center">

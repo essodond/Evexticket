@@ -27,8 +27,8 @@ class TripAdmin(admin.ModelAdmin):
 
 @admin.register(Booking)
 class BookingAdmin(admin.ModelAdmin):
-    list_display = ['passenger_name', 'trip', 'travel_date', 'status', 'total_price', 'booking_date']
-    list_filter = ['status', 'payment_method', 'travel_date', 'booking_date']
+    list_display = ['passenger_name', 'trip', 'status', 'total_price', 'booking_date']
+    list_filter = ['status', 'payment_method', 'booking_date']
     search_fields = ['passenger_name', 'passenger_email', 'passenger_phone']
     readonly_fields = ['booking_date']
 
@@ -42,13 +42,13 @@ class PaymentAdmin(admin.ModelAdmin):
 
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):
-    list_display = ['booking', 'rating', 'is_approved', 'created_at']
-    list_filter = ['rating', 'is_approved', 'created_at']
+    list_display = ['booking', 'rating', 'created_at']
+    list_filter = ['rating', 'created_at']
     search_fields = ['booking__passenger_name', 'comment']
 
 
 @admin.register(Notification)
 class NotificationAdmin(admin.ModelAdmin):
-    list_display = ['user', 'title', 'notification_type', 'is_read', 'created_at']
-    list_filter = ['notification_type', 'is_read', 'created_at']
+    list_display = ['user', 'title', 'type', 'is_read', 'created_at']
+    list_filter = ['type', 'is_read', 'created_at']
     search_fields = ['user__username', 'title', 'message']

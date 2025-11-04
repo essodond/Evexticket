@@ -288,7 +288,7 @@ class BookingSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'trip', 'trip_details', 'passenger_name', 'passenger_email',
             'passenger_phone', 'seat_number', 'origin_stop', 'destination_stop', 'status', 'payment_method',
-            'total_price', 'booking_date', 'travel_date', 'notes', 'user',
+            'total_price', 'booking_date', 'user',
             'passenger_full_name'
         ]
         read_only_fields = ['id', 'booking_date', 'passenger_full_name']
@@ -356,7 +356,7 @@ class PaymentSerializer(serializers.ModelSerializer):
         model = Payment
         fields = [
             'id', 'booking', 'booking_details', 'amount', 'payment_method',
-            'status', 'transaction_id', 'payment_date', 'notes'
+            'status', 'transaction_id', 'payment_date'
         ]
         read_only_fields = ['id', 'payment_date']
 
@@ -369,7 +369,7 @@ class ReviewSerializer(serializers.ModelSerializer):
         model = Review
         fields = [
             'id', 'booking', 'booking_details', 'rating', 'comment',
-            'created_at', 'is_approved'
+            'created_at'
         ]
         read_only_fields = ['id', 'created_at']
 
@@ -379,7 +379,7 @@ class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = [
-            'id', 'user', 'title', 'message', 'notification_type',
+            'id', 'user', 'title', 'message', 'type',
             'is_read', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
@@ -399,7 +399,7 @@ class BookingCreateSerializer(serializers.ModelSerializer):
         model = Booking
         fields = [
             'trip', 'passenger_name', 'passenger_email', 'passenger_phone',
-            'seat_number', 'origin_stop', 'destination_stop', 'payment_method', 'travel_date', 'notes'
+            'seat_number', 'origin_stop', 'destination_stop', 'payment_method'
         ]
 
     def create(self, validated_data):

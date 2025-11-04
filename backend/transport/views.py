@@ -38,11 +38,36 @@ class EmailAuthToken(APIView):
 
         email = request.data.get('email')
         username = request.data.get('username')
+        phone = request.data.get('phone')
         password = request.data.get('password')
-        if not password or (not email and not username):
-            return Response({'detail': 'Email/username et mot de passe requis.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not password or (not email and not username and not phone):
+            return Response({'detail': 'Email/téléphone/username et mot de passe requis.'}, status=status.HTTP_400_BAD_REQUEST)
 
         attempts = []
+
+        # 0) Auth via phone number
+        if phone:
+            try:
+                profile = UserProfile.objects.select_related('user').get(phone=phone)
+                attempts.append(f'found_user_by_phone:{profile.user.username}')
+                user_auth = authenticate(request, username=profile.user.username, password=password)
+                if user_auth:
+                    token, created = Token.objects.get_or_create(user=user_auth)
+                    from .serializers import UserSerializer
+                    user_data = UserSerializer(user_auth).data
+                    return Response({'token': token.key, 'user': user_data})
+                attempts.append('auth_failed_for_user_by_phone')
+            except UserProfile.DoesNotExist:
+                attempts.append('no_user_with_phone')
+
+            # Also try authenticating directly using the phone as username
+            user_auth = authenticate(request, username=phone, password=password)
+            if user_auth:
+                token, created = Token.objects.get_or_create(user=user_auth)
+                from .serializers import UserSerializer
+                user_data = UserSerializer(user_auth).data
+                return Response({'token': token.key, 'user': user_data})
+            attempts.append('auth_failed_using_phone_as_username')
 
         # 1) If email provided, try to find user by email and authenticate with that user's username
         if email:
@@ -91,7 +116,7 @@ from django.db.models import Q, Count, Sum, Avg
 from django.utils import timezone
 from datetime import datetime, timedelta
 from django.contrib.auth.models import User
-from .models import Company, City, Trip, Booking, Payment, Review, Notification, TripStop
+from .models import Company, City, Trip, Booking, Payment, Review, Notification, TripStop, UserProfile
 from .serializers import (
     CompanySerializer, CitySerializer, TripSerializer, BookingSerializer,
     PaymentSerializer, ReviewSerializer, NotificationSerializer,

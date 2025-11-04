@@ -9,7 +9,28 @@
 //   Le token est ajouté dans l'en-tête Authorization: 'Token <token>' par request().
 // - La méthode request utilise `credentials: 'include'` pour supporter la SessionAuthentication
 //   si le backend utilise des cookies.
-const API_BASE_URL = 'http://127.0.0.1:8000/api';
+
+function resolveApiBaseUrl(): string {
+  // 1) Priorité à l'override via environnement (Vite)
+  const envOrigin = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
+  if (envOrigin && envOrigin.trim().length > 0) {
+    const clean = envOrigin.replace(/\/$/, '');
+    return clean.endsWith('/api') ? clean : `${clean}/api`;
+  }
+
+  // 2) Déduire à partir de l'hôte courant (utile en LAN depuis un téléphone)
+  try {
+    const host = typeof window !== 'undefined' ? window.location.hostname : undefined;
+    if (host) {
+      return `http://${host}:8000/api`;
+    }
+  } catch (_) {}
+
+  // 3) Repli par défaut en développement local
+  return 'http://127.0.0.1:8000/api';
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 // Types pour les données
 export interface City {
@@ -427,13 +448,22 @@ class ApiService {
 
   // Authentification (pour l'instant, simulation)
   async login(username: string, password: string): Promise<{ token: string; user: any }> {
-    // Obtenir token via endpoint DRF authtoken
+    // Obtenir token via endpoint DRF authtoken (email ou téléphone)
+    const payload: any = { password };
+    if (username && username.includes('@')) {
+      payload.email = username;
+    } else if (username) {
+      payload.phone = username;
+    }
+    // Fournir également username comme repli éventuel
+    payload.username = username;
+
     const tokenResp = await fetch(`${API_BASE_URL}/login/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email: username, password }),
+      body: JSON.stringify(payload),
     });
 
     if (!tokenResp.ok) {
