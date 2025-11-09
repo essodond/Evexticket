@@ -503,6 +503,7 @@ class ApiService {
     password2: string;
     first_name: string;
     last_name: string;
+    phone?: string;
   }): Promise<{ token: string; user: any }> {
     // Appel réel à l'API Django pour l'inscription
     const response = await fetch(`${API_BASE_URL}/register/`, {

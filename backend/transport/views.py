@@ -21,12 +21,10 @@ class RegisterView(generics.CreateAPIView):
 
         # Générer un token si vous utilisez DRF authtoken
         token, created = Token.objects.get_or_create(user=user)
-
-        data = serializer.data
-        # serializer.data n'inclura pas le token ni le mot de passe
-        data['id'] = user.id
-        data['token'] = token.key
-        return Response(data, status=status.HTTP_201_CREATED)
+        # Conformer la réponse au format attendu par les clients ({ token, user })
+        from .serializers import UserSerializer
+        user_data = UserSerializer(user).data
+        return Response({'token': token.key, 'user': user_data}, status=status.HTTP_201_CREATED)
 
 class EmailAuthToken(APIView):
     """Authentification par email -> retourne un token."""

@@ -390,3 +390,29 @@ def create_scheduled_trips_on_trip_creation(sender, instance, created, **kwargs)
     except Exception:
         # Ne pas lever d'exception lors de la sauvegarde du Trip — log possible si besoin
         pass
+
+
+class UserProfile(models.Model):
+    """Profil utilisateur étendu pour stocker des infos supplémentaires comme le téléphone."""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile', verbose_name='Utilisateur')
+    phone_number = models.CharField(max_length=30, blank=True, null=True, verbose_name='Numéro de téléphone')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Date de création')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Date de mise à jour')
+
+    class Meta:
+        verbose_name = 'Profil utilisateur'
+        verbose_name_plural = 'Profils utilisateurs'
+
+    def __str__(self):
+        return f"Profil de {self.user.username}"
+
+
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    """Créer automatiquement un profil lors de la création d'un utilisateur."""
+    if created:
+        try:
+            UserProfile.objects.create(user=instance)
+        except Exception:
+            # Éviter de bloquer la création d'utilisateur en cas d'erreur
+            pass

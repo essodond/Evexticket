@@ -19,10 +19,11 @@ class TripStopSerializer(serializers.ModelSerializer):
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
     password2 = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
+    phone = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = User
-        fields = ('username', 'email', 'first_name', 'last_name', 'password', 'password2')
+        fields = ('username', 'email', 'first_name', 'last_name', 'password', 'password2', 'phone')
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
@@ -30,7 +31,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        validated_data.pop('password2')
+        password2 = validated_data.pop('password2', None)
+        phone = validated_data.pop('phone', '').strip()
         user = User.objects.create_user(
             username=validated_data['username'],
             email=validated_data['email'],
@@ -38,12 +40,24 @@ class RegisterSerializer(serializers.ModelSerializer):
             last_name=validated_data.get('last_name', ''),
             password=validated_data['password']
         )
+        try:
+            from .models import UserProfile
+            profile = getattr(user, 'profile', None)
+            if not profile:
+                profile = UserProfile.objects.create(user=user)
+            if phone:
+                profile.phone = phone
+                profile.save()
+        except Exception:
+            # Ne pas bloquer l'inscription si le profil ne peut pas être créé
+            pass
         return user
 
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer pour les utilisateurs"""
     is_company_admin = serializers.SerializerMethodField()
+    phone_number = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -51,13 +65,20 @@ class UserSerializer(serializers.ModelSerializer):
         # décider de la redirection (is_staff => Admin Général, is_company_admin calculé côté /me/)
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'is_active', 'is_staff', 'is_superuser', 'date_joined', 'is_company_admin'
+            'is_active', 'is_staff', 'is_superuser', 'date_joined', 'is_company_admin', 'phone_number'
         ]
-        read_only_fields = ['id', 'date_joined', 'is_company_admin']
+        read_only_fields = ['id', 'date_joined', 'is_company_admin', 'phone_number']
 
     def get_is_company_admin(self, obj):
         # Vérifie si l'utilisateur est admin d'au moins une compagnie
         return obj.admin_companies.exists()
+
+    def get_phone_number(self, obj):
+        try:
+            profile = getattr(obj, 'profile', None)
+            return profile.phone if profile else None
+        except Exception:
+            return None
 
 
 class CitySerializer(serializers.ModelSerializer):

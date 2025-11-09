@@ -108,6 +108,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode, onBack, onSuccess, onSwitchMo
           password2: formData.confirmPassword,
           first_name: formData.firstName,
           last_name: formData.lastName,
+          phone: formData.phone,
         });
         setIsLoading(false);
         onSuccess(respUser);
