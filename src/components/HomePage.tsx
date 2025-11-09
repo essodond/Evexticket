@@ -11,9 +11,10 @@ interface HomePageProps {
   isAuthenticated?: boolean;
   onNavigateToAuth?: (mode: 'login' | 'register') => void;
   onLogout?: () => void;
+  onListAllTrips?: () => void;
 }
 
-const HomePage: React.FC<HomePageProps> = ({ onSearch, isAuthenticated = false, onNavigateToAuth, onLogout }) => {
+const HomePage: React.FC<HomePageProps> = ({ onSearch, isAuthenticated = false, onNavigateToAuth, onLogout, onListAllTrips }) => {
   const [departure, setDeparture] = useState('');
   const [arrival, setArrival] = useState('');
   const [date, setDate] = useState('');
@@ -149,8 +150,8 @@ const HomePage: React.FC<HomePageProps> = ({ onSearch, isAuthenticated = false, 
                 </div>
               </div>
 
-              {/* Search Button */}
-              <div className="text-center">
+              {/* Search & List Buttons */}
+              <div className="flex items-center justify-center gap-4">
                 <button 
                   type="submit"
                   className="inline-flex items-center px-8 py-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-lg hover:shadow-xl"
@@ -158,6 +159,13 @@ const HomePage: React.FC<HomePageProps> = ({ onSearch, isAuthenticated = false, 
                   <Search className="w-5 h-5 mr-2" />
                   Rechercher
                   <ArrowRight className="w-5 h-5 ml-2" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onListAllTrips && onListAllTrips()}
+                  className="inline-flex items-center px-6 py-4 bg-white text-blue-600 border border-blue-200 font-semibold rounded-lg hover:bg-blue-50 transition-colors shadow-sm"
+                >
+                  Voir tous les trajets disponibles
                 </button>
               </div>
             </form>

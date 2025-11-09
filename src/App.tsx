@@ -65,6 +65,24 @@ function App() {
     }
   };
 
+  const handleListAllTrips = async () => {
+    try {
+      const trips = await apiService.getTrips();
+      setSearchResults(trips);
+      setSearchData(null);
+      try {
+        localStorage.setItem('searchResults', JSON.stringify(trips));
+        localStorage.removeItem('searchData');
+        localStorage.setItem('currentView', 'results');
+      } catch (e) {
+        // ignore localStorage errors
+      }
+      navigate('/results');
+    } catch (error) {
+      console.error('Erreur lors du chargement des trajets', error);
+    }
+  };
+
   // Consolidate localStorage restoration into a single useEffect
   useEffect(() => {
     // Restore data from localStorage with validation
@@ -258,7 +276,7 @@ function App() {
           <Route path="/" element={<LandingPage onNavigateToAuth={handleNavigateToAuth} onNavigateToHome={() => navigate('/')} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
           <Route path="/login" element={<AuthPage mode={authMode} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
           <Route path="/register" element={<AuthPage mode={'register'} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
-          <Route path="/home" element={<HomePage onSearch={handleSearch} isAuthenticated={isAuthenticated} onNavigateToAuth={handleNavigateToAuth} onLogout={handleLogout} />} />
+          <Route path="/home" element={<HomePage onSearch={handleSearch} isAuthenticated={isAuthenticated} onNavigateToAuth={handleNavigateToAuth} onLogout={handleLogout} onListAllTrips={handleListAllTrips} />} />
           <Route path="/results" element={<ResultsPage searchData={searchData} searchResults={searchResults.map((sr: any) => sr?.trip_info ? sr.trip_info : sr)} onBack={() => navigate('/home')} onSelectTrip={handleTripSelect} />} />
           <Route path="/booking" element={<BookingPage trip={selectedTrip} searchData={searchData} onBack={() => navigate('/results')} onProceedToPayment={handleProceedToPayment} />} />
           <Route path="/payment" element={<PaymentPage bookingData={bookingData} onBack={() => navigate('/booking')} onPaymentSuccess={handlePaymentSuccess} />} />
