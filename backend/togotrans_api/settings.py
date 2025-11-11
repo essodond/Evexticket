@@ -167,6 +167,10 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:8081",
     "http://127.0.0.1:8081",
     "http://192.168.1.64:8081",
+    # Expo LAN alternative port
+    "http://localhost:8084",
+    "http://127.0.0.1:8084",
+    "http://192.168.1.64:8084",
     "https://4429be1bde8e.ngrok-free.app",
 ]
 
