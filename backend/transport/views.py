@@ -8,6 +8,8 @@ from django.contrib.auth.models import User
 from rest_framework.permissions import AllowAny
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
+from .models import ScheduledTrip
+from .serializers import ScheduledTripSerializer
 from .serializers import RegisterSerializer, UserSerializer, CompanySerializer, TripSerializer, BookingSerializer, PaymentSerializer, ReviewSerializer, NotificationSerializer, ScheduledTripSerializer, CompanyStatsSerializer, TripStopSerializer, BoardingZoneSerializer, CitySerializer, TripSearchSerializer
 from .models import Company, City, Trip, Booking, Payment, Review, Notification, ScheduledTrip, UserProfile, TripStop, BoardingZone
 from django.contrib.auth import authenticate
@@ -793,6 +795,11 @@ def availability_view(request):
 class ScheduledTripSearchView(APIView):
     """Rechercher des voyages planifiés avec prise en compte des escales (segments)."""
     permission_classes = [AllowAny]
+
+class ScheduledTripDetailView(generics.RetrieveAPIView):
+    queryset = ScheduledTrip.objects.all()
+    serializer_class = ScheduledTripSerializer
+    lookup_field = 'pk'
 
     def post(self, request, *args, **kwargs):
         serializer = TripSearchSerializer(data=request.data)
