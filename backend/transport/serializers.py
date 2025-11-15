@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from decimal import Decimal
 import uuid
+from rest_framework.authtoken.models import Token
 
 
 from rest_framework import serializers
@@ -20,10 +21,11 @@ class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
     password2 = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
     phone = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    token = serializers.CharField(read_only=True)
 
     class Meta:
         model = User
-        fields = ('username', 'email', 'first_name', 'last_name', 'password', 'password2', 'phone')
+        fields = ('username', 'email', 'first_name', 'last_name', 'password', 'password2', 'phone', 'token')
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
@@ -51,6 +53,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         except Exception:
             # Ne pas bloquer l'inscription si le profil ne peut pas être créé
             pass
+        token, created = Token.objects.get_or_create(user=user)
+        user.token = token.key
         return user
 
 
