@@ -1,12 +1,12 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
-
+from decimal import Decimal
+import uuid
 
 
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Company, City, Trip, Booking, Payment, Review, Notification, ScheduledTrip
-from .models import TripStop
+from .models.base import Company, City, Trip, Booking, Payment, Review, Notification, ScheduledTrip, TripStop, BoardingZone
 
 
 class TripStopSerializer(serializers.ModelSerializer):
@@ -143,25 +143,49 @@ class CompanySerializer(serializers.ModelSerializer):
         return company
 
 
+class TripStopSerializer(serializers.ModelSerializer):
+    city_name = serializers.CharField(source='city.name', read_only=True)
+
+    class Meta:
+        model = TripStop
+        fields = ['id', 'city', 'city_name', 'sequence', 'segment_price']
+
+
+class BoardingZoneSerializer(serializers.ModelSerializer):
+    company_name = serializers.CharField(source='company.name', read_only=True)
+    trip_name = serializers.CharField(source='trip.__str__', read_only=True)
+
+    class Meta:
+        model = BoardingZone
+        fields = [
+            'id', 'company', 'company_name', 'trip', 'trip_name', 'name', 
+            'address', 'latitude', 'longitude', 'is_active', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
 class TripSerializer(serializers.ModelSerializer):
-    """Serializer pour les trajets"""
+    """Serializer pour les trajets (aligné avec models.base.Trip)"""
     company_name = serializers.CharField(source='company.name', read_only=True)
     departure_city_name = serializers.CharField(source='departure_city.name', read_only=True)
     arrival_city_name = serializers.CharField(source='arrival_city.name', read_only=True)
     bookings_count = serializers.SerializerMethodField()
     available_seats = serializers.SerializerMethodField()
-    # Allow reading and writing stops as nested objects
-    stops = TripStopSerializer(many=True, required=False)
-    
+
     class Meta:
         model = Trip
         fields = [
-            'id', 'company', 'company_name', 'departure_city', 'departure_city_name',
-            'arrival_city', 'arrival_city_name', 'departure_time', 'arrival_time',
-            'price', 'duration', 'bus_type', 'capacity', 'is_active',
-            'created_at', 'updated_at', 'bookings_count', 'available_seats', 'stops'
+            'id',
+            'company_name', 'departure_city_name', 'arrival_city_name',
+            'price', 'departure_time', 'arrival_time',
+            'duration', 'bus_type', 'capacity',
+            'bookings_count', 'available_seats'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'bookings_count', 'available_seats']
+        read_only_fields = [
+            'id', 'company_name', 'departure_city_name', 'arrival_city_name',
+            'price', 'bookings_count', 'available_seats'
+        ]
+
 
     def get_bookings_count(self, obj):
         return obj.bookings.filter(status__in=['confirmed', 'pending']).count()
@@ -172,7 +196,7 @@ class TripSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        # include stops ordered for frontend convenience
+        # Inclure les escales ordonnées pour le frontend
         stops = TripStop.objects.filter(trip=instance).order_by('sequence')
         data['stops'] = TripStopSerializer(stops, many=True).data
         return data
@@ -201,7 +225,7 @@ class TripSerializer(serializers.ModelSerializer):
                         raw = str(city_id).strip()
                         # normalize by removing parenthetical suffixes: 'Mango (Savanes)' -> 'Mango'
                         import re
-                        normalized = re.sub(r"\s*\(.*\)\s*", "", raw).strip()
+                        normalized = re.sub(r"\\s*\\(.*\\)\\s*", "", raw).strip()
                         # try exact
                         c = CityModel.objects.filter(name__iexact=raw).first()
                         if not c:
@@ -230,7 +254,7 @@ class TripSerializer(serializers.ModelSerializer):
                     )
                 except Exception as e:
                     trip.delete()
-                    raise serializers.ValidationError({'stops': f'Impossible de créer l\'arrêt: {str(e)}'})
+                    raise serializers.ValidationError({f'stops[{idx}]': f"Erreur lors de la création de l\'arrêt: {e}"})
         return trip
 
     def update(self, instance, validated_data):
@@ -252,7 +276,7 @@ class TripSerializer(serializers.ModelSerializer):
                     else:
                         raw = str(city_id).strip()
                         import re
-                        normalized = re.sub(r"\s*\(.*\)\s*", "", raw).strip()
+                        normalized = re.sub(r"\\s*\\(.*\\)\\s*", "", raw).strip()
                         c = CityModel.objects.filter(name__iexact=raw).first()
                         if not c:
                             c = CityModel.objects.filter(name__iexact=normalized).first()
@@ -276,7 +300,7 @@ class TripSerializer(serializers.ModelSerializer):
                         segment_price=s.get('segment_price')
                     )
                 except Exception as e:
-                    raise serializers.ValidationError({'stops': f'Impossible de créer l\'arrêt: {str(e)}'})
+                    raise serializers.ValidationError({f'stops[{idx}]': f"Erreur lors de la création de l\'arrêt: {e}"})
         return trip
 
     def validate(self, data):
@@ -366,7 +390,33 @@ class BookingSerializer(serializers.ModelSerializer):
 
         if existing_booking.exists():
             raise serializers.ValidationError("Ce siège est déjà réservé pour ce trajet.")
-        return value
+
+    def create(self, validated_data):
+        # Commission rate for Evex (e.g., 10%)
+        EVEX_COMMISSION_RATE = Decimal('0.10')
+
+        # Create the booking instance
+        booking = super().create(validated_data)
+
+        # Calculate total price (assuming it's already set on the booking instance or can be derived)
+        total_price = booking.total_price
+
+        # Calculate commission and company revenue
+        evex_commission = total_price * EVEX_COMMISSION_RATE
+        company_revenue = total_price - evex_commission
+
+        # Create the Payment instance
+        Payment.objects.create(
+            booking=booking,
+            amount=total_price,
+            payment_method=booking.payment_method,
+            status='completed',  # Assuming payment is completed upon booking creation
+            evex_commission=evex_commission,
+            company_revenue=company_revenue,
+            transaction_id=str(uuid.uuid4())
+        )
+
+        return booking
 
 
 class PaymentSerializer(serializers.ModelSerializer):
@@ -377,9 +427,9 @@ class PaymentSerializer(serializers.ModelSerializer):
         model = Payment
         fields = [
             'id', 'booking', 'booking_details', 'amount', 'payment_method',
-            'status', 'transaction_id', 'payment_date'
+            'status', 'transaction_id', 'evex_commission', 'company_revenue', 'payment_date'
         ]
-        read_only_fields = ['id', 'payment_date']
+        read_only_fields = ['id', 'payment_date', 'evex_commission', 'company_revenue']
 
 
 class ReviewSerializer(serializers.ModelSerializer):
@@ -479,8 +529,12 @@ class ScheduledTripSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ScheduledTrip
-        fields = ['id', 'trip', 'trip_info', 'date', 'is_active', 'available_seats', 'created_at']
-        read_only_fields = ['id', 'created_at', 'available_seats']
+        fields = ('trip', 'date', 'available_seats', 'trip_info')
+
+
+
+    def get_bookings_count(self, obj):
+        return obj.bookings.filter(status__in=['confirmed', 'pending']).count()
 
     def get_available_seats(self, obj):
         """Calcule les places disponibles.

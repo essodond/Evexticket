@@ -1,54 +1,42 @@
+from rest_framework.decorators import action
 from rest_framework.views import APIView
-from rest_framework import generics, status
+from datetime import datetime, timedelta
+from django.utils import timezone
+from rest_framework import generics, status, permissions, viewsets
+from rest_framework.response import Response
 from django.contrib.auth.models import User
 from rest_framework.permissions import AllowAny
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
-from .serializers import RegisterSerializer
-
-# Vue d'inscription
+from .serializers import RegisterSerializer, UserSerializer, CompanySerializer, TripSerializer, BookingSerializer, PaymentSerializer, ReviewSerializer, NotificationSerializer, ScheduledTripSerializer, CompanyStatsSerializer, TripStopSerializer, BoardingZoneSerializer, CitySerializer, TripSearchSerializer
+from .models import Company, City, Trip, Booking, Payment, Review, Notification, ScheduledTrip, UserProfile, TripStop, BoardingZone
+from django.contrib.auth import authenticate
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
+    permission_classes = (AllowAny,)
     serializer_class = RegisterSerializer
-    permission_classes = [AllowAny]
-
-    def create(self, request, *args, **kwargs):
-        # Utiliser le serializer pour valider et créer l'utilisateur
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-
-        # Générer un token si vous utilisez DRF authtoken
-        token, created = Token.objects.get_or_create(user=user)
-        # Conformer la réponse au format attendu par les clients ({ token, user })
-        from .serializers import UserSerializer
-        user_data = UserSerializer(user).data
-        return Response({'token': token.key, 'user': user_data}, status=status.HTTP_201_CREATED)
 
 class EmailAuthToken(APIView):
-    """Authentification par email -> retourne un token."""
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
-        import logging
-        logger = logging.getLogger(__name__)
-
+        phone = request.data.get('phone')
         email = request.data.get('email')
         username = request.data.get('username')
-        phone = request.data.get('phone')
         password = request.data.get('password')
-        if not password or (not email and not username and not phone):
-            return Response({'detail': 'Email/téléphone/username et mot de passe requis.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not password:
+            return Response({'detail': 'Le mot de passe est requis.'}, status=status.HTTP_400_BAD_REQUEST)
 
         attempts = []
 
-        # 0) Auth via phone number
+        # Try authenticating with phone number
         if phone:
             try:
-                profile = UserProfile.objects.select_related('user').get(phone=phone)
-                attempts.append(f'found_user_by_phone:{profile.user.username}')
-                user_auth = authenticate(request, username=profile.user.username, password=password)
+                user_by_phone = UserProfile.objects.get(phone=phone).user
+                attempts.append(f'found_user_by_phone:{user_by_phone.username}')
+                user_auth = authenticate(request, username=user_by_phone.username, password=password)
                 if user_auth:
                     token, created = Token.objects.get_or_create(user=user_auth)
                     from .serializers import UserSerializer
@@ -104,23 +92,9 @@ class EmailAuthToken(APIView):
         # 3) Final fallback: try authenticate with username equal to provided password? (not typical) - skip
 
         # Log attempts for debugging (server-side only)
-        logger.warning('EmailAuthToken failed: attempts=%s, remote=%s', attempts, request.META.get('REMOTE_ADDR'))
+        # logger.warning('EmailAuthToken failed: attempts=%s, remote=%s', attempts, request.META.get('REMOTE_ADDR'))
 
         return Response({'detail': 'Identifiants invalides.'}, status=status.HTTP_400_BAD_REQUEST)
-from rest_framework import viewsets, permissions
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from django.db.models import Q, Count, Sum, Avg
-from django.utils import timezone
-from datetime import datetime, timedelta
-from django.contrib.auth.models import User
-from .models import Company, City, Trip, Booking, Payment, Review, Notification, TripStop, UserProfile
-from .serializers import (
-    CompanySerializer, CitySerializer, TripSerializer, BookingSerializer,
-    PaymentSerializer, ReviewSerializer, NotificationSerializer,
-    TripSearchSerializer, BookingCreateSerializer, DashboardStatsSerializer,
-    CompanyStatsSerializer, UserSerializer
-)
 
 class CurrentUserView(APIView):
     """Retourne les informations de l'utilisateur connecté et son rôle"""
@@ -267,7 +241,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
 
 class TripViewSet(viewsets.ModelViewSet):
     """ViewSet pour les trajets"""
-    queryset = Trip.objects.filter(is_active=True)
+    queryset = Trip.objects.filter(is_active=True).prefetch_related('stops')
     serializer_class = TripSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -398,8 +372,95 @@ class TripViewSet(viewsets.ModelViewSet):
                     pass
         except Exception:
             pass
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
-        return Response({'message': 'Trajet créé avec succès.', 'trip': serializer.data}, status=status.HTTP_201_CREATED, headers=headers)
+
+class TripStopViewSet(viewsets.ModelViewSet):
+    """ViewSet pour les arrêts"""
+    queryset = TripStop.objects.all()
+    serializer_class = TripStopSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        trip_id = self.request.query_params.get('trip_id')
+        if trip_id:
+            queryset = queryset.filter(trip__id=trip_id)
+        return queryset
+
+
+class BoardingZoneViewSet(viewsets.ModelViewSet):
+    """ViewSet pour les zones d'embarquement"""
+    queryset = BoardingZone.objects.all()
+    serializer_class = BoardingZoneSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        company_id = self.request.query_params.get('company_id')
+        trip_id = self.request.query_params.get('trip_id')
+        if company_id:
+            queryset = queryset.filter(company__id=company_id)
+        if trip_id:
+            queryset = queryset.filter(trip__id=trip_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if user.is_staff:
+            serializer.save()
+            return
+
+        # Non-staff: must be admin of a company
+        companies_for_user = Company.objects.filter(Q(admin_user=user) | Q(admins=user))
+        if not companies_for_user.exists():
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Vous n'êtes pas autorisé à créer des zones d'embarquement.")
+
+        # If client provided a company, ensure it's one of their companies
+        provided_company = serializer.validated_data.get('company') if hasattr(serializer, 'validated_data') else None
+        if provided_company:
+            if isinstance(provided_company, Company):
+                company_obj = provided_company
+            else:
+                try:
+                    company_obj = Company.objects.get(pk=provided_company)
+                except Company.DoesNotExist:
+                    from rest_framework.exceptions import ValidationError
+                    raise ValidationError({'company': 'Compagnie inexistante.'})
+
+            if not companies_for_user.filter(pk=company_obj.pk).exists():
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("Vous ne pouvez créer des zones d'embarquement que pour vos compagnies.")
+
+            serializer.save()
+            return
+
+        # No company provided: default to the first company the user administers
+        serializer.save(company=companies_for_user.first())
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        if user.is_staff:
+            serializer.save()
+            return
+
+        companies_for_user = Company.objects.filter(Q(admin_user=user) | Q(admins=user))
+        if not companies_for_user.exists():
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Vous n'êtes pas autorisé à modifier cette zone d'embarquement.")
+
+        instance_company = serializer.instance.company
+        if not companies_for_user.filter(pk=instance_company.pk).exists():
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Vous ne pouvez modifier que les zones d'embarquement de vos compagnies.")
+
+        new_company = serializer.validated_data.get('company') if hasattr(serializer, 'validated_data') else None
+        if new_company and (isinstance(new_company, Company) and not companies_for_user.filter(pk=new_company.pk).exists()):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Impossible d'assigner la zone d'embarquement à une compagnie que vous ne gérez pas.")
+
+        serializer.save()
 
     @action(detail=False, methods=['post'])
     def search(self, request):
@@ -514,6 +575,26 @@ class TripViewSet(viewsets.ModelViewSet):
             return Response(results)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class MessageSyncView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        # Logique de synchronisation des messages ici
+        # Récupérer les nouveaux messages depuis la dernière sync
+        # Les changements de statut (envoyé, reçu, lu)
+        # Les nouvelles conversations
+        # Les mises à jour des métadonnées (timestamps, statuts)
+        
+        # Exemple de réponse (à adapter)
+        data = {
+            "new_messages": [],
+            "status_updates": [],
+            "new_conversations": [],
+            "metadata_updates": []
+        }
+        return Response(data, status=status.HTTP_200_OK)
 
 
 class BookingViewSet(viewsets.ModelViewSet):
@@ -797,3 +878,35 @@ class ScheduledTripSearchView(APIView):
             return Response(st_serializer.data)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class TripSyncView(APIView):
+    permission_classes = [permissions.IsAuthenticated] # Cette ligne sera corrigée par la modification ci-dessus
+
+    def get(self, request, *args, **kwargs):
+        last_sync_str = request.query_params.get('last_sync_timestamp')
+        
+        if last_sync_str:
+            try:
+                last_sync_timestamp = datetime.fromisoformat(last_sync_str).replace(tzinfo=timezone.utc)
+            except ValueError:
+                return Response({"error": "Invalid last_sync_timestamp format. Use ISO 8601."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Fetch trips that were created or updated since last_sync_timestamp
+            updated_trips = ScheduledTrip.objects.filter(
+                Q(created_at__gte=last_sync_timestamp) | Q(updated_at__gte=last_sync_timestamp)
+            ).distinct()
+            
+            updated_trip_serializer = TripSearchSerializer(updated_trips, many=True)
+            
+            return Response({
+                "updated_trips": updated_trip_serializer.data,
+                "current_timestamp": datetime.now(timezone.utc).isoformat()
+            }, status=status.HTTP_200_OK)
+        else:
+            # If no timestamp is provided, return all trips (initial sync)
+            all_trips = ScheduledTrip.objects.all()
+            all_trip_serializer = TripSearchSerializer(all_trips, many=True)
+            return Response({
+                "all_trips": all_trip_serializer.data,
+                "current_timestamp": datetime.now(timezone.utc).isoformat()
+            }, status=status.HTTP_200_OK)

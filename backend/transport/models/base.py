@@ -150,6 +150,24 @@ class TripStop(models.Model):
         return f"{self.trip} - {self.city.name} (#{self.sequence})"
 
 
+class BoardingZone(models.Model):
+    """Zone d'embarquement spécifique à une ville et un arrêt de trajet."""
+    city = models.ForeignKey(City, on_delete=models.CASCADE, related_name='boarding_zones', verbose_name='Ville')
+    trip_stop = models.ForeignKey(TripStop, on_delete=models.CASCADE, related_name='boarding_zones', verbose_name='Arrêt de trajet')
+    name = models.CharField(max_length=100, verbose_name="Nom de la zone")
+    description = models.TextField(blank=True, verbose_name="Description")
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name="Latitude")
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name="Longitude")
+
+    class Meta:
+        unique_together = ('trip_stop', 'name')
+        verbose_name = "Zone d'embarquement"
+        verbose_name_plural = "Zones d'embarquement"
+
+    def __str__(self):
+        return f"{self.name} ({self.city.name} - {self.trip_stop.trip.id})"
+
+
 class Booking(models.Model):
     """Modèle pour les réservations"""
     STATUS_CHOICES = [
@@ -259,6 +277,18 @@ class Payment(models.Model):
         choices=STATUS_CHOICES,
         default='pending',
         verbose_name="Statut"
+    )
+    evex_commission = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0.00,
+        verbose_name="Commission Evex (FCFA)"
+    )
+    company_revenue = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0.00,
+        verbose_name="Revenu Compagnie (FCFA)"
     )
     payment_date = models.DateTimeField(auto_now_add=True, verbose_name="Date de paiement")
 

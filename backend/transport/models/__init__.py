@@ -1,6 +1,6 @@
 from .user import UserProfile
 from .base import (
-    Company, City, Trip, TripStop, Booking, Payment, Review, Notification, ScheduledTrip
+    Company, City, Trip, TripStop, BoardingZone, Booking, Payment, Review, Notification, ScheduledTrip
 )
 
 __all__ = [
@@ -14,4 +14,5 @@ __all__ = [
     'Review',
     'Notification',
     'ScheduledTrip',
+    'BoardingZone',
 ]

@@ -24,7 +24,7 @@ class Command(BaseCommand):
         qs = Trip.objects.filter(is_active=True)
         total_created = 0
         total_skipped = 0
-    total_pruned = 0
+        total_pruned = 0
 
         for trip in qs:
             # Create the window

@@ -78,26 +78,32 @@ class Trip(models.Model):
         related_name='trips',
         verbose_name="Compagnie"
     )
-    departure_city = models.ForeignKey(
-        City, 
+    main_departure_point = models.ForeignKey(
+        Stop, 
         on_delete=models.CASCADE, 
-        related_name='departure_trips',
-        verbose_name="Ville de départ"
+        related_name='main_departure_trips',
+        verbose_name='Point de départ principal'
     )
-    arrival_city = models.ForeignKey(
-        City, 
+    main_destination_point = models.ForeignKey(
+        Stop, 
         on_delete=models.CASCADE, 
-        related_name='arrival_trips',
-        verbose_name="Ville d'arrivée"
+        related_name='main_destination_trips',
+        verbose_name='Point d'arrivée principal'
     )
-    departure_time = models.TimeField(verbose_name="Heure de départ")
-    arrival_time = models.TimeField(verbose_name="Heure d'arrivée")
-    price = models.DecimalField(
+    base_price = models.DecimalField(
         max_digits=10, 
         decimal_places=2, 
         validators=[MinValueValidator(0)],
-        verbose_name="Prix (FCFA)"
+        verbose_name='Prix de base du trajet'
     )
+    evex_commission = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0.00,
+        verbose_name='Commission Evex'
+    )
+    departure_time = models.TimeField(verbose_name="Heure de départ")
+    arrival_time = models.TimeField(verbose_name="Heure d'arrivée")
     duration = models.PositiveIntegerField(
         help_text="Durée en minutes",
         verbose_name="Durée (minutes)"
@@ -122,16 +128,16 @@ class Trip(models.Model):
         ordering = ['departure_time']
 
     def __str__(self):
-        return f"{self.departure_city.name} → {self.arrival_city.name} ({self.departure_time})"
+        return f"{self.main_departure_point.city.name} → {self.main_destination_point.city.name} ({self.departure_time})"
 
     def clean(self):
         from django.core.exceptions import ValidationError
-        if self.departure_city == self.arrival_city:
-            raise ValidationError("La ville de départ et d'arrivée doivent être différentes.")
+        if self.main_departure_point == self.main_destination_point:
+            raise ValidationError("Le point de départ principal et le point d'arrivée principal doivent être différents.")
 
 
-class TripStop(models.Model):
-    """Une escale (stop) pour un Trip, ordonnée par `sequence`.
+class Stop(models.Model):
+    """Un arrêt (stop) pour un Trip, ordonné par `sequence`.
 
     On stocke un prix cumulatif `price_from_start` qui représente le tarif
     depuis le premier arrêt du trajet jusqu'à cette escale. Le prix entre
@@ -147,6 +153,8 @@ class TripStop(models.Model):
     class Meta:
         unique_together = ('trip', 'sequence')
         ordering = ['trip', 'sequence']
+        verbose_name = "Arrêt"
+        verbose_name_plural = "Arrêts"
 
     def __str__(self):
         return f"{self.trip} - {self.city.name} (#{self.sequence})"
@@ -178,8 +186,8 @@ class Booking(models.Model):
     passenger_phone = models.CharField(max_length=20, verbose_name="Téléphone du passager")
     seat_number = models.CharField(max_length=10, verbose_name="Numéro de siège")
     # Optional origin/destination stops for segment bookings
-    origin_stop = models.ForeignKey('TripStop', on_delete=models.SET_NULL, null=True, blank=True, related_name='origin_bookings')
-    destination_stop = models.ForeignKey('TripStop', on_delete=models.SET_NULL, null=True, blank=True, related_name='destination_bookings')
+    origin_stop = models.ForeignKey('Stop', on_delete=models.SET_NULL, null=True, blank=True, related_name='origin_bookings')
+    destination_stop = models.ForeignKey('Stop', on_delete=models.SET_NULL, null=True, blank=True, related_name='destination_bookings')
     status = models.CharField(
         max_length=20, 
         choices=STATUS_CHOICES, 
@@ -255,6 +263,18 @@ class Payment(models.Model):
         blank=True, 
         null=True,
         verbose_name="ID de transaction"
+    )
+    evex_commission = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0.00,
+        verbose_name="Commission Evex (FCFA)"
+    )
+    company_revenue = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0.00,
+        verbose_name="Revenu Compagnie (FCFA)"
     )
     payment_date = models.DateTimeField(
         auto_now_add=True, 
@@ -366,6 +386,41 @@ class ScheduledTrip(models.Model):
         if self.available_seats is None:
             self.available_seats = self.trip.capacity
         super().save(*args, **kwargs)
+
+
+class BoardingZone(models.Model):
+    """Modèle pour les zones d'embarquement spécifiques à une compagnie ou un trajet."""
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='boarding_zones',
+        verbose_name="Compagnie"
+    )
+    trip = models.ForeignKey(
+        Trip,
+        on_delete=models.CASCADE,
+        related_name='boarding_zones',
+        verbose_name="Trajet",
+        null=True, blank=True
+    )
+    name = models.CharField(max_length=200, verbose_name="Nom de la zone d'embarquement")
+    address = models.CharField(max_length=300, verbose_name="Adresse")
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name="Latitude")
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name="Longitude")
+    is_active = models.BooleanField(default=True, verbose_name="Zone active")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Date de mise à jour")
+
+    class Meta:
+        verbose_name = "Zone d'embarquement"
+        verbose_name_plural = "Zones d'embarquement"
+        unique_together = ('company', 'name', 'trip') # Une zone d'embarquement est unique par compagnie, nom et trajet (si spécifié)
+        ordering = ['company__name', 'name']
+
+    def __str__(self):
+        if self.trip:
+            return f"{self.name} ({self.company.name} - {self.trip})"
+        return f"{self.name} ({self.company.name})"
 
 
 # Lorsque un Trip est créé via l'admin ou API, créer automatiquement les
