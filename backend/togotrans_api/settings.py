@@ -172,7 +172,16 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8084",
     "http://192.168.1.64:8084",
     "https://4429be1bde8e.ngrok-free.app",
+    "http://10.0.2.2:8000",
+    "http://192.168.1.68:8000",
+    "http://192.168.137.234:8000",
+    "http://192.168.137.227:8000",
+    
 ]
+
+
+CORS_ALLOW_CREDENTIALS = True
+
 
 CORS_ALLOW_CREDENTIALS = True
 
