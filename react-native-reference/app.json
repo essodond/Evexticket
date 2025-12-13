@@ -1,0 +1,63 @@
+{
+  "expo": {
+    "sdkVersion": "54.0.0",
+    "name": "EVEX Ticket",
+    "slug": "evex-ticket",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icone.png",
+    "userInterfaceStyle": "light",
+
+    "reactNativeExperimental": {
+      "bridgelessMode": false
+    },
+    "jsEngine": "jsc",
+
+    "extra": {
+      "EXPO_PUBLIC_API_BASE_URL": "http://10.0.203.29:8000"
+    },
+
+    "splash": {
+      "image": "./assets/icone.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.evex.ticket",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Cette application nécessite l'accès à la caméra pour scanner les QR codes.",
+        "NSPhotoLibraryUsageDescription": "Cette application nécessite l'accès à vos photos pour enregistrer vos billets."
+      }
+    },
+    "android": {
+      "package": "com.evex.ticket",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "buildToolsVersion": "34.0.0"
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ]
+    ]
+  }
+}
