@@ -177,7 +177,7 @@ class TripSerializer(serializers.ModelSerializer):
         model = Trip
         fields = [
             'id',
-            'company_name', 'departure_city_name', 'arrival_city_name',
+            'company_name', 'departure_city', 'departure_city_name', 'arrival_city', 'arrival_city_name',
             'price', 'departure_time', 'arrival_time',
             'duration', 'bus_type', 'capacity',
             'bookings_count', 'available_seats', 'stops'
