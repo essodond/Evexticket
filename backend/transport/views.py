@@ -827,6 +827,91 @@ def availability_view(request):
 class ScheduledTripSearchView(APIView):
     """Rechercher des voyages planifiés avec prise en compte des escales (segments)."""
     permission_classes = [AllowAny]
+    
+    def post(self, request, *args, **kwargs):
+        serializer = TripSearchSerializer(data=request.data)
+        if serializer.is_valid():
+            departure_city = serializer.validated_data['departure_city']
+            arrival_city = serializer.validated_data['arrival_city']
+            travel_date = serializer.validated_data['travel_date']
+            passengers = serializer.validated_data['passengers']
+
+            from unidecode import unidecode
+
+            dep_norm = unidecode(departure_city).lower()
+            arr_norm = unidecode(arrival_city).lower()
+
+            # Récupérer tous les voyages planifiés pour la date donnée
+            scheduled_trips = ScheduledTrip.objects.filter(
+                date=travel_date,
+                trip__is_active=True
+            ).select_related('trip__company', 'trip__departure_city', 'trip__arrival_city')
+
+            matches = []
+            for st in scheduled_trips:
+                trip = st.trip
+                # Récupérer les escales ordonnées
+                stops = list(TripStop.objects.filter(trip=trip).select_related('city').order_by('sequence'))
+
+                # Cas 1: correspondance directe aux extrémités du trajet
+                direct_match = (
+                    dep_norm in unidecode((trip.departure_city.name or '')).lower() and
+                    arr_norm in unidecode((trip.arrival_city.name or '')).lower()
+                )
+                if direct_match:
+                    booked = Booking.objects.filter(
+                        trip=trip,
+                        travel_date=st.date,
+                        status__in=['confirmed', 'pending']
+                    ).values_list('seat_number', flat=True)
+                    available = max(trip.capacity - len(set(booked)), 0)
+                    if available >= passengers:
+                        matches.append(st)
+                        continue
+
+                # Cas 2: recherche par escales (segments)
+                origin_candidates = [s for s in stops if dep_norm in unidecode(s.city.name or '').lower()]
+                dest_candidates = [s for s in stops if arr_norm in unidecode(s.city.name or '').lower()]
+                found = False
+                for o in origin_candidates:
+                    for d in dest_candidates:
+                        if o.sequence < d.sequence:
+                            qs = Booking.objects.filter(
+                                trip=trip,
+                                travel_date=st.date,
+                                status__in=['confirmed', 'pending']
+                            ).select_related('origin_stop', 'destination_stop')
+
+                            occupied = set()
+                            for b in qs:
+                                try:
+                                    if b.origin_stop and b.destination_stop:
+                                        # chevauchement si NOT (b.dest <= o OR b.orig >= d)
+                                        if not (b.destination_stop.sequence <= o.sequence or b.origin_stop.sequence >= d.sequence):
+                                            occupied.add(b.seat_number)
+                                    else:
+                                        # réservation sans escales: considérer comme occupant toutes les sections
+                                        occupied.add(b.seat_number)
+                                except Exception:
+                                    occupied.add(b.seat_number)
+
+                            available = max(trip.capacity - len(occupied), 0)
+                            if available >= passengers:
+                                matches.append(st)
+                                found = True
+                                break
+                    if found:
+                        break
+
+            # Sérialiser avec le contexte pour calculer available_seats par segment
+            st_serializer = ScheduledTripSerializer(
+                matches,
+                many=True,
+                context={'origin_city': departure_city, 'destination_city': arrival_city}
+            )
+            return Response(st_serializer.data)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ScheduledTripDetailView(generics.RetrieveAPIView):
     queryset = ScheduledTrip.objects.all()
@@ -981,10 +1066,6 @@ class TripSyncView(APIView):
 
 
 
-
-class ScheduledTripSearchView(APIView):
-    """Rechercher des voyages planifiés avec prise en compte des escales (segments)."""
-    permission_classes = [AllowAny]
 
 class ScheduledTripDetailView(generics.RetrieveAPIView):
     queryset = ScheduledTrip.objects.all()
