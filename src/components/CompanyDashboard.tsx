@@ -481,6 +481,7 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
           onSave={handleSaveTrip}
           editingTrip={editingTrip}
           cities={apiCities}
+          companyId={companyId}
         />
       )}
 
