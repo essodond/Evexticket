@@ -8,6 +8,60 @@ from rest_framework.authtoken.models import Token
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import Company, City, Trip, TripStop, Booking, Payment, Review, Notification, ScheduledTrip, BoardingZone
+import unicodedata
+import re
+
+
+def _normalize_string_for_matching(s: str) -> str:
+    if s is None:
+        return ''
+    # remove parenthetical parts and normalize unicode (strip accents)
+    try:
+        raw = str(s).strip()
+    except Exception:
+        raw = ''
+    without_paren = re.sub(r"\s*\(.*\)\s*", "", raw).strip()
+    nfkd = unicodedata.normalize('NFKD', without_paren)
+    no_diacritics = ''.join([c for c in nfkd if not unicodedata.combining(c)])
+    return no_diacritics.lower()
+
+
+def _resolve_city_id(value):
+    """Try to resolve a city identifier which may be numeric id, numeric-string, exact name,
+    name with parenthetical suffix, startswith or contains. Returns integer id or None."""
+    from .models import City as CityModel
+    # direct numeric id
+    if value is None and value != 0:
+        return None
+    if isinstance(value, int) or (isinstance(value, str) and str(value).isdigit()):
+        try:
+            return int(value)
+        except Exception:
+            return None
+
+    raw = str(value).strip()
+    if not raw:
+        return None
+
+    # try exact case-insensitive match first
+    c = CityModel.objects.filter(name__iexact=raw).first()
+    if c:
+        return c.id
+
+    # normalized matching (remove diacritics and parenthetical suffixes)
+    norm = _normalize_string_for_matching(raw)
+    # try to find exact normalized match by scanning candidates (SQLite lacks unaccent)
+    for candidate in CityModel.objects.all():
+        if _normalize_string_for_matching(candidate.name) == norm:
+            return candidate.id
+
+    # startswith / contains on normalized form
+    for candidate in CityModel.objects.all():
+        cnorm = _normalize_string_for_matching(candidate.name)
+        if cnorm.startswith(norm) or norm in cnorm:
+            return candidate.id
+
+    return None
 
 # Serializer pour l'inscription d'utilisateur
 class RegisterSerializer(serializers.ModelSerializer):
@@ -216,33 +270,7 @@ class TripSerializer(serializers.ModelSerializer):
                     # Rollback the trip creation by deleting it to avoid inconsistent state
                     trip.delete()
                     raise serializers.ValidationError({f'stops[{idx}].city': 'La ville de l\'arrêt est requise.'})
-                # If city_id looks like a name (string non-numeric), try to resolve to a City id
-                from .models import City as CityModel
-                resolved_city_id = None
-                try:
-                    # if it's numeric-like, coerce
-                    if isinstance(city_id, int) or (isinstance(city_id, str) and city_id.isdigit()):
-                        resolved_city_id = int(city_id)
-                    else:
-                        raw = str(city_id).strip()
-                        # normalize by removing parenthetical suffixes: 'Mango (Savanes)' -> 'Mango'
-                        import re
-                        normalized = re.sub(r"\\s*\\(.*\\)\\s*", "", raw).strip()
-                        # try exact
-                        c = CityModel.objects.filter(name__iexact=raw).first()
-                        if not c:
-                            c = CityModel.objects.filter(name__iexact=normalized).first()
-                        # startswith
-                        if not c:
-                            c = CityModel.objects.filter(name__istartswith=normalized).first()
-                        # contains
-                        if not c:
-                            c = CityModel.objects.filter(name__icontains=normalized).first()
-                        if c:
-                            resolved_city_id = c.id
-                except Exception:
-                    resolved_city_id = None
-
+                resolved_city_id = _resolve_city_id(city_id)
                 if not resolved_city_id:
                     trip.delete()
                     raise serializers.ValidationError({f'stops[{idx}].city': f"Ville d'arrêt invalide: {city_id}"})
@@ -270,27 +298,7 @@ class TripSerializer(serializers.ModelSerializer):
                 if not city_id and city_id != 0:
                     raise serializers.ValidationError({f'stops[{idx}].city': 'La ville de l\'arrêt est requise.'})
 
-                from .models import City as CityModel
-                resolved_city_id = None
-                try:
-                    if isinstance(city_id, int) or (isinstance(city_id, str) and city_id.isdigit()):
-                        resolved_city_id = int(city_id)
-                    else:
-                        raw = str(city_id).strip()
-                        import re
-                        normalized = re.sub(r"\\s*\\(.*\\)\\s*", "", raw).strip()
-                        c = CityModel.objects.filter(name__iexact=raw).first()
-                        if not c:
-                            c = CityModel.objects.filter(name__iexact=normalized).first()
-                        if not c:
-                            c = CityModel.objects.filter(name__istartswith=normalized).first()
-                        if not c:
-                            c = CityModel.objects.filter(name__icontains=normalized).first()
-                        if c:
-                            resolved_city_id = c.id
-                except Exception:
-                    resolved_city_id = None
-
+                resolved_city_id = _resolve_city_id(city_id)
                 if not resolved_city_id:
                     raise serializers.ValidationError({f'stops[{idx}].city': f"Ville d'arrêt invalide: {city_id}"})
 
