@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Plus, Edit, Trash2, Users, Download, Calendar, MapPin, DollarSign, TrendingUp, Bus, BarChart3, FileText, Eye, XCircle } from 'lucide-react';
 import apiService, { ScheduledTrip, Booking, CompanyStats, City } from '../services/api';
 import { useCities } from '../hooks/useApi';
@@ -35,8 +35,8 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
   const [showBookingDetails, setShowBookingDetails] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
 
-  const n1Cities = ["Lomé", "Tsévié", "Aného", "Atakpamé", "Sokodé", "Kara", "Dapaong", "Mango"];
-  const filterN1Cities = (city: City) => n1Cities.includes(city.name);
+  const n1Cities = useMemo(() => ["Lomé", "Tsévié", "Aného", "Atakpamé", "Sokodé", "Kara", "Dapaong", "Mango"], []);
+  const filterN1Cities = useCallback((city: City) => n1Cities.includes(city.name), [n1Cities]);
 
   const { cities: apiCities } = useCities(filterN1Cities);
 
