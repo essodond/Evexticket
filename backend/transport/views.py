@@ -669,10 +669,39 @@ from .serializers import ScheduledTripSerializer, TripSearchSerializer
 from .models import ScheduledTrip, Booking
 
 
-@api_view(['GET'])
+@api_view(['GET','POST'])
 def scheduled_trips_list(request):
     """List scheduled trips, optionally filtered by company_id."""
     company_id = request.query_params.get('company_id')
+    if request.method == 'POST':
+        # Create a ScheduledTrip for a specific Trip and date
+        try:
+            data = request.data
+            trip_id = data.get('trip')
+            date = data.get('date')
+            if not trip_id or not date:
+                return Response({'detail': 'trip and date are required.'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                trip = Trip.objects.get(pk=trip_id)
+            except Trip.DoesNotExist:
+                return Response({'detail': 'Trip not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+            # authorize: staff or admin of the trip's company
+            user = request.user
+            if not user.is_staff:
+                is_admin = (trip.company.admin_user_id == user.id) or trip.company.admins.filter(id=user.id).exists()
+                if not is_admin:
+                    return Response({'detail': 'Not authorized to create scheduled trips for this company.'}, status=status.HTTP_403_FORBIDDEN)
+
+            # Prevent duplicate scheduled trip
+            if ScheduledTrip.objects.filter(trip=trip, date=date).exists():
+                return Response({'detail': 'Scheduled trip already exists for this date.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            st = ScheduledTrip.objects.create(trip=trip, date=date, is_active=bool(data.get('is_active', True)), available_seats=data.get('available_seats') or trip.capacity)
+            serializer = ScheduledTripSerializer(st)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     qs = ScheduledTrip.objects.all().select_related('trip', 'trip__departure_city', 'trip__arrival_city')
     if company_id:
         qs = qs.filter(trip__company_id=company_id)
@@ -803,6 +832,40 @@ class ScheduledTripDetailView(generics.RetrieveAPIView):
     queryset = ScheduledTrip.objects.all()
     serializer_class = ScheduledTripSerializer
     lookup_field = 'pk'
+
+    def put(self, request, *args, **kwargs):
+        # Update schedule metadata (date, is_active, available_seats)
+        scheduled_trip = self.get_object()
+        data = request.data
+        user = request.user
+        trip = scheduled_trip.trip
+
+        if not user.is_staff:
+            is_admin = (trip.company.admin_user_id == user.id) or trip.company.admins.filter(id=user.id).exists()
+            if not is_admin:
+                return Response({'detail': 'Not authorized to update this scheduled trip.'}, status=status.HTTP_403_FORBIDDEN)
+
+        date = data.get('date')
+        if date:
+            scheduled_trip.date = date
+        if 'is_active' in data:
+            scheduled_trip.is_active = bool(data.get('is_active'))
+        if 'available_seats' in data:
+            scheduled_trip.available_seats = data.get('available_seats')
+        scheduled_trip.save()
+        serializer = ScheduledTripSerializer(scheduled_trip)
+        return Response(serializer.data)
+
+    def delete(self, request, *args, **kwargs):
+        scheduled_trip = self.get_object()
+        user = request.user
+        trip = scheduled_trip.trip
+        if not user.is_staff:
+            is_admin = (trip.company.admin_user_id == user.id) or trip.company.admins.filter(id=user.id).exists()
+            if not is_admin:
+                return Response({'detail': 'Not authorized to delete this scheduled trip.'}, status=status.HTTP_403_FORBIDDEN)
+        scheduled_trip.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def post(self, request, *args, **kwargs):
         serializer = TripSearchSerializer(data=request.data)

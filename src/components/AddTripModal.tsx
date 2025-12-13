@@ -6,8 +6,8 @@ import { City, Trip as SharedTrip, Company } from '../types';
 interface AddTripModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (trip: SharedTrip) => void;
-  editingTrip: SharedTrip | null;
+  onSave: (trip: any) => void;
+  editingTrip: any;
   companyId?: string | number;
   companies?: Company[];
   cities?: City[];
@@ -53,6 +53,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const busTypes = [
     { value: 'Standard', label: 'Standard' },
@@ -68,21 +69,22 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
 
   useEffect(() => {
     if (editingTrip) {
+      const sourceTrip = (editingTrip as any).trip_info || (editingTrip as any).trip || editingTrip;
       setFormData({
-        companyId: editingTrip.companyId ?? companyId,
-        departureCity: editingTrip.departureCity ?? '',
-        arrivalCity: editingTrip.arrivalCity ?? '',
-        departureTime: editingTrip.departureTime ?? '',
-        arrivalTime: editingTrip.arrivalTime ?? '',
-        price: editingTrip.price ?? 0,
-        duration: editingTrip.duration ?? 0,
-        busType: editingTrip.busType ?? 'Standard',
-        capacity: editingTrip.capacity ?? 50,
-        isActive: editingTrip.isActive ?? true,
+        companyId: sourceTrip.company ?? (editingTrip as any).companyId ?? companyId,
+        departureCity: sourceTrip.departure_city ?? sourceTrip.departureCity ?? '',
+        arrivalCity: sourceTrip.arrival_city ?? sourceTrip.arrivalCity ?? '',
+        departureTime: sourceTrip.departure_time ?? sourceTrip.departureTime ?? '',
+        arrivalTime: sourceTrip.arrival_time ?? sourceTrip.arrivalTime ?? '',
+        price: sourceTrip.price ?? 0,
+        duration: sourceTrip.duration ?? 0,
+        busType: sourceTrip.bus_type ?? sourceTrip.busType ?? 'Standard',
+        capacity: sourceTrip.capacity ?? 50,
+        isActive: (editingTrip as any).is_active ?? sourceTrip.is_active ?? true,
         date: (editingTrip as any).date ?? ''
       });
       // load stops if provided on editingTrip
-      const providedStops = (editingTrip as any).stops || [];
+      const providedStops = (editingTrip as any).stops || (editingTrip as any).trip_info?.stops || [];
       if (providedStops && Array.isArray(providedStops)) {
         setStops(providedStops.map((s: any, idx: number) => ({
           id: s.id,
@@ -92,7 +94,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
         })));
       }
     }
-  }, [editingTrip]);
+  }, [editingTrip, companyId]);
 
   useEffect(() => {
     // initialize stops when modal opens and no editingTrip
@@ -245,7 +247,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
     };
 
     const payload: any = {
-      company: formData.companyId ? Number(formData.companyId) : null,
+      company: formData.companyId ? Number(formData.companyId) : (companyId ? Number(companyId) : null),
       departure_city: resolveTopCity(formData.departureCity),
       arrival_city: resolveTopCity(formData.arrivalCity),
       departure_time: formData.departureTime,
@@ -301,22 +303,55 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
     // }, 300);
 
     try {
+      setErrorMessage(null);
+      // Determine if we are editing a ScheduledTrip
+      const isScheduledEditing = editingTrip && ((editingTrip as any).trip || (editingTrip as any).trip_info);
+
       if (editingTrip) {
-        const updated = await apiService.updateTrip(Number(editingTrip.id), payload);
-        setSuccessMessage('Trajet modifié avec succès.');
-        onSave({ ...editingTrip, ...updated } as any);
+        if (isScheduledEditing) {
+          // editing a scheduled trip: first update the underlying Trip, then update the ScheduledTrip (date/is_active)
+          const scheduled = editingTrip as any;
+          const tripId = scheduled.trip || scheduled.trip_info?.id || scheduled.id;
+          const updatedTrip = await apiService.updateTrip(Number(tripId), payload);
+          // update scheduled trip metadata if date/isActive were changed
+          const scheduledPayload: any = {};
+          if (formData.date) scheduledPayload.date = formData.date;
+          scheduledPayload.is_active = Boolean(formData.isActive);
+          try {
+            const updatedScheduled = await apiService.updateScheduledTrip(Number(scheduled.id), scheduledPayload);
+            setSuccessMessage('Trajet programmé modifié avec succès.');
+            onSave(updatedScheduled as any);
+          } catch (sErr) {
+            // If scheduled update fails, still return the updated trip to the parent
+            setSuccessMessage('Trajet mis à jour, mais la mise à jour du voyage programmé a échoué.');
+            onSave({ ...editingTrip, ...updatedTrip } as any);
+          }
+        } else {
+          // editing a plain Trip
+          const updated = await apiService.updateTrip(Number((editingTrip as any).id), payload);
+          setSuccessMessage('Trajet modifié avec succès.');
+          onSave({ ...editingTrip, ...updated } as any);
+        }
       } else {
-        // Debug: log payload sent to backend to inspect 500 errors
+        // creation
+        // First create the Trip
         // eslint-disable-next-line no-console
         console.debug('Creating trip payload:', payload);
-        const resp = await apiService.createTrip(payload as any);
-        // backend returns { message, trip }
-        if ((resp as any).trip) {
-          setSuccessMessage('Trajet créé avec succès.');
-          onSave((resp as any).trip as any);
+        const createdTrip = await apiService.createTrip(payload as any);
+        if (formData.date) {
+          // Create a ScheduledTrip for the selected date
+          try {
+            const newScheduled = await apiService.createScheduledTrip({ trip: (createdTrip as any).id, date: formData.date, is_active: Boolean(formData.isActive) } as any);
+            setSuccessMessage('Trajet programmé créé avec succès.');
+            onSave(newScheduled as any);
+          } catch (sErr) {
+            // If scheduled creation fails, still return the trip
+            setSuccessMessage('Trajet créé, mais la création du voyage programmé a échoué.');
+            onSave(createdTrip as any);
+          }
         } else {
-          setSuccessMessage('Trajet créé.');
-          onSave(resp as any);
+          setSuccessMessage('Trajet créé avec succès.');
+          onSave(createdTrip as any);
         }
       }
       // close after short delay to show confirmation
@@ -324,8 +359,10 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
         setSuccessMessage(null);
         onClose();
       }, 900);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur lors de la sauvegarde du trajet:', error);
+      const msg = error?.message || (error?.data && JSON.stringify(error.data)) || 'Erreur inconnue';
+      setErrorMessage(typeof msg === 'string' ? msg : JSON.stringify(msg));
     } finally {
       setIsLoading(false);
     }
@@ -611,6 +648,9 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
 
             {successMessage && (
               <div className="mb-3 p-3 bg-green-50 border border-green-200 text-green-800 rounded">{successMessage}</div>
+            )}
+            {errorMessage && (
+              <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-800 rounded">{errorMessage}</div>
             )}
 
             {stops.length === 0 && (

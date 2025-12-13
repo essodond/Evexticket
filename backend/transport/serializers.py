@@ -531,7 +531,8 @@ class ScheduledTripSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ScheduledTrip
-        fields = ('trip', 'date', 'available_seats', 'trip_info')
+        fields = ('id', 'trip', 'date', 'available_seats', 'trip_info')
+        read_only_fields = ('id', 'available_seats', 'trip_info')
 
 
 
