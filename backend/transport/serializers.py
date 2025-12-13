@@ -467,38 +467,78 @@ class NotificationSerializer(serializers.ModelSerializer):
 
 
 class ScheduledTripSerializer(serializers.ModelSerializer):
+    """Serializer unifié pour les voyages planifiés.
+
+    Fournit :
+    - `trip_info` : détails du trajet
+    - `departure_city_display` / `arrival_city_display` : valeurs adaptées au contexte de recherche
+    - `stops` : arrêts ordonnés du trajet
+    - `available_seats` : calculé selon le segment demandé si présent dans le contexte
     """
-    Serializer pour les voyages planifiés, ajustant les villes de départ/arrivée
-    en fonction du contexte de recherche de segment.
-    """
-    trip_details = TripSerializer(source='trip', read_only=True)
+    trip_info = TripSerializer(source='trip', read_only=True)
     departure_city_display = serializers.SerializerMethodField()
     arrival_city_display = serializers.SerializerMethodField()
     stops = serializers.SerializerMethodField()
+    available_seats = serializers.SerializerMethodField()
 
     class Meta:
         model = ScheduledTrip
         fields = [
-            'id', 'trip', 'trip_details', 'date', 'is_active', 'available_seats',
+            'id', 'trip', 'trip_info', 'date', 'is_active', 'available_seats',
             'departure_city_display', 'arrival_city_display', 'stops'
         ]
 
     def get_departure_city_display(self, obj):
-        # Utilise la ville de départ du contexte si disponible, sinon celle du trajet
         if 'origin_city' in self.context:
             return self.context['origin_city']
         return obj.trip.departure_city.name
 
     def get_arrival_city_display(self, obj):
-        # Utilise la ville d'arrivée du contexte si disponible, sinon celle du trajet
         if 'destination_city' in self.context:
             return self.context['destination_city']
         return obj.trip.arrival_city.name
 
     def get_stops(self, obj):
-        # Récupérer les arrêts associés à ce voyage et les sérialiser
         stops = obj.trip.stops.all().order_by('sequence')
         return TripStopSerializer(stops, many=True).data
+
+    def get_available_seats(self, obj):
+        try:
+            origin_city = self.context.get('origin_city')
+            destination_city = self.context.get('destination_city')
+            from unidecode import unidecode
+            if origin_city and destination_city:
+                dep_norm = unidecode(origin_city).lower()
+                arr_norm = unidecode(destination_city).lower()
+                stops = list(TripStop.objects.filter(trip=obj.trip).select_related('city').order_by('sequence'))
+                origin_candidates = [s for s in stops if dep_norm in unidecode(s.city.name or '').lower()]
+                dest_candidates = [s for s in stops if arr_norm in unidecode(s.city.name or '').lower()]
+                for o in origin_candidates:
+                    for d in dest_candidates:
+                        if o.sequence < d.sequence:
+                            qs = Booking.objects.filter(
+                                trip=obj.trip,
+                                travel_date=obj.date,
+                                status__in=['confirmed', 'pending']
+                            ).select_related('origin_stop', 'destination_stop')
+                            occupied = set()
+                            for b in qs:
+                                try:
+                                    if b.origin_stop and b.destination_stop:
+                                        if not (b.destination_stop.sequence <= o.sequence or b.origin_stop.sequence >= d.sequence):
+                                            occupied.add(b.seat_number)
+                                    else:
+                                        occupied.add(b.seat_number)
+                                except Exception:
+                                    occupied.add(b.seat_number)
+                            return max(0, obj.trip.capacity - len(occupied))
+            confirmed = obj.trip.bookings.filter(
+                travel_date=obj.date,
+                status__in=['confirmed', 'pending']
+            ).values_list('seat_number', flat=True)
+            return max(0, obj.trip.capacity - len(set(confirmed)))
+        except Exception:
+            return obj.trip.capacity
 
 
 class TripSearchSerializer(serializers.Serializer):
