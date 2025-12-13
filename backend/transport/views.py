@@ -861,7 +861,7 @@ class ScheduledTripSearchView(APIView):
                 if direct_match:
                     booked = Booking.objects.filter(
                         trip=trip,
-                        travel_date=st.date,
+                        booking_date=st.date,
                         status__in=['confirmed', 'pending']
                     ).values_list('seat_number', flat=True)
                     available = max(trip.capacity - len(set(booked)), 0)
@@ -878,7 +878,7 @@ class ScheduledTripSearchView(APIView):
                         if o.sequence < d.sequence:
                             qs = Booking.objects.filter(
                                 trip=trip,
-                                travel_date=st.date,
+                                booking_date=st.date,
                                 status__in=['confirmed', 'pending']
                             ).select_related('origin_stop', 'destination_stop')
 

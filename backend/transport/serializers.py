@@ -466,6 +466,41 @@ class NotificationSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
 
 
+class ScheduledTripSerializer(serializers.ModelSerializer):
+    """
+    Serializer pour les voyages planifiés, ajustant les villes de départ/arrivée
+    en fonction du contexte de recherche de segment.
+    """
+    trip_details = TripSerializer(source='trip', read_only=True)
+    departure_city_display = serializers.SerializerMethodField()
+    arrival_city_display = serializers.SerializerMethodField()
+    stops = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ScheduledTrip
+        fields = [
+            'id', 'trip', 'trip_details', 'date', 'is_active', 'available_seats',
+            'departure_city_display', 'arrival_city_display', 'stops'
+        ]
+
+    def get_departure_city_display(self, obj):
+        # Utilise la ville de départ du contexte si disponible, sinon celle du trajet
+        if 'origin_city' in self.context:
+            return self.context['origin_city']
+        return obj.trip.departure_city.name
+
+    def get_arrival_city_display(self, obj):
+        # Utilise la ville d'arrivée du contexte si disponible, sinon celle du trajet
+        if 'destination_city' in self.context:
+            return self.context['destination_city']
+        return obj.trip.arrival_city.name
+
+    def get_stops(self, obj):
+        # Récupérer les arrêts associés à ce voyage et les sérialiser
+        stops = obj.trip.stops.all().order_by('sequence')
+        return TripStopSerializer(stops, many=True).data
+
+
 class TripSearchSerializer(serializers.Serializer):
     """Serializer pour la recherche de trajets"""
     departure_city = serializers.CharField(required=True)
