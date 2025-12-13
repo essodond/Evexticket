@@ -1,0 +1,7 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+# Auto-push after local commit unless SKIP_AUTO_PUSH is set or on main branch
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+if [ -z "$SKIP_AUTO_PUSH" ] && [ "${BRANCH}" != "main" ]; then
+  git push origin HEAD || true
+fi

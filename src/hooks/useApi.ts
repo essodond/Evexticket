@@ -2,31 +2,66 @@ import { useState, useEffect } from 'react';
 import { apiService, City, Company, Trip, Booking, DashboardStats, CompanyStats } from '../services/api';
 
 // Hook pour les villes
+// Shared module-level cache to prevent repeated network calls across multiple hook instances
+let _citiesCache: City[] | null = null;
+let _citiesPromise: Promise<City[]> | null = null;
+
 export const useCities = (filterFn?: (city: City) => boolean) => {
-  const [cities, setCities] = useState<City[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [allCities, setAllCities] = useState<City[] | null>(_citiesCache);
+  const [cities, setCities] = useState<City[]>(_citiesCache || []);
+  const [loading, setLoading] = useState<boolean>(_citiesCache ? false : true);
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch once per app lifecycle and cache the result
   useEffect(() => {
-    const fetchCities = async () => {
+    let mounted = true;
+    const fetchOnce = async () => {
+      setLoading(true);
       try {
-        setLoading(true);
-        const data = await apiService.getCities();
-        let filteredData = data;
-        if (filterFn) {
-          filteredData = data.filter(filterFn);
+        if (_citiesCache) {
+          if (mounted) {
+            setAllCities(_citiesCache);
+            setCities(filterFn ? _citiesCache.filter(filterFn) : _citiesCache);
+          }
+          setError(null);
+          return;
         }
-        setCities(filteredData);
-        setError(null);
+
+        if (!_citiesPromise) {
+          _citiesPromise = apiService.getCities();
+        }
+        const data = await _citiesPromise;
+        _citiesCache = data;
+        if (mounted) {
+          setAllCities(data);
+          setCities(filterFn ? data.filter(filterFn) : data);
+          setError(null);
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Erreur lors du chargement des villes');
+        if (mounted) {
+          setError(err instanceof Error ? err.message : 'Erreur lors du chargement des villes');
+        }
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
+    fetchOnce();
+    return () => { mounted = false };
+    // We intentionally avoid listing filterFn here because we want to
+    // avoid re-fetching when a new (unstable) filter function is passed.
+    // Filtering is handled in a dedicated effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    fetchCities();
-  }, [filterFn]);
+  // Recompute filtered results when filterFn or allCities changes
+  useEffect(() => {
+    const source = allCities || [];
+    if (filterFn) {
+      setCities(source.filter(filterFn));
+    } else {
+      setCities(source);
+    }
+  }, [allCities, filterFn]);
 
   return { cities, loading, error };
 };
