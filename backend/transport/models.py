@@ -78,18 +78,17 @@ class Trip(models.Model):
         related_name='trips',
         verbose_name="Compagnie"
     )
-    main_departure_point = models.ForeignKey(
-        Stop, 
+    departure_city = models.ForeignKey(
+        City, 
         on_delete=models.CASCADE, 
-        related_name='main_departure_trips',
-        verbose_name='Point de départ principal'
+        related_name='departure_trips',
+        verbose_name='Ville de départ'
     )
-    main_destination_point = models.ForeignKey(
-        Stop, 
+    destination_city = models.ForeignKey(
+        City, 
         on_delete=models.CASCADE, 
-        related_name='main_destination_trips',
-        verbose_name="Point d'arrivée principal"
-
+        related_name='destination_trips',
+        verbose_name="Ville d'arrivée"
     )
     base_price = models.DecimalField(
         max_digits=10, 
@@ -129,12 +128,12 @@ class Trip(models.Model):
         ordering = ['departure_time']
 
     def __str__(self):
-        return f"{self.main_departure_point.city.name} → {self.main_destination_point.city.name} ({self.departure_time})"
+        return f"{self.departure_city.name} → {self.destination_city.name} ({self.departure_time})"
 
     def clean(self):
         from django.core.exceptions import ValidationError
-        if self.main_departure_point == self.main_destination_point:
-            raise ValidationError("Le point de départ principal et le point d'arrivée principal doivent être différents.")
+        if self.departure_city == self.destination_city:
+            raise ValidationError("La ville de départ et la ville d'arrivée doivent être différentes.")
 
 
 class Stop(models.Model):

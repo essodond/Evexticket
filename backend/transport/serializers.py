@@ -171,7 +171,7 @@ class TripSerializer(serializers.ModelSerializer):
     arrival_city_name = serializers.CharField(source='arrival_city.name', read_only=True)
     bookings_count = serializers.SerializerMethodField()
     available_seats = serializers.SerializerMethodField()
-    stops = TripStopSerializer(many=True, read_only=True)
+    stops = TripStopSerializer(many=True, required=False)
 
     class Meta:
         model = Trip
@@ -184,7 +184,7 @@ class TripSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'id', 'company_name', 'departure_city_name', 'arrival_city_name',
-            'price', 'bookings_count', 'available_seats', 'stops'
+            'bookings_count', 'available_seats'
         ]
 
 

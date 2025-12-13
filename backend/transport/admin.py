@@ -1,5 +1,13 @@
 from django.contrib import admin
-from .models import Company, City, Trip, Booking, Payment, Review, Notification
+from django.contrib import messages
+from .models import Company, City, Trip, Booking, Payment, Review, Notification, TripStop
+
+
+class TripStopInline(admin.TabularInline):
+    model = TripStop
+    extra = 1
+    fields = ['city', 'sequence', 'segment_price']
+    ordering = ['sequence']
 
 
 @admin.register(Company)
@@ -23,6 +31,12 @@ class TripAdmin(admin.ModelAdmin):
     list_filter = ['company', 'bus_type', 'is_active', 'departure_city', 'arrival_city']
     search_fields = ['departure_city__name', 'arrival_city__name', 'company__name']
     readonly_fields = ['created_at', 'updated_at']
+    inlines = [TripStopInline]
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if not change:
+            messages.success(request, f"Le trajet '{obj}' a été créé avec succès.")
 
 
 @admin.register(Booking)
