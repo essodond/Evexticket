@@ -1,7 +1,8 @@
 from .user import UserProfile
 from .base import (
-    Company, City, Trip, TripStop, BoardingZone, Booking, Payment, Review, Notification, ScheduledTrip
+    Company, City, Trip, TripStop, BoardingZone, Booking, Payment, Review, Notification
 )
+from .base import ScheduledTrip
 
 __all__ = [
     'UserProfile',

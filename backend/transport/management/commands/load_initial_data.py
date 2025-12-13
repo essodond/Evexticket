@@ -182,6 +182,7 @@ class Command(BaseCommand):
                     self.stdout.write(f'Trajet créé: {trip}')
         
         # Créer quelques réservations de démonstration
+        Booking.objects.all().delete() # Supprimer les réservations existantes
         trips = Trip.objects.all()
         if trips.exists():
             for i in range(10):

@@ -32,7 +32,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
   const [stats, setStats] = useState<any>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
-  const { cities: apiCities } = useCities();
+
+  const n1Cities = ["Lomé", "Tsévié", "Aného", "Atakpamé", "Sokodé", "Kara", "Dapaong", "Mango"];
+  const filterN1Cities = (city: City) => n1Cities.includes(city.name);
+
+  const { cities: apiCities } = useCities(filterN1Cities);
 
   const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -67,7 +71,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
         setTrips(((tps as any[]) || []).map(t => ({ id: String(t.id), companyId: String(t.company), companyName: t.company_name || '', departureCity: t.departure_city_name || String(t.departure_city), arrivalCity: t.arrival_city_name || String(t.arrival_city), departureTime: t.departure_time, arrivalTime: t.arrival_time, price: t.price, duration: t.duration, busType: t.bus_type, capacity: t.capacity, isActive: t.is_active })));
         let usersData: any[] = [];
         try { usersData = await apiService.getUsers(); } catch (e) { usersData = []; }
-        setUsers((usersData || []).map(u => ({ id: String(u.id), firstName: u.first_name || u.firstName || '', lastName: u.last_name || u.lastName || '', email: u.email || '', role: u.is_staff ? 'admin' : (u.is_company_admin ? 'company' : 'user'), isActive: u.is_active ?? true, createdAt: u.created_at || '' })));
+        setUsers((usersData || []).map(u => ({ id: String(u.id), firstName: u.first_name || u.firstName || '', lastName: u.last_name || u.lastName || '', email: u.email || '', phone_number: u.phone_number || '', role: u.is_staff ? 'admin' : (u.is_company_admin ? 'company' : 'user'), isActive: u.is_active ?? true, createdAt: u.created_at || '' })));
       } catch (e: any) { console.error(e); setError(e?.message || 'Erreur'); }
       finally { setLoading(false); }
     };
@@ -132,8 +136,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
   const handleEditUser = (u: User) => { setSelectedUser(u); setShowUserDetails(true); };
   const handleSaveUserDetails = async (payload:any) => {
     try {
-      const resp = await apiService.updateUser(Number(payload.id), { first_name: payload.firstName, last_name: payload.lastName, email: payload.email, is_active: payload.isActive });
-      setUsers(prev => prev.map(p => p.id === String(resp.id) ? ({ ...p, firstName: resp.first_name || p.firstName, lastName: resp.last_name || p.lastName, email: resp.email || p.email, isActive: resp.is_active ?? p.isActive }) : p));
+      const resp = await apiService.updateUser(Number(payload.id), { username: payload.email, first_name: payload.firstName, last_name: payload.lastName, email: payload.email, phone_number: payload.phone_number, is_active: payload.isActive });
+      setUsers(prev => prev.map(u => u.id === String(resp.id) ? ({ ...u, firstName: resp.first_name, lastName: resp.last_name, email: resp.email, phone_number: resp.phone_number, isActive: resp.is_active }) : u));
       setNotificationData({ type: 'success', title: 'Enregistré', message: 'Utilisateur mis à jour.' }); setShowNotification(true); setShowUserDetails(false); setSelectedUser(null);
     } catch (e:any) { setNotificationData({ type: 'error', title: 'Erreur', message: e?.message || 'Erreur' }); setShowNotification(true); }
   };
@@ -360,6 +364,3 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
 };
 
 export default AdminDashboard;
-
-
-// Removed duplicate block

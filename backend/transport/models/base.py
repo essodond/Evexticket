@@ -129,31 +129,29 @@ class Trip(models.Model):
             raise ValidationError("La ville de départ et d'arrivée doivent être différentes.")
 
 
-class TripStop(models.Model):
-    """Une escale (stop) pour un Trip, ordonnée par `sequence`."""
-    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='stops')
-    city = models.ForeignKey(City, on_delete=models.CASCADE, verbose_name='Ville')
-    sequence = models.PositiveIntegerField(verbose_name='Ordre')
-    segment_price = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        null=True, 
-        blank=True, 
-        verbose_name="Prix du segment vers l'arrêt suivant"
-    )
+    
+
+class ScheduledTrip(models.Model):
+    """Instance planifiée d'un Trip pour une date donnée."""
+    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='scheduled_trips')
+    date = models.DateField(verbose_name="Date")
+    is_active = models.BooleanField(default=True, verbose_name="Actif")
+    available_seats = models.PositiveIntegerField(default=0, verbose_name="Places disponibles")
 
     class Meta:
-        unique_together = ('trip', 'sequence')
-        ordering = ['trip', 'sequence']
+        unique_together = ('trip', 'date')
+        ordering = ['-date']
+        verbose_name = "Voyage programmé"
+        verbose_name_plural = "Voyages programmés"
 
     def __str__(self):
-        return f"{self.trip} - {self.city.name} (#{self.sequence})"
+        return f"{self.trip} @ {self.date}"
 
 
 class BoardingZone(models.Model):
     """Zone d'embarquement spécifique à une ville et un arrêt de trajet."""
     city = models.ForeignKey(City, on_delete=models.CASCADE, related_name='boarding_zones', verbose_name='Ville')
-    trip_stop = models.ForeignKey(TripStop, on_delete=models.CASCADE, related_name='boarding_zones', verbose_name='Arrêt de trajet')
+    trip_stop = models.ForeignKey('TripStop', on_delete=models.CASCADE, related_name='boarding_zones', verbose_name='Arrêt de trajet')
     name = models.CharField(max_length=100, verbose_name="Nom de la zone")
     description = models.TextField(blank=True, verbose_name="Description")
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name="Latitude")
@@ -370,53 +368,25 @@ class Notification(models.Model):
         return f"{self.user.username} - {self.title}"
 
 
-class ScheduledTrip(models.Model):
-    """Représente un voyage daté (instance d'un Trip pour une date donnée).
+class TripStop(models.Model):
+    """Un arrêt (stop) pour un Trip, ordonné par `sequence`.
 
-    Permet d'activer / désactiver un voyage pour une date spécifique sans
-    toucher le trajet permanent (Trip).
+    On stocke un prix cumulatif `price_from_start` qui représente le tarif
+    depuis le premier arrêt du trajet jusqu'à cette escale. Le prix entre
+    deux escales est la différence des `price_from_start`.
     """
-    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='scheduled_trips', verbose_name='Trajet')
-    date = models.DateField(verbose_name='Date du voyage')
-    is_active = models.BooleanField(default=True, verbose_name='Voyage actif')
-    available_seats = models.PositiveIntegerField(null=True, blank=True, verbose_name='Places disponibles')
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Date de création')
+    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='stops')
+    city = models.ForeignKey(City, on_delete=models.CASCADE, verbose_name='Ville')
+    sequence = models.PositiveIntegerField(verbose_name='Ordre')
+    # Prix du segment partant de cette escale vers l'escale suivante.
+    # Les compagnies doivent renseigner ces prix manuellement.
+    segment_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name="Prix du segment vers l'arrêt suivant")
 
     class Meta:
-        verbose_name = 'Voyage planifié'
-        verbose_name_plural = 'Voyages planifiés'
-        unique_together = ('trip', 'date')
-        ordering = ['date', 'trip__departure_time']
+        unique_together = ('trip', 'sequence')
+        ordering = ['trip', 'sequence']
+        verbose_name = "Arrêt"
+        verbose_name_plural = "Arrêts"
 
     def __str__(self):
-        return f"{self.trip} @ {self.date}"
-
-    def save(self, *args, **kwargs):
-        # Si available_seats n'est pas précisé, initialiser à la capacité du bus
-        if self.available_seats is None:
-            self.available_seats = self.trip.capacity
-        super().save(*args, **kwargs)
-
-
-# Lorsque un Trip est créé via l'admin ou API, créer automatiquement les
-# ScheduledTrip pour les 14 prochains jours (fenêtre glissante).
-@receiver(post_save, sender=Trip)
-def create_scheduled_trips_on_trip_creation(sender, instance, created, **kwargs):
-    if not created:
-        return
-    try:
-        start_offset = 1
-        days = 14
-        today = timezone.localdate()
-        start_date = today + timedelta(days=start_offset)
-        for n in range(days):
-            d = start_date + timedelta(days=n)
-            # importer ici ScheduledTrip qui est défini dans ce même module
-            ScheduledTrip.objects.get_or_create(
-                trip=instance,
-                date=d,
-                defaults={'is_active': True, 'available_seats': instance.capacity}
-            )
-    except Exception:
-        # Ne pas lever d'exception lors de la sauvegarde du Trip — log possible si besoin
-        pass
+        return f"{self.trip} - {self.city.name} (#{self.sequence})"

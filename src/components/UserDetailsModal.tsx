@@ -35,7 +35,7 @@ const UserDetailsModal: React.FC<Props> = ({ isOpen, onClose, user, onSave }) =>
           </div>
           <div>
             <label className="text-sm font-medium text-gray-700">Téléphone</label>
-            <input className="mt-1 block w-full border rounded p-2" value={form.phone || ''} onChange={e => setForm({...form, phone: e.target.value})} />
+            <input className="mt-1 block w-full border rounded p-2" value={form.phone_number || ''} onChange={e => setForm({...form, phone_number: e.target.value})} />
           </div>
           <div className="flex items-center space-x-3">
             <label className="text-sm font-medium text-gray-700">Actif</label>

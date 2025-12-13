@@ -60,6 +60,7 @@ export interface User {
   firstName?: string;
   lastName?: string;
   email?: string;
+  phone_number?: string;
   role?: 'user' | 'company' | 'admin';
   isActive?: boolean;
   createdAt?: string;

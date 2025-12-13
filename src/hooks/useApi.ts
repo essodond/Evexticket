@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { apiService, City, Company, Trip, Booking, DashboardStats, CompanyStats } from '../services/api';
 
 // Hook pour les villes
-export const useCities = () => {
+export const useCities = (filterFn?: (city: City) => boolean) => {
   const [cities, setCities] = useState<City[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -12,7 +12,11 @@ export const useCities = () => {
       try {
         setLoading(true);
         const data = await apiService.getCities();
-        setCities(data);
+        let filteredData = data;
+        if (filterFn) {
+          filteredData = data.filter(filterFn);
+        }
+        setCities(filteredData);
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Erreur lors du chargement des villes');
@@ -22,7 +26,7 @@ export const useCities = () => {
     };
 
     fetchCities();
-  }, []);
+  }, [filterFn]);
 
   return { cities, loading, error };
 };
@@ -328,3 +332,6 @@ export const useCompanyStats = (companyId: number) => {
 
   return { stats, loading, error };
 };
+
+
+

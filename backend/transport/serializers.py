@@ -7,14 +7,7 @@ from rest_framework.authtoken.models import Token
 
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models.base import Company, City, Trip, Booking, Payment, Review, Notification, ScheduledTrip, TripStop, BoardingZone
-
-
-class TripStopSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TripStop
-        fields = ['id', 'city', 'sequence', 'segment_price']
-        read_only_fields = ['id']
+from .models import Company, City, Trip, TripStop, Booking, Payment, Review, Notification, ScheduledTrip, BoardingZone
 
 # Serializer pour l'inscription d'utilisateur
 class RegisterSerializer(serializers.ModelSerializer):
@@ -168,6 +161,9 @@ class BoardingZoneSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
+# Supprimé: StopSerializer (le modèle canonique est TripStop)
+
+
 class TripSerializer(serializers.ModelSerializer):
     """Serializer pour les trajets (aligné avec models.base.Trip)"""
     company_name = serializers.CharField(source='company.name', read_only=True)
@@ -175,6 +171,7 @@ class TripSerializer(serializers.ModelSerializer):
     arrival_city_name = serializers.CharField(source='arrival_city.name', read_only=True)
     bookings_count = serializers.SerializerMethodField()
     available_seats = serializers.SerializerMethodField()
+    stops = TripStopSerializer(many=True, read_only=True)
 
     class Meta:
         model = Trip
@@ -183,11 +180,11 @@ class TripSerializer(serializers.ModelSerializer):
             'company_name', 'departure_city_name', 'arrival_city_name',
             'price', 'departure_time', 'arrival_time',
             'duration', 'bus_type', 'capacity',
-            'bookings_count', 'available_seats'
+            'bookings_count', 'available_seats', 'stops'
         ]
         read_only_fields = [
             'id', 'company_name', 'departure_city_name', 'arrival_city_name',
-            'price', 'bookings_count', 'available_seats'
+            'price', 'bookings_count', 'available_seats', 'stops'
         ]
 
 
@@ -199,11 +196,12 @@ class TripSerializer(serializers.ModelSerializer):
         return obj.capacity - confirmed_bookings
 
     def to_representation(self, instance):
-        data = super().to_representation(instance)
-        # Inclure les escales ordonnées pour le frontend
-        stops = TripStop.objects.filter(trip=instance).order_by('sequence')
-        data['stops'] = TripStopSerializer(stops, many=True).data
-        return data
+        representation = super().to_representation(instance)
+        # Récupérer les arrêts associés à ce voyage et les sérialiser
+        stops = instance.stops.all().order_by('sequence')
+        representation['stops'] = TripStopSerializer(stops, many=True).data
+        return representation
+
 
     def create(self, validated_data):
         stops_data = validated_data.pop('stops', None)

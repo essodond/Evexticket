@@ -88,7 +88,8 @@ class Trip(models.Model):
         Stop, 
         on_delete=models.CASCADE, 
         related_name='main_destination_trips',
-        verbose_name='Point d'arrivée principal'
+        verbose_name="Point d'arrivée principal"
+
     )
     base_price = models.DecimalField(
         max_digits=10, 
@@ -121,7 +122,7 @@ class Trip(models.Model):
     is_active = models.BooleanField(default=True, verbose_name="Trajet actif")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Date de mise à jour")
-
+    
     class Meta:
         verbose_name = "Trajet"
         verbose_name_plural = "Trajets"
@@ -205,7 +206,7 @@ class Booking(models.Model):
         verbose_name="Prix total (FCFA)"
     )
     booking_date = models.DateTimeField(auto_now_add=True, verbose_name="Date de réservation")
-    travel_date = models.DateField(verbose_name="Date de voyage")
+    travel_date = models.DateField(verbose_name="Date de voyage", default=None)
     notes = models.TextField(blank=True, null=True, verbose_name="Notes")
     
     # Lien avec l'utilisateur si connecté

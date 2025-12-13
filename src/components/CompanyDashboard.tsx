@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Edit, Trash2, Users, Download, Calendar, MapPin, DollarSign, TrendingUp, Bus, BarChart3, FileText, Eye, XCircle } from 'lucide-react';
-import apiService, { ScheduledTrip, Booking, CompanyStats } from '../services/api';
+import apiService, { ScheduledTrip, Booking, CompanyStats, City } from '../services/api';
 import { useCities } from '../hooks/useApi';
 import AddTripModal from './AddTripModal';
 import ConfirmationModal from './ConfirmationModal';
@@ -35,9 +35,13 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
   const [showBookingDetails, setShowBookingDetails] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
 
-  const { cities: apiCities } = useCities();
+  const n1Cities = ["Lomé", "Tsévié", "Aného", "Atakpamé", "Sokodé", "Kara", "Dapaong", "Mango"];
+  const filterN1Cities = (city: City) => n1Cities.includes(city.name);
+
+  const { cities: apiCities } = useCities(filterN1Cities);
 
   const [stats, setStats] = useState<CompanyStats | null>(null);
+  const [companyName, setCompanyName] = useState<string>('');
   const [trips, setTrips] = useState<ScheduledTrip[]>([]);
   const [bookings, setBookings] = useState<LocalBooking[]>([]);
 
@@ -74,9 +78,20 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
   };
 
   useEffect(() => {
-    fetchCompanyData();
+    if (companyId) {
+      fetchCompanyData();
+      fetchCompanyName(companyId);
+    }
   }, [companyId]);
 
+  const fetchCompanyName = async (id: number) => {
+    try {
+      const company = await apiService.getCompany(id);
+      setCompanyName(company.name);
+    } catch (error) {
+      console.error('Error fetching company name:', error);
+    }
+  };
   const handleSaveTrip = (trip: ScheduledTrip) => {
     if (editingTrip) {
       setTrips((prev) => prev.map((t) => (t.id === trip.id ? trip : t)));
@@ -214,8 +229,8 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
         {logoUrl && (
           <img src={logoUrl} alt={siteTitle || "Logo"} className="h-10 w-10 mr-3" />
         )}
-        <h1 className="text-3xl font-bold text-gray-800">
-          Tableau de bord de la compagnie {siteTitle ? `pour ${siteTitle}` : ''}
+        <h1 className="text-3xl font-bold text-gray-900">
+          Tableau de bord de la compagnie <span className="text-blue-600">{companyName}</span>
         </h1>
       </div>
 
@@ -459,10 +474,12 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
       {showAddTripModal && (
         <AddTripModal
           isOpen={showAddTripModal}
-          onClose={() => setShowAddTripModal(false)}
+          onClose={() => {
+            setShowAddTripModal(false);
+            setEditingTrip(null);
+          }}
           onSave={handleSaveTrip}
           editingTrip={editingTrip}
-          companyId={companyId}
           cities={apiCities}
         />
       )}
