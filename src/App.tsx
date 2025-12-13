@@ -47,9 +47,30 @@ function App() {
     };
     setSearchData(normalized);
     try {
+      // Ensure we send city NAMES to the backend search endpoint. Some callers may provide numeric ids.
+      let depName = normalized.departure_city;
+      let arrName = normalized.arrival_city;
+      // if numeric ids provided, resolve to names via API cache
+      const isNumeric = (v: any) => (typeof v === 'number') || (typeof v === 'string' && /^\d+$/.test(v));
+      if (isNumeric(depName) || isNumeric(arrName)) {
+        try {
+          const cities = await apiService.getCities();
+          if (isNumeric(depName)) {
+            const found = cities.find((c:any) => String(c.id) === String(depName));
+            if (found) depName = found.name;
+          }
+          if (isNumeric(arrName)) {
+            const found2 = cities.find((c:any) => String(c.id) === String(arrName));
+            if (found2) arrName = found2.name;
+          }
+        } catch (e) {
+          // ignore and send original values
+        }
+      }
+
       const trips = await apiService.searchScheduledTrips({
-        departure_city: normalized.departure_city,
-        arrival_city: normalized.arrival_city,
+        departure_city: depName,
+        arrival_city: arrName,
         travel_date: normalized.travel_date,
         passengers: normalized.passengers,
       });
