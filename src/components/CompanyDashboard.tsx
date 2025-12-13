@@ -38,7 +38,9 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
   const n1Cities = useMemo(() => ["Lomé", "Tsévié", "Aného", "Atakpamé", "Sokodé", "Kara", "Dapaong", "Mango"], []);
   const filterN1Cities = useCallback((city: City) => n1Cities.includes(city.name), [n1Cities]);
 
-  const { cities: apiCities } = useCities(filterN1Cities);
+  // fetch full city list and derive filtered subset locally
+  const { cities: apiCities } = useCities();
+  const n1ApiCities = useMemo(() => (apiCities || []).filter(filterN1Cities), [apiCities, filterN1Cities]);
 
   const [stats, setStats] = useState<CompanyStats | null>(null);
   const [companyName, setCompanyName] = useState<string>('');

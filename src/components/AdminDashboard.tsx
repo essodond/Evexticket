@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import apiService from '../services/api';
+import apiService, { City } from '../services/api';
 import { Company as TCompany, Trip as TTrip, User as TUser } from '../types';
 import { useCities } from '../hooks/useApi';
 import { Edit, Trash2, Users, Download, Bus, BarChart3, FileText, Eye, Building, Lock } from 'lucide-react';
@@ -36,7 +36,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
   const n1Cities = useMemo(() => ["Lomé", "Tsévié", "Aného", "Atakpamé", "Sokodé", "Kara", "Dapaong", "Mango"], []);
   const filterN1Cities = useCallback((city: City) => n1Cities.includes(city.name), [n1Cities]);
 
-  const { cities: apiCities } = useCities(filterN1Cities);
+  // Request full city list and derive filtered subset locally — ensures modals receive complete list
+  const { cities: apiCities } = useCities();
+  const n1ApiCities = useMemo(() => (apiCities || []).filter(filterN1Cities), [apiCities, filterN1Cities]);
 
   const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
