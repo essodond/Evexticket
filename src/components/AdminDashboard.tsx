@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import apiService from '../services/api';
 import { Company as TCompany, Trip as TTrip, User as TUser } from '../types';
 import { useCities } from '../hooks/useApi';
@@ -33,8 +33,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
 
-  const n1Cities = ["Lomé", "Tsévié", "Aného", "Atakpamé", "Sokodé", "Kara", "Dapaong", "Mango"];
-  const filterN1Cities = (city: City) => n1Cities.includes(city.name);
+  const n1Cities = useMemo(() => ["Lomé", "Tsévié", "Aného", "Atakpamé", "Sokodé", "Kara", "Dapaong", "Mango"], []);
+  const filterN1Cities = useCallback((city: City) => n1Cities.includes(city.name), [n1Cities]);
 
   const { cities: apiCities } = useCities(filterN1Cities);
 
