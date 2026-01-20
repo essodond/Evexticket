@@ -124,6 +124,24 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# Configuration de la journalisation
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        '': {  # Logger par défaut
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+    },
+}
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
@@ -172,9 +190,9 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8084",
     "http://192.168.1.64:8084",
     "https://4429be1bde8e.ngrok-free.app",
-    "http://10.0.2.2:8000",
-    "http://192.168.137.221:8000",
     "http://192.168.137.234:8000",
+    "http://192.168.137.96:8000",
+    "http://192.168.1.66:8000",
     "http://192.168.1.65:8000",
     
 ]

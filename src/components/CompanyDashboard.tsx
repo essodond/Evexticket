@@ -380,7 +380,7 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
               <tbody className="bg-white divide-y divide-gray-200">
                 {trips.map((trip) => (
                   <tr key={trip.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{trip.trip_info?.departure_city_name || 'N/A'} → {trip.trip_info?.arrival_city_name || 'N/A'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{trip.departure_city_display || 'N/A'} → {trip.arrival_city_display || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(trip.date).toLocaleDateString()}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{trip.trip_info?.departure_time || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{(trip.trip_info?.price ? `${trip.trip_info.price} FCFA` : 'N/A')}</td>
@@ -424,7 +424,7 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
                 {bookings.map((booking) => (
                   <tr key={booking.id}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{booking.passenger_name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{booking.trip_details?.departure_city_name} → {booking.trip_details?.arrival_city_name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{booking.trip_details?.departure_city_display} → {booking.trip_details?.arrival_city_display}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{booking.seat_number}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{booking.status}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(booking.booking_date).toLocaleDateString()}</td>
@@ -521,7 +521,7 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
                   <strong>Téléphone:</strong> {selectedBooking.passenger_phone}
                 </p>
                 <p className="text-sm text-gray-500 mb-2">
-                  <strong>Trajet:</strong> {selectedBooking.trip_details?.departure_city_name} → {selectedBooking.trip_details?.arrival_city_name}
+                  <strong>Trajet:</strong> {selectedBooking.trip_details?.departure_city_display} → {selectedBooking.trip_details?.arrival_city_display}
                 </p>
                 <p className="text-sm text-gray-500 mb-2">
                   <strong>Siège:</strong> {selectedBooking.seat_number}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { apiService, City, Company, Trip, Booking, DashboardStats, CompanyStats } from '../services/api';
+import { apiService, City, Company, Trip, Booking, CreateBookingPayload, DashboardStats, CompanyStats, ScheduledTrip } from '../services/api';
 
 // Hook pour les villes
 // Shared module-level cache to prevent repeated network calls across multiple hook instances
@@ -244,7 +244,7 @@ export const useBookings = () => {
     fetchBookings();
   }, []);
 
-  const createBooking = async (bookingData: Omit<Booking, 'id' | 'booking_date' | 'trip_details' | 'passenger_full_name'>) => {
+  const createBooking = async (bookingData: CreateBookingPayload) => {
     try {
       const newBooking = await apiService.createBooking(bookingData);
       setBookings(prev => [...prev, newBooking]);

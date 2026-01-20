@@ -284,7 +284,7 @@ class TripSerializer(serializers.ModelSerializer):
                     )
                 except Exception as e:
                     trip.delete()
-                    raise serializers.ValidationError({f'stops[{idx}]': f"Erreur lors de la création de l\'arrêt: {e}"})
+                    raise serializers.ValidationError({f'stops[{idx}]': f"Erreur lors de la création de l'arrêt: {e}"})
         return trip
 
     def update(self, instance, validated_data):
@@ -310,7 +310,7 @@ class TripSerializer(serializers.ModelSerializer):
                         segment_price=s.get('segment_price')
                     )
                 except Exception as e:
-                    raise serializers.ValidationError({f'stops[{idx}]': f"Erreur lors de la création de l\'arrêt: {e}"})
+                    raise serializers.ValidationError({f'stops[{idx}]': f"Erreur lors de la création de l'arrêt: {e}"})
         return trip
 
     def validate(self, data):
@@ -352,7 +352,7 @@ class BookingSerializer(serializers.ModelSerializer):
         return f"{obj.passenger_name}"
 
     def validate_seat_number(self, value):
-        # Vérifier que le siège n'est pas déjà pris pour ce trajet et cette date
+        # Vérifier que le siège n'est pas déjà pris pour ce voyage programmé
         # If booking includes origin/destination stops, we must check overlap by sequence indices
         origin = None
         destination = None
@@ -370,18 +370,16 @@ class BookingSerializer(serializers.ModelSerializer):
         if self.instance:
             # Mode édition
             existing_booking = Booking.objects.filter(
-                trip=self.instance.trip,
-                travel_date=self.instance.travel_date,
+                scheduled_trip=self.instance.scheduled_trip,
                 seat_number=value,
                 status__in=['confirmed', 'pending']
             ).exclude(id=self.instance.id)
         else:
             # Mode création
-            trip = self.initial_data.get('trip')
-            travel_date = self.initial_data.get('travel_date')
-            if trip and travel_date:
+            scheduled_trip_id = self.initial_data.get('scheduled_trip')
+            if scheduled_trip_id:
                 # If origin/destination provided, determine overlapping bookings by stop sequence
-                qs = Booking.objects.filter(trip=trip, travel_date=travel_date, seat_number=value, status__in=['confirmed', 'pending'])
+                qs = Booking.objects.filter(scheduled_trip=scheduled_trip_id, seat_number=value, status__in=['confirmed', 'pending'])
                 if origin and destination:
                     # bookings that overlap segment [origin.sequence, destination.sequence)
                     overlapping = []
@@ -399,7 +397,7 @@ class BookingSerializer(serializers.ModelSerializer):
                 existing_booking = Booking.objects.none()
 
         if existing_booking.exists():
-            raise serializers.ValidationError("Ce siège est déjà réservé pour ce trajet.")
+            raise serializers.ValidationError("Ce siège est déjà réservé pour ce voyage.")
 
     def create(self, validated_data):
         # Commission rate for Evex (e.g., 10%)
@@ -484,183 +482,203 @@ class ScheduledTripSerializer(serializers.ModelSerializer):
     class Meta:
         model = ScheduledTrip
         fields = [
-            'id', 'trip', 'trip_info', 'date', 'is_active', 'available_seats',
-            'departure_city_display', 'arrival_city_display', 'stops'
+            'id', 'trip_info', 'date', 'departure_city_display', 'arrival_city_display', 'stops', 'available_seats'
         ]
 
     def get_departure_city_display(self, obj):
-        if 'origin_city' in self.context:
-            return self.context['origin_city']
+        request = self.context.get('request')
+        if request:
+            departure_city_id = request.query_params.get('departure_city')
+            if departure_city_id:
+                for stop in obj.trip.stops.all().order_by('sequence'):
+                    if str(stop.city.id) == departure_city_id:
+                        return stop.city.name
         return obj.trip.departure_city.name
 
     def get_arrival_city_display(self, obj):
-        if 'destination_city' in self.context:
-            return self.context['destination_city']
+        request = self.context.get('request')
+        if request:
+            arrival_city_id = request.query_params.get('arrival_city')
+            if arrival_city_id:
+                for stop in obj.trip.stops.all().order_by('sequence'):
+                    if str(stop.city.id) == arrival_city_id:
+                        return stop.city.name
         return obj.trip.arrival_city.name
 
     def get_stops(self, obj):
-        stops = obj.trip.stops.all().order_by('sequence')
-        return TripStopSerializer(stops, many=True).data
+        # Retourne les arrêts du trajet triés par séquence
+        return TripStopSerializer(obj.trip.stops.all().order_by('sequence'), many=True).data
 
     def get_available_seats(self, obj):
-        try:
-            origin_city = self.context.get('origin_city')
-            destination_city = self.context.get('destination_city')
-            from unidecode import unidecode
-            if origin_city and destination_city:
-                dep_norm = unidecode(origin_city).lower()
-                arr_norm = unidecode(destination_city).lower()
-                stops = list(TripStop.objects.filter(trip=obj.trip).select_related('city').order_by('sequence'))
-                origin_candidates = [s for s in stops if dep_norm in unidecode(s.city.name or '').lower()]
-                dest_candidates = [s for s in stops if arr_norm in unidecode(s.city.name or '').lower()]
-                for o in origin_candidates:
-                    for d in dest_candidates:
-                        if o.sequence < d.sequence:
-                            qs = Booking.objects.filter(
-                                trip=obj.trip,
-                                travel_date=obj.date,
-                                status__in=['confirmed', 'pending']
-                            ).select_related('origin_stop', 'destination_stop')
-                            occupied = set()
-                            for b in qs:
-                                try:
-                                    if b.origin_stop and b.destination_stop:
-                                        if not (b.destination_stop.sequence <= o.sequence or b.origin_stop.sequence >= d.sequence):
-                                            occupied.add(b.seat_number)
-                                    else:
-                                        occupied.add(b.seat_number)
-                                except Exception:
-                                    occupied.add(b.seat_number)
-                            return max(0, obj.trip.capacity - len(occupied))
-            confirmed = obj.trip.bookings.filter(
-                travel_date=obj.date,
+        request = self.context.get('request')
+        if request:
+            departure_city_id = request.query_params.get('departure_city')
+            arrival_city_id = request.query_params.get('arrival_city')
+
+            if departure_city_id and arrival_city_id:
+                # Convertir les IDs en entiers
+                try:
+                    departure_city_id = int(departure_city_id)
+                    arrival_city_id = int(arrival_city_id)
+                except ValueError:
+                    return obj.trip.capacity # Ou gérer l'erreur différemment
+
+                # Trouver les objets TripStop pour les villes de départ et d'arrivée du segment
+                departure_stop = obj.trip.stops.filter(city__id=departure_city_id).first()
+                arrival_stop = obj.trip.stops.filter(city__id=arrival_city_id).first()
+
+                if departure_stop and arrival_stop:
+                    # Récupérer toutes les réservations confirmées ou en attente pour ce voyage planifié
+                    all_bookings = Booking.objects.filter(
+                        scheduled_trip=obj,
+                        status__in=['confirmed', 'pending']
+                    ).select_related('origin_stop', 'destination_stop')
+
+                    overlapping_bookings_count = 0
+                    for booking in all_bookings:
+                        # Si la réservation n'a pas d'arrêts spécifiques, elle couvre tout le trajet
+                        if not booking.origin_stop or not booking.destination_stop:
+                            overlapping_bookings_count += 1
+                            continue
+
+                        # Vérifier si la réservation chevauche le segment demandé
+                        # Un chevauchement se produit si :
+                        # (départ_réservation < arrivée_segment ET arrivée_réservation > départ_segment)
+                        if (booking.origin_stop.sequence < arrival_stop.sequence and
+                                booking.destination_stop.sequence > departure_stop.sequence):
+                            overlapping_bookings_count += 1
+
+                    return obj.trip.capacity - overlapping_bookings_count
+
+            # Logique par défaut si pas de segment ou d'erreur
+            confirmed_bookings = Booking.objects.filter(
+                scheduled_trip=obj,
                 status__in=['confirmed', 'pending']
-            ).values_list('seat_number', flat=True)
-            return max(0, obj.trip.capacity - len(set(confirmed)))
-        except Exception:
-            return obj.trip.capacity
-
-
-class TripSearchSerializer(serializers.Serializer):
-    """Serializer pour la recherche de trajets"""
-    departure_city = serializers.CharField(required=True)
-    arrival_city = serializers.CharField(required=True)
-    travel_date = serializers.DateField(required=True)
-    passengers = serializers.IntegerField(min_value=1, max_value=10, default=1)
+            ).count()
+            return obj.trip.capacity - confirmed_bookings
+        return obj.trip.capacity
 
 
 class BookingCreateSerializer(serializers.ModelSerializer):
-    """Serializer pour la création de réservations"""
+    """
+    Serializer pour la création de réservations.
+    Permet de spécifier le ScheduledTrip par son ID.
+    """
+    scheduled_trip = serializers.PrimaryKeyRelatedField(queryset=ScheduledTrip.objects.all(), write_only=True)
+    trip = serializers.SerializerMethodField(read_only=True) # Pour afficher le trip après création
+
     class Meta:
         model = Booking
         fields = [
-            'trip', 'passenger_name', 'passenger_email', 'passenger_phone',
-            'seat_number', 'origin_stop', 'destination_stop', 'payment_method'
+            'id', 'scheduled_trip', 'trip', 'passenger_name', 'passenger_email',
+            'passenger_phone', 'seat_number', 'origin_stop', 'destination_stop',
+            'total_price', 'user'
         ]
+        read_only_fields = ['id', 'trip','total_price']
+
+    def get_trip(self, obj):
+        return obj.trip.id # Retourne l'ID du trip associé
+
+    def validate(self, data):
+        scheduled_trip = data.get('scheduled_trip')
+        seat_number = data.get('seat_number')
+        origin_stop = data.get('origin_stop')
+        destination_stop = data.get('destination_stop')
+
+        if not scheduled_trip:
+            raise serializers.ValidationError("Le voyage planifié (scheduled_trip) est requis.")
+        
+        # Vérifier la disponibilité du siège pour ce voyage programmé spécifique
+        if seat_number:
+            # Vérifier si le siège est déjà pris pour ce voyage programmé
+            if Booking.objects.filter(
+                scheduled_trip=scheduled_trip,
+                seat_number=seat_number,
+                status__in=['confirmed', 'pending']
+            ).exists():
+                raise serializers.ValidationError(f"Le siège {seat_number} est déjà réservé pour ce voyage.")
+        
+        # Vérifier si le voyage programmé a des places disponibles
+        if scheduled_trip.available_seats <= 0:
+            raise serializers.ValidationError("Aucune place disponible pour ce voyage.")
+
+        # Calculer le prix total en fonction du segment si spécifié
+        if origin_stop and destination_stop:
+            try:
+                origin_stop_obj = TripStop.objects.get(id=origin_stop.id, trip=scheduled_trip.trip)
+                destination_stop_obj = TripStop.objects.get(id=destination_stop.id, trip=scheduled_trip.trip)
+            except TripStop.DoesNotExist:
+                raise serializers.ValidationError("Les arrêts d'origine ou de destination spécifiés ne sont pas valides pour ce voyage.")
+
+            # Récupérer tous les arrêts entre l'origine et la destination (inclus)
+            segment_stops = scheduled_trip.trip.stops.filter(
+                sequence__gte=origin_stop_obj.sequence,
+                sequence__lte=destination_stop_obj.sequence
+            ).order_by('sequence')
+
+            if not segment_stops.exists() or segment_stops.first() != origin_stop_obj or segment_stops.last() != destination_stop_obj:
+                raise serializers.ValidationError("Le segment de voyage spécifié est invalide.")
+
+            total_price = Decimal(0)
+            # Additionner les prix des segments intermédiaires
+            for i in range(len(segment_stops) - 1):
+                current_stop = segment_stops[i]
+                next_stop = segment_stops[i+1]
+                # Le prix du segment est stocké sur l'arrêt de départ de ce segment
+                total_price += current_stop.segment_price
+            data['total_price'] = total_price
+        else:
+            # Si pas de segment, utiliser le prix total du voyage
+            data['total_price'] = scheduled_trip.trip.price
+
+        data['trip'] = scheduled_trip.trip # Associer le trip réel
+        return data
 
     def create(self, validated_data):
-        trip = validated_data['trip']
-        origin = validated_data.get('origin_stop')
-        destination = validated_data.get('destination_stop')
-
-        total = None
-        try:
-            if origin and destination:
-                # Ensure origin and destination belong to the trip
-                if origin.trip_id != trip.id or destination.trip_id != trip.id:
-                    raise serializers.ValidationError('Origin/Destination stops must belong to the selected trip.')
-                if origin.sequence >= destination.sequence:
-                    raise serializers.ValidationError('Origin must be before destination.')
-
-                # Sum segment_price for sequences [origin.sequence, destination.sequence)
-                segments = TripStop.objects.filter(trip=trip, sequence__gte=origin.sequence, sequence__lt=destination.sequence)
-                prices = [s.segment_price for s in segments]
-                if any(p is None for p in prices):
-                    # Fallback to trip.price if some segments lack pricing
-                    total = trip.price
-                else:
-                    total = sum(prices)
-            else:
-                total = trip.price
-        except Exception:
-            total = trip.price
-
-        validated_data['total_price'] = total
-        validated_data['status'] = 'pending'
-        return super().create(validated_data)
-
-
-class DashboardStatsSerializer(serializers.Serializer):
-    """Serializer pour les statistiques du dashboard"""
-    total_users = serializers.IntegerField()
-    total_companies = serializers.IntegerField()
-    total_trips = serializers.IntegerField()
-    total_bookings = serializers.IntegerField()
-    total_revenue = serializers.DecimalField(max_digits=12, decimal_places=2)
-    monthly_growth = serializers.FloatField()
+        scheduled_trip = validated_data.pop('scheduled_trip')
+        validated_data['trip'] = scheduled_trip.trip
+        validated_data['scheduled_trip'] = scheduled_trip
+        
+        # Créer la réservation
+        booking = super().create(validated_data)
+        
+        # Mettre à jour le nombre de places disponibles
+        scheduled_trip.available_seats = max(0, scheduled_trip.available_seats - 1)
+        scheduled_trip.save()
+        
+        return booking
 
 
 class CompanyStatsSerializer(serializers.Serializer):
-    """Serializer pour les statistiques de la compagnie"""
     total_trips = serializers.IntegerField()
     total_bookings = serializers.IntegerField()
-    total_revenue = serializers.DecimalField(max_digits=12, decimal_places=2)
-    active_users = serializers.IntegerField()
+    total_revenue = serializers.DecimalField(max_digits=10, decimal_places=2)
+    average_occupancy = serializers.FloatField()
 
+class DashboardStatsSerializer(serializers.Serializer):
+    total_trips = serializers.IntegerField()
+    total_bookings = serializers.IntegerField()
+    total_revenue = serializers.DecimalField(max_digits=10, decimal_places=2)
+    average_occupancy = serializers.FloatField()
+    upcoming_trips = ScheduledTripSerializer(many=True)
+    recent_bookings = BookingSerializer(many=True)
 
-class ScheduledTripSerializer(serializers.ModelSerializer):
-    trip_info = TripSerializer(source='trip', read_only=True)
-    available_seats = serializers.SerializerMethodField()
+class TripSearchSerializer(serializers.Serializer):
+    departure_city = serializers.CharField(required=True)
+    arrival_city = serializers.CharField(required=True)
+    travel_date = serializers.DateField(required=True)
+    passengers = serializers.IntegerField(required=False, min_value=1, default=1)
+    company = serializers.IntegerField(required=False)
+    min_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    max_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    departure_time_after = serializers.TimeField(required=False)
+    departure_time_before = serializers.TimeField(required=False)
 
-    class Meta:
-        model = ScheduledTrip
-        fields = ('id', 'trip', 'date', 'available_seats', 'trip_info')
-        read_only_fields = ('id', 'available_seats', 'trip_info')
+    def validate(self, data):
+        departure_city = data.get('departure_city')
+        arrival_city = data.get('arrival_city')
 
+        if departure_city and arrival_city and departure_city == arrival_city:
+            raise serializers.ValidationError("La ville de départ et d'arrivée ne peuvent pas être identiques.")
 
-
-    def get_bookings_count(self, obj):
-        return obj.bookings.filter(status__in=['confirmed', 'pending']).count()
-
-    def get_available_seats(self, obj):
-        """Calcule les places disponibles.
-        - Si le contexte fournit origin_city et destination_city, calculer par segment (escales) en tenant compte des chevauchements.
-        - Sinon, calculer sur l'ensemble du trajet (réservations pending+confirmed).
-        """
-        try:
-            origin_city = self.context.get('origin_city')
-            destination_city = self.context.get('destination_city')
-            from unidecode import unidecode
-            if origin_city and destination_city:
-                dep_norm = unidecode(origin_city).lower()
-                arr_norm = unidecode(destination_city).lower()
-                stops = list(TripStop.objects.filter(trip=obj.trip).select_related('city').order_by('sequence'))
-                origin_candidates = [s for s in stops if dep_norm in unidecode(s.city.name or '').lower()]
-                dest_candidates = [s for s in stops if arr_norm in unidecode(s.city.name or '').lower()]
-                for o in origin_candidates:
-                    for d in dest_candidates:
-                        if o.sequence < d.sequence:
-                            qs = Booking.objects.filter(
-                                trip=obj.trip,
-                                travel_date=obj.date,
-                                status__in=['confirmed', 'pending']
-                            ).select_related('origin_stop', 'destination_stop')
-                            occupied = set()
-                            for b in qs:
-                                try:
-                                    if b.origin_stop and b.destination_stop:
-                                        if not (b.destination_stop.sequence <= o.sequence or b.origin_stop.sequence >= d.sequence):
-                                            occupied.add(b.seat_number)
-                                    else:
-                                        occupied.add(b.seat_number)
-                                except Exception:
-                                    occupied.add(b.seat_number)
-                            return max(0, obj.trip.capacity - len(occupied))
-            # Fallback: calcul global
-            confirmed = obj.trip.bookings.filter(
-                travel_date=obj.date,
-                status__in=['confirmed', 'pending']
-            ).values_list('seat_number', flat=True)
-            return max(0, obj.trip.capacity - len(set(confirmed)))
-        except Exception:
-            return obj.trip.capacity
+        return data

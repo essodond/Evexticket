@@ -72,13 +72,12 @@ const PaymentPage: React.FC<PaymentPageProps> = ({ bookingData, onBack, onPaymen
     try {
       const tripId = Number(trip?.id ?? trip?.trip_id ?? trip);
       const payload: any = {
-        trip: tripId,
+        scheduled_trip: tripId,
         passenger_name: `${passengerInfo.firstName || ''} ${passengerInfo.lastName || ''}`.trim(),
         passenger_email: passengerInfo.email || undefined,
         passenger_phone: passengerInfo.phone,
         seat_number: String(selectedSeat),
         payment_method: paymentMethod,
-        travel_date: formatDate(searchData?.date || searchData?.travel_date || new Date()),
         notes: `Payment via ${paymentMethod}${phoneNumber ? ' - ' + phoneNumber : ''}`,
       };
 

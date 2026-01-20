@@ -69,6 +69,8 @@ const BookingPage: React.FC<BookingPageProps> = ({ trip, searchData, onBack, onP
     const travelDate = searchData?.date || searchData?.travel_date;
     if (!tripId || !travelDate) return;
 
+    console.log('DEBUG: Fetching occupied seats for tripId:', tripId, 'and travelDate:', travelDate);
+
     // Prefer availability endpoint which can restrict to a segment
     const originStop = searchData?.origin_stop || searchData?.origin_stop_id || searchData?.originStop || searchData?.departure_city || searchData?.departure;
     const destinationStop = searchData?.destination_stop || searchData?.destination_stop_id || searchData?.destinationStop || searchData?.arrival_city || searchData?.arrival;
@@ -76,7 +78,9 @@ const BookingPage: React.FC<BookingPageProps> = ({ trip, searchData, onBack, onP
     apiService.getAvailability(tripId, travelDate, originStop as any, destinationStop as any)
       .then((resp) => {
         if (!mounted) return;
+        console.log('DEBUG: getAvailability response:', resp);
         const seats = (resp && resp.occupied_seats) ? resp.occupied_seats : [];
+        console.log('DEBUG: Occupied seats from getAvailability:', seats);
         setOccupiedSeatNumbers(new Set((seats || []).map(s => String(s))));
       })
       .catch((err) => {
@@ -84,8 +88,11 @@ const BookingPage: React.FC<BookingPageProps> = ({ trip, searchData, onBack, onP
         // Fallback: try older endpoint
         apiService.getBookedSeats(tripId, travelDate).then((seats) => {
           if (!mounted) return;
+          console.log('DEBUG: getBookedSeats response:', seats);
           setOccupiedSeatNumbers(new Set((seats || []).map(s => String(s))));
-        }).catch(() => {});
+        }).catch((err2) => {
+          console.warn('Erreur en récupérant les sièges réservés:', err2);
+        });
       });
 
     return () => { mounted = false; };

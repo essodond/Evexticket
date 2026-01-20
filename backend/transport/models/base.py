@@ -6,6 +6,13 @@ from datetime import timedelta
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+# Signal pour initialiser le nombre de places disponibles lors de la création d'un ScheduledTrip
+@receiver(post_save, sender='transport.ScheduledTrip')
+def set_initial_available_seats(sender, instance, created, **kwargs):
+    if created:
+        instance.available_seats = instance.trip.capacity
+        instance.save()
+
 class Company(models.Model):
     """Modèle pour les compagnies de transport"""
     name = models.CharField(max_length=200, verbose_name="Nom de la compagnie")
@@ -186,6 +193,14 @@ class Booking(models.Model):
         on_delete=models.CASCADE, 
         related_name='bookings',
         verbose_name="Trajet"
+    )
+    scheduled_trip = models.ForeignKey(
+        'ScheduledTrip',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='bookings',
+        verbose_name="Voyage programmé"
     )
     passenger_name = models.CharField(max_length=200, verbose_name="Nom du passager")
     passenger_email = models.EmailField(verbose_name="Email du passager")

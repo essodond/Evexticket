@@ -15,9 +15,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList, Trip } from '../types';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
-import { getTrips } from '../services/api';
+import { getTrips, getCities, City } from '../services/api';
 import TripCard from '../components/TripCard';
 import Input from '../components/Input';
+import Select from '../components/Select';
 import { useAuth } from '../contexts/AuthContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MainTabs'>;
@@ -34,6 +35,28 @@ export default function HomeConnectedScreen({ navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false); // Nouvel état pour le rafraîchissement
   const [isSearchCollapsed, setIsSearchCollapsed] = useState(true); // État pour la barre de recherche dépliable
+  const [cities, setCities] = useState<City[]>([]);
+  const [loadingCities, setLoadingCities] = useState<boolean>(true);
+  const [citiesError, setCitiesError] = useState<string | null>(null);
+
+  // Récupérer la liste des villes
+  useEffect(() => {
+    const fetchCities = async () => {
+      try {
+        setLoadingCities(true);
+        const citiesData = await getCities();
+        setCities(citiesData);
+        setCitiesError(null);
+      } catch (e) {
+        setCitiesError(e instanceof Error ? e.message : 'Erreur de chargement des villes');
+        console.error('Erreur lors de la récupération des villes:', e);
+      } finally {
+        setLoadingCities(false);
+      }
+    };
+
+    fetchCities();
+  }, []);
 
   const fetchAndFilterTrips = useCallback(async () => {
     try {
@@ -138,20 +161,22 @@ export default function HomeConnectedScreen({ navigation }: Props) {
 
         {!isSearchCollapsed ? (
           <View style={styles.searchContainer}>
-            <Input
+            <Select
               placeholder="Ville de départ"
               value={searchFrom}
-              onChangeText={setSearchFrom}
+              onValueChange={setSearchFrom}
+              options={cities}
               leftIcon={
                 <Ionicons name="location-outline" size={20} color={COLORS.textSecondary} />
               }
               containerStyle={styles.searchInput}
             />
 
-            <Input
+            <Select
               placeholder="Ville d'arrivée"
               value={searchTo}
-              onChangeText={setSearchTo}
+              onValueChange={setSearchTo}
+              options={cities}
               leftIcon={
                 <Ionicons name="location-outline" size={20} color={COLORS.textSecondary} />
               }

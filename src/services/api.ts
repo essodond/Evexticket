@@ -75,6 +75,8 @@ export interface Trip {
   updated_at: string;
   bookings_count?: number;
   available_seats?: number;
+  departure_city_display?: string;
+  arrival_city_display?: string;
 }
 
 export interface ScheduledTrip extends Trip {

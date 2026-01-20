@@ -35,3 +35,8 @@ export type MainTabParamList = {
   MyTickets: undefined;
   Profile: undefined;
 };
+
+export interface City {
+  id: number;
+  name: string;
+}

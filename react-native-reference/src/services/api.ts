@@ -32,7 +32,7 @@ interface SearchTripsParams {
   departure_date?: string;
 }
 
-const API_BASE_URL = 'http://192.168.1.65:8000/api';
+const API_BASE_URL = 'http://192.168.137.234:8000/api';
 console.log('API_BASE_URL utilisée:', API_BASE_URL);
 const TIMEOUT = 20000; // 20s pour éviter des attentes prolongées
 
@@ -288,6 +288,31 @@ export async function createBooking(data: BookingData): Promise<any> {
     return response;
   } catch (error) {
     console.error('Erreur lors de la création de la réservation:', error);
+    throw error;
+  }
+}
+
+export interface City {
+  id: number;
+  name: string;
+}
+
+export async function getCities(): Promise<City[]> {
+  try {
+    const response = await request<any>('/cities/');
+    // Gérer les formats de réponse du backend
+    if (Array.isArray(response)) {
+      return response as City[];
+    }
+    if (response && Array.isArray(response.results)) {
+      return response.results as City[];
+    }
+    if (response && Array.isArray(response.data)) {
+      return response.data as City[];
+    }
+    throw new Error('Réponse inattendue du serveur pour la liste des villes');
+  } catch (error) {
+    console.error('Erreur de récupération des villes:', error);
     throw error;
   }
 }
