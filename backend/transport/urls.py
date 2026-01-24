@@ -1,6 +1,11 @@
-from django.urls import path
+from django.urls import path, include
 from . import views
 from rest_framework.authtoken.views import obtain_auth_token
+from rest_framework.routers import DefaultRouter
+
+# Créer un routeur
+router = DefaultRouter()
+router.register(r'bookings', views.BookingViewSet, basename='booking')
 
 urlpatterns = [
     path('dashboard/stats/', views.DashboardStatsView.as_view(), name='dashboard-stats'),
@@ -15,4 +20,6 @@ urlpatterns = [
     path('booked_seats/', views.booked_seats_list, name='booked-seats'),
     path('availability/', views.availability_view, name='availability'),
     path('cities/', views.cities_list, name='cities-list'),
+    # Inclure les routes du routeur
+    path('', include(router.urls)),
 ]

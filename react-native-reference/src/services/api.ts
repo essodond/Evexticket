@@ -39,24 +39,46 @@ const TIMEOUT = 20000; // 20s pour éviter des attentes prolongées
 async function handleResponse(response: Response) {
   const contentType = response.headers.get('content-type');
   const isJson = contentType && contentType.includes('application/json');
-  const data = isJson ? await response.json() : await response.text();
-
-  if (!response.ok) {
-    if (isJson && data.detail) {
-      throw new Error(data.detail);
-    }
-    if (isJson && data.message) {
-      throw new Error(data.message);
-    }
-    if (isJson && typeof data === 'object') {
-      const firstError = Object.values(data)[0];
-      if (Array.isArray(firstError)) {
-        throw new Error(firstError[0]);
-      }
-    }
-    throw new Error('Une erreur est survenue lors de la communication avec le serveur');
+  let data;
+  
+  try {
+    data = isJson ? await response.json() : await response.text();
+    console.log('📝 handleResponse - Données brute:', data);
+  } catch (parseError) {
+    console.error('❌ Erreur de parsing de la réponse:', parseError);
+    data = null;
   }
 
+  if (!response.ok) {
+    console.error('🚨 handleResponse - Erreur de réponse:', {
+      status: response.status,
+      statusText: response.statusText,
+      data: data,
+      contentType: contentType
+    });
+    
+    if (isJson && data) {
+      if (data.detail) {
+        throw new Error(data.detail);
+      }
+      if (data.message) {
+        throw new Error(data.message);
+      }
+      if (typeof data === 'object') {
+        const firstError = Object.values(data)[0];
+        if (Array.isArray(firstError) && firstError[0]) {
+          throw new Error(firstError[0]);
+        } else if (typeof firstError === 'string') {
+          throw new Error(firstError);
+        }
+      }
+    }
+    
+    const errorMessage = `Erreur ${response.status}: ${response.statusText}`;
+    throw new Error(errorMessage);
+  }
+
+  console.log('✅ handleResponse - Réponse valide:', data);
   return data;
 }
 
@@ -101,13 +123,34 @@ async function request<T>(
       ...options.headers,
     } as Record<string, string>;
 
+    // Log de la requête
+    console.log('🌐 API Request:', {
+      url: primaryUrl,
+      method: options.method || 'GET',
+      headers,
+      body: options.body ? JSON.parse(options.body as string) : undefined
+    });
+
     try {
       const response = await fetchWithTimeout(primaryUrl, { ...options, headers });
-      return handleResponse(response);
+      
+      // Log de la réponse
+      console.log('🌐 API Response:', {
+        url: primaryUrl,
+        status: response.status,
+        statusText: response.statusText
+      });
+      
+      const responseData = await handleResponse(response);
+      console.log('📋 API Response Data:', responseData);
+      
+      return responseData;
     } catch (primaryErr) {
+      console.error('❌ API Request Error:', primaryErr);
       throw primaryErr;
     }
   } catch (error) {
+    console.error('💥 Global API Error:', error);
     if (error instanceof Error) {
       throw error;
     }
@@ -288,6 +331,20 @@ export async function createBooking(data: BookingData): Promise<any> {
     return response;
   } catch (error) {
     console.error('Erreur lors de la création de la réservation:', error);
+    throw error;
+  }
+}
+
+export async function getMyBookings(): Promise<any[]> {
+  try {
+    console.log('📡 Appel API vers /bookings/');
+    const response = await request<any[]>('/bookings/', {
+      method: 'GET',
+    });
+    console.log('✅ Réponse des réservations:', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.error('Erreur lors de la récupération des réservations:', error);
     throw error;
   }
 }

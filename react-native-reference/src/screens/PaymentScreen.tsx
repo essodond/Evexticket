@@ -11,9 +11,8 @@ import {
   Alert, // Import Alert
   ActivityIndicator, // Import ActivityIndicator
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
-import { getTripStops, getSegmentPrice, SegmentPriceResponse } from '../services/api';
-import { TripStop } from '../types';
+
+
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList, PaymentMethod } from '../types';
@@ -37,62 +36,7 @@ export default function PaymentScreen({ navigation, route }: Props) {
   const { trip, selectedSeat } = route.params;
   const { user } = useAuth(); // Use the useAuth hook to get user details
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('flooz');
-  const [tripStops, setTripStops] = useState<TripStop[]>([]);
-  const [selectedOriginStop, setSelectedOriginStop] = useState<number | null>(null);
-  const [selectedDestinationStop, setSelectedDestinationStop] = useState<number | null>(null);
-  const [loadingStops, setLoadingStops] = useState<boolean>(true);
-  const [segmentPrice, setSegmentPrice] = useState<number | null>(null);
-  const [loadingPrice, setLoadingPrice] = useState<boolean>(false);
 
-  useEffect(() => {
-    const fetchTripStops = async () => {
-      const tripId = trip?.id || trip?.trip_info?.id;
-      console.log("PaymentScreen: Checking trip ID", tripId);
-      if (tripId) {
-        try {
-          setLoadingStops(true);
-          console.log("PaymentScreen: Fetching stops for trip", tripId);
-          const stops = await getTripStops(tripId.toString());
-          console.log("PaymentScreen: Stops received", stops);
-          setTripStops(stops);
-          if (stops.length > 0) {
-            setSelectedOriginStop(stops[0].id);
-            setSelectedDestinationStop(stops[stops.length - 1].id);
-          } else {
-            console.log("PaymentScreen: No stops found in response");
-          }
-        } catch (error) {
-          console.error("Erreur lors de la récupération des arrêts du trajet:", error);
-          Alert.alert("Erreur", "Impossible de récupérer les arrêts du trajet.");
-        } finally {
-          setLoadingStops(false);
-        }
-      } else {
-        setLoadingStops(false);
-        console.warn("Trip ID is missing in PaymentScreen", trip);
-      }
-    };
-    fetchTripStops();
-  }, [trip?.id, trip?.trip_info?.id]);
-
-  useEffect(() => {
-    const fetchSegmentPrice = async () => {
-      const tripId = trip?.id || trip?.trip_info?.id;
-      if (tripId && selectedOriginStop && selectedDestinationStop) {
-        try {
-          setLoadingPrice(true);
-          const response = await getSegmentPrice(tripId, selectedOriginStop, selectedDestinationStop);
-          setSegmentPrice(response.price);
-        } catch (error) {
-          console.error("Erreur lors de la récupération du prix du segment:", error);
-          setSegmentPrice(null);
-        } finally {
-          setLoadingPrice(false);
-        }
-      }
-    };
-    fetchSegmentPrice();
-  }, [trip?.id, trip?.trip_info?.id, selectedOriginStop, selectedDestinationStop]);
 
   const [passengerName, setPassengerName] = useState(`${user?.firstName || ''} ${user?.lastName || ''}`);
   const [passengerEmail, setPassengerEmail] = useState(user?.email || '');
@@ -126,11 +70,25 @@ export default function PaymentScreen({ navigation, route }: Props) {
   const dateLabel = trip.date || ''; // Assuming trip.date is the correct date field
   const companyName = trip.trip_info.company_name || 'Compagnie inconnue';
   const commission = 100; // Commission de 100 FCFA
-  const totalAmount = segmentPrice !== null ? segmentPrice + commission : 0;
+  
+  // Calculer le prix total (prix du trajet + commission)
+  const totalAmount = useMemo(() => {
+    const basePrice = parseFloat(trip.trip_info.price || '0');
+    const validBasePrice = isNaN(basePrice) ? 0 : basePrice;
+    return validBasePrice + commission;
+  }, [trip.trip_info.price, commission]);
 
   const handlePayment = async () => {
     setProcessing(true);
     try {
+      console.log('🚀 Début du processus de paiement');
+      console.log('📋 Données initiales:', {
+        selectedSeat,
+        user: user?.id ? { id: user.id, email: user.email } : null,
+        trip: { id: trip?.id, trip_info_id: trip.trip_info?.id },
+        selectedMethod
+      });
+
       if (!selectedSeat) {
         Alert.alert('Erreur', 'Veuillez sélectionner un siège.');
         setProcessing(false);
@@ -143,35 +101,45 @@ export default function PaymentScreen({ navigation, route }: Props) {
         return;
       }
 
-      console.log("trip.trip_info:", trip.trip_info);
-
-      const tripId = trip?.id || trip?.trip_info?.id;
-      if (!tripId || !selectedOriginStop || !selectedDestinationStop || segmentPrice === null) {
-        Alert.alert("Erreur", "Veuillez sélectionner les arrêts de départ et de destination et attendre le calcul du prix.");
+      const tripId = trip?.id || trip.trip_info?.id;
+      if (!tripId) {
+        Alert.alert("Erreur", "ID de trajet manquant.");
         setProcessing(false);
         return;
       }
 
-      const bookingData: BookingData = {
-        trip: tripId, // Assurez-vous que trip.id est l'ID du ScheduledTrip
-        passenger_name: passengerName, // Utilise le nom de l'utilisateur connecté
-        passenger_email: passengerEmail, // Utilise l'email de l'utilisateur connecté
-        passenger_phone: passengerPhone, // Utilise le numéro saisi, ou celui de l'utilisateur, ou une valeur par défaut
+      // Calculer le prix à utiliser pour la réservation
+      const bookingPrice = parseFloat(trip.trip_info.price || '0');
+      console.log('💰 Calcul du prix:', { basePrice: trip.trip_info.price, bookingPrice });
+
+      // Corriger la structure des données pour correspondre à ce que le backend attend
+      const bookingData: any = {
+        scheduled_trip: tripId, // Le backend attend scheduled_trip, pas trip
+        passenger_name: passengerName, // Nom de l'utilisateur connecté
+        passenger_email: passengerEmail, // Email de l'utilisateur connecté
+        passenger_phone: passengerPhone, // Numéro de téléphone
         seat_number: selectedSeat.replace('seat-', ''),
-        origin_stop: selectedOriginStop, // Utilise l'arrêt d'origine sélectionné
-        destination_stop: selectedDestinationStop, // Utilise l'arrêt de destination sélectionné
         payment_method: selectedMethod,
-        price: segmentPrice, // Utiliser le prix du segment calculé
+        total_price: bookingPrice, // Le backend attend total_price, pas price
+        origin_stop: null, // Aucun arrêt intermédiaire sélectionné
+        destination_stop: null // Aucun arrêt intermédiaire sélectionné
       };
 
+      console.log('🔄 Envoi des données de réservation:', JSON.stringify(bookingData, null, 2));
+      console.log('📡 Appel API vers /bookings/');
       const response = await createBooking(bookingData);
-      console.log('Réservation créée avec succès:', response);
+      console.log('✅ Réponse de réservation:', JSON.stringify(response, null, 2));
       Alert.alert('Succès', 'Votre réservation a été effectuée avec succès!');
-      navigation.navigate('Ticket', { trip: response.trip }); // Naviguer vers l'écran du ticket avec les détails de la réservation
+      navigation.navigate('Ticket', { trip: response.trip }); // Naviguer vers l'écran du ticket
     } catch (error: any) {
-      console.error('Erreur lors du paiement:', error);
+      console.error('💥 Erreur lors du paiement:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       Alert.alert('Erreur', error.message || 'Une erreur est survenue lors de la réservation.');
     } finally {
+      console.log('🏁 Fin du processus de paiement');
       setProcessing(false);
     }
   };
@@ -227,11 +195,7 @@ export default function PaymentScreen({ navigation, route }: Props) {
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRow}>
             <Text style={styles.summaryTotalLabel}>Total</Text>
-            {loadingPrice ? (
-              <ActivityIndicator size="small" color={COLORS.primary} />
-            ) : (
-              <Text style={styles.summaryTotalValue}>{formatCurrency(segmentPrice !== null ? segmentPrice + commission : trip.trip_info.price + commission)}</Text>
-            )}
+            <Text style={styles.summaryTotalValue}>{formatCurrency(totalAmount)}</Text>
           </View>
         </View>
 
@@ -262,59 +226,7 @@ export default function PaymentScreen({ navigation, route }: Props) {
           />
         </View>
 
-        {loadingStops ? (
-          <ActivityIndicator size="large" color="#0000ff" />
-        ) : (
-          <>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Arrêt d'embarquement</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={selectedOriginStop}
-                  onValueChange={(itemValue) => {
-                    setSelectedOriginStop(itemValue);
-                    const newOriginIndex = tripStops.findIndex(stop => stop.id === itemValue);
-                    const currentDestinationIndex = tripStops.findIndex(stop => stop.id === selectedDestinationStop);
 
-                    if (newOriginIndex !== -1 && currentDestinationIndex !== -1 && newOriginIndex >= currentDestinationIndex) {
-                      if (newOriginIndex < tripStops.length - 1) {
-                        setSelectedDestinationStop(tripStops[newOriginIndex + 1].id);
-                      } else {
-                        setSelectedDestinationStop(null);
-                      }
-                    }
-                  }}
-                  style={styles.picker}
-                >
-                  {tripStops.map((stop) => (
-                    <Picker.Item key={stop.id} label={resolveCityName(stop.city, stop.city_name)} value={stop.id} />
-                  ))}
-                </Picker>
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Arrêt de débarquement</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={selectedDestinationStop}
-                  onValueChange={(itemValue) => setSelectedDestinationStop(itemValue)}
-                  style={styles.picker}
-                >
-                  {tripStops
-                    .filter((stop) => {
-                      const originIndex = tripStops.findIndex(s => s.id === selectedOriginStop);
-                      const destinationIndex = tripStops.findIndex(s => s.id === stop.id);
-                      return destinationIndex > originIndex;
-                    })
-                    .map((stop) => (
-                      <Picker.Item key={stop.id} label={resolveCityName(stop.city, stop.city_name)} value={stop.id} />
-                    ))}
-                </Picker>
-              </View>
-            </View>
-          </>
-        )}
 
         <View style={styles.paymentSection}>
           <Text style={styles.sectionTitle}>Mode de paiement</Text>

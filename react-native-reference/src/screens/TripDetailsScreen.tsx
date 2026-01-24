@@ -224,31 +224,7 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
           />
         </View>
 
-        {trip.stops && trip.stops.length > 0 && (
-          <View style={styles.infoSection}>
-            <Text style={styles.sectionTitle}>Arrêts intermédiaires</Text>
-            {trip.stops.map((stop, index) => (
-              <View key={stop.id} style={styles.stopCard}>
-                <View style={styles.stopHeader}>
-                  <Ionicons name="pin-outline" size={20} color={COLORS.primary} />
-                  <Text style={styles.stopCity}>{resolveCityName(stop.city, stop.city_name)}</Text>
-                </View>
-                <View style={styles.stopTimes}>
-                  <Text style={styles.stopTime}>Arrivée: {formatTime(stop.arrival_time)}</Text>
-                  <Text style={styles.stopTime}>Départ: {formatTime(stop.departure_time)}</Text>
-                </View>
-                {stop.boarding_zones && stop.boarding_zones.length > 0 && (
-                  <View style={styles.boardingZonesContainer}>
-                    <Text style={styles.boardingZonesTitle}>Zones d'embarquement:</Text>
-                    {stop.boarding_zones.map((zone) => (
-                      <Text key={zone.id} style={styles.boardingZoneText}>- {zone.name} ({zone.location})</Text>
-                    ))}
-                  </View>
-                )}
-              </View>
-            ))}
-          </View>
-        )}
+
 
         <View style={styles.notice}>
           <Text style={styles.noticeText}>

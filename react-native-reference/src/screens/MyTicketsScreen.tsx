@@ -5,43 +5,82 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList, Trip } from '../types';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
 import { formatCurrency } from '../utils/mockData';
 import Button from '../components/Button';
+import { getMyBookings } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MainTabs'>;
 
 export default function MyTicketsScreen({ navigation }: Props) {
   const [tickets, setTickets] = useState<Trip[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
   useEffect(() => {
     loadTickets();
-  }, []);
+  }, [user]);
 
   const loadTickets = async () => {
     try {
-      const savedTickets = await AsyncStorage.getItem('bookedTickets');
-      if (savedTickets) {
-        setTickets(JSON.parse(savedTickets));
+      setLoading(true);
+      console.log('📥 Chargement des tickets...');
+      
+      if (!user) {
+        console.log('👤 Utilisateur non connecté');
+        setTickets([]);
+        return;
       }
+      
+      const bookings = await getMyBookings();
+      console.log('✅ Tickets chargés:', bookings);
+      
+      // Transformer les réservations en format Trip attendu par l'écran
+      const transformedTickets = bookings.map((booking: any) => {
+        const tripDetails = booking.trip_details || booking.trip_info || {};
+        return {
+          id: booking.id,
+          date: booking.scheduled_trip?.date || 'Date non disponible',
+          company: tripDetails.company_name || 'Compagnie inconnue',
+          price: booking.total_price || tripDetails.price || 0,
+          from: tripDetails.departure_city_name || 'Ville de départ',
+          to: tripDetails.arrival_city_name || 'Ville d\'arrivée',
+          departure: tripDetails.departure_time || 'Heure non disponible',
+          arrival: tripDetails.arrival_time || 'Heure non disponible',
+          // Ajouter d'autres champs nécessaires
+          seat_number: booking.seat_number || 'Siège non assigné',
+          status: booking.status || 'Confirmé',
+          trip_info: tripDetails
+        };
+      });
+      
+      setTickets(transformedTickets);
     } catch (error) {
-      console.error('Error loading tickets:', error);
+      console.error('💥 Erreur lors du chargement des tickets:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (tickets.length === 0) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Mes Tickets</Text>
-        </View>
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Mes Tickets</Text>
+      </View>
 
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Chargement de vos tickets...</Text>
+        </View>
+      ) : tickets.length === 0 ? (
         <View style={styles.emptyContainer}>
           <View style={styles.emptyIcon}>
             <Ionicons name="ticket-outline" size={48} color={COLORS.textSecondary} />
@@ -56,75 +95,72 @@ export default function MyTicketsScreen({ navigation }: Props) {
             style={styles.emptyButton}
           />
         </View>
-      </View>
-    );
-  }
+      ) : (
+        <ScrollView
+          style={styles.content}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.contentContainer}
+        >
+          <Text style={styles.sectionTitle}>BILLETS ACTIFS</Text>
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mes Tickets</Text>
-      </View>
-
-      <ScrollView
-        style={styles.content}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.contentContainer}
-      >
-        <Text style={styles.sectionTitle}>BILLETS ACTIFS</Text>
-
-        {tickets.map((ticket, index) => (
-          <View key={index} style={styles.ticketCard}>
-            <View style={styles.ticketCardHeader}>
-              <View style={styles.ticketCardHeaderLeft}>
-                <Ionicons name="calendar-outline" size={16} color={COLORS.white} />
-                <Text style={styles.ticketCardDate}>{ticket.date}</Text>
+          {tickets.map((ticket, index) => (
+            <View key={ticket.id || index} style={styles.ticketCard}>
+              <View style={styles.ticketCardHeader}>
+                <View style={styles.ticketCardHeaderLeft}>
+                  <Ionicons name="calendar-outline" size={16} color={COLORS.white} />
+                  <Text style={styles.ticketCardDate}>{ticket.date}</Text>
+                </View>
+                <View style={styles.ticketCardBadge}>
+                  <Text style={styles.ticketCardBadgeText}>{ticket.status}</Text>
+                </View>
               </View>
-              <View style={styles.ticketCardBadge}>
-                <Text style={styles.ticketCardBadgeText}>Confirmé</Text>
+
+              <View style={styles.ticketCardBody}>
+                <View style={styles.ticketCardInfo}>
+                  <View>
+                    <Text style={styles.ticketCardLabel}>Compagnie</Text>
+                    <Text style={styles.ticketCardValue}>{ticket.company}</Text>
+                  </View>
+                  <View style={styles.ticketCardInfoRight}>
+                    <Text style={styles.ticketCardLabel}>Prix</Text>
+                    <Text style={styles.ticketCardPrice}>{formatCurrency(ticket.price)}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.ticketCardRoute}>
+                  <View style={styles.ticketCardRouteItem}>
+                    <Text style={styles.ticketCardRouteLabel}>Départ</Text>
+                    <Text style={styles.ticketCardRouteCity}>{ticket.from}</Text>
+                    <Text style={styles.ticketCardRouteTime}>{ticket.departure}</Text>
+                  </View>
+
+                  <View style={styles.ticketCardRouteLine}>
+                    <View style={styles.ticketCardRouteDot} />
+                  </View>
+
+                  <View style={[styles.ticketCardRouteItem, styles.ticketCardRouteItem_end]}>
+                    <Text style={styles.ticketCardRouteLabel}>Arrivée</Text>
+                    <Text style={styles.ticketCardRouteCity}>{ticket.to}</Text>
+                    <Text style={styles.ticketCardRouteTime}>{ticket.arrival}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.ticketCardSeat}>
+                  <Text style={styles.ticketCardLabel}>Siège</Text>
+                  <Text style={styles.ticketCardValue}>{ticket.seat_number}</Text>
+                </View>
+
+                <Button
+                  title="Voir le billet"
+                  onPress={() => navigation.navigate('Ticket' as any, { trip: ticket })}
+                  icon={<Ionicons name="ticket-outline" size={20} color={COLORS.white} style={{ marginRight: 8 }} />}
+                  style={styles.viewButton}
+                />
               </View>
             </View>
-
-            <View style={styles.ticketCardBody}>
-              <View style={styles.ticketCardInfo}>
-                <View>
-                  <Text style={styles.ticketCardLabel}>Compagnie</Text>
-                  <Text style={styles.ticketCardValue}>{ticket.company}</Text>
-                </View>
-                <View style={styles.ticketCardInfoRight}>
-                  <Text style={styles.ticketCardLabel}>Prix</Text>
-                  <Text style={styles.ticketCardPrice}>{formatCurrency(ticket.price)}</Text>
-                </View>
-              </View>
-
-              <View style={styles.ticketCardRoute}>
-                <View style={styles.ticketCardRouteItem}>
-                  <Text style={styles.ticketCardRouteLabel}>Départ</Text>
-                  <Text style={styles.ticketCardRouteCity}>{ticket.from}</Text>
-                  <Text style={styles.ticketCardRouteTime}>{ticket.departure}</Text>
-                </View>
-
-                <View style={styles.ticketCardRouteLine}>
-                  <View style={styles.ticketCardRouteDot} />
-                </View>
-
-                <View style={[styles.ticketCardRouteItem, styles.ticketCardRouteItem_end]}>
-                  <Text style={styles.ticketCardRouteLabel}>Arrivée</Text>
-                  <Text style={styles.ticketCardRouteCity}>{ticket.to}</Text>
-                  <Text style={styles.ticketCardRouteTime}>{ticket.arrival}</Text>
-                </View>
-              </View>
-
-              <Button
-                title="Voir le billet"
-                onPress={() => navigation.navigate('Ticket' as any, { trip: ticket })}
-                icon={<Ionicons name="ticket-outline" size={20} color={COLORS.white} style={{ marginRight: 8 }} />}
-                style={styles.viewButton}
-              />
-            </View>
-          </View>
-        ))}
-      </ScrollView>
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -157,6 +193,17 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     color: COLORS.textSecondary,
     marginBottom: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  loadingText: {
+    fontSize: FONT_SIZES.base,
+    color: COLORS.textSecondary,
+    marginTop: 16,
   },
   emptyContainer: {
     flex: 1,
@@ -301,6 +348,9 @@ const styles = StyleSheet.create({
     top: -3,
     left: '50%',
     marginLeft: -4,
+  },
+  ticketCardSeat: {
+    marginBottom: 16,
   },
   viewButton: {
     height: 48,

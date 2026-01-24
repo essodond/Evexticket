@@ -505,28 +505,69 @@ class ScheduledTripSearchView(APIView):
                 context={'origin_city': departure_city, 'destination_city': arrival_city}
             )
             return Response(st_serializer.data)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class BookingViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_serializer_class(self):
+        # Utiliser BookingCreateSerializer pour la création, BookingSerializer pour les autres opérations
+        if self.action == 'create':
+            return BookingCreateSerializer
+        return BookingSerializer
+    
+    def get_queryset(self):
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Log de la requête
+        logger.info(f"Received request for bookings from user: {self.request.user}, action: {self.action}")
+        
+        # Renvoyer les réservations de l'utilisateur connecté
+        queryset = Booking.objects.filter(user=self.request.user)
+        logger.info(f"Found {queryset.count()} bookings for user")
+        return queryset
+    
+    def create(self, request, *args, **kwargs):
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Log des données de requête
+        logger.info(f"Received booking request: {request.data}")
+        logger.info(f"User: {request.user}")
+        
+        # Ajouter le user à la requête data si non fourni
+        if 'user' not in request.data:
+            request.data['user'] = request.user.id
+        
+        # Appeler la méthode parent pour la création
+        response = super().create(request, *args, **kwargs)
+        
+        # Log de la réponse
+        logger.info(f"Booking created successfully: {response.data}")
+        
+        return response
 
 @api_view(['GET'])
 def scheduled_trips_list(request):
     # Récupérer les paramètres de requête
     departure_city = request.query_params.get('departure_city')
     arrival_city = request.query_params.get('arrival_city')
-    # Accepter à la fois 'travel_date' et 'date' comme paramètres
-    travel_date = request.query_params.get('travel_date') or request.query_params.get('date')
+    # Accepter 'travel_date', 'date' et 'departure_date' comme paramètres
+    travel_date = request.query_params.get('travel_date') or request.query_params.get('date') or request.query_params.get('departure_date')
     
     # Filtrer les trajets planifiés actifs
     scheduled_trips = ScheduledTrip.objects.filter(
         trip__is_active=True
     ).select_related('trip__company', 'trip__departure_city', 'trip__arrival_city')
     
-    # Appliquer le filtre de date et la limite de 3 jours
+    # Appliquer le filtre de date
     from datetime import datetime, timedelta
     if travel_date:
-        # Gérer différents formats de date (DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD, etc.)
+        # Gérer différents formats de date (y compris avec des points)
         try:
-            # Tenter de parser la date en plusieurs formats (y compris avec des tirets)
-            date_formats = ['%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%m/%d/%Y', '%m-%d-%Y']
+            date_formats = ['%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%m/%d/%Y', '%m-%d-%Y', '%d.%m.%Y']
             parsed_date = None
             for fmt in date_formats:
                 try:
@@ -536,25 +577,34 @@ def scheduled_trips_list(request):
                     continue
             
             if parsed_date:
-                # Calculer la date de fin (3 jours après la date de recherche)
-                end_date = parsed_date + timedelta(days=3)
-                # Filtrer les trajets entre la date de recherche et la date de fin (inclus)
-                scheduled_trips = scheduled_trips.filter(date__gte=parsed_date, date__lte=end_date)
-                print(f"[DEBUG] Dates filtrées: {parsed_date} à {end_date}, Nombre de trajets: {scheduled_trips.count()}")
+                if departure_city or arrival_city:
+                    # Requête de recherche: afficher exactement la date recherchée
+                    scheduled_trips = scheduled_trips.filter(date=parsed_date)
+                    print(f"[DEBUG] Date exacte filtrée: {parsed_date}, Nombre de trajets: {scheduled_trips.count()}")
+                else:
+                    # Page d'accueil: afficher 3 jours
+                    end_date = parsed_date + timedelta(days=3)
+                    scheduled_trips = scheduled_trips.filter(date__gte=parsed_date, date__lte=end_date)
+                    print(f"[DEBUG] Dates filtrées pour accueil: {parsed_date} à {end_date}, Nombre de trajets: {scheduled_trips.count()}")
         except Exception as e:
             print(f"[DEBUG] Erreur de parsing de date: {e}")
     else:
-        # Si pas de date fournie, afficher les trajets à partir d'aujourd'hui sur 3 jours
         today = datetime.now().date()
-        end_date = today + timedelta(days=3)
-        scheduled_trips = scheduled_trips.filter(date__gte=today, date__lte=end_date)
-        print(f"[DEBUG] Aucune date fournie, affichage des trajets du {today} au {end_date}, Nombre de trajets: {scheduled_trips.count()}")
+        if departure_city or arrival_city:
+            # Requête de recherche: afficher tous les trajets futurs
+            scheduled_trips = scheduled_trips.filter(date__gte=today)
+            print(f"[DEBUG] Requête de recherche sans date: affichage de tous les trajets futurs à partir de {today}, Nombre de trajets: {scheduled_trips.count()}")
+        else:
+            # Page d'accueil: afficher 3 jours
+            end_date = today + timedelta(days=3)
+            scheduled_trips = scheduled_trips.filter(date__gte=today, date__lte=end_date)
+            print(f"[DEBUG] Page d'accueil sans date: affichage des trajets du {today} au {end_date}, Nombre de trajets: {scheduled_trips.count()}")
     
     # Trier les trajets par date ascendante (plus proche d'abord)
     scheduled_trips = scheduled_trips.order_by('date')
     
-    # Filtrer les trajets pour la page d'accueil (pas de filtres de ville)
-    if not departure_city and not arrival_city:
+    # Filtrer les trajets pour la page d'accueil (pas de filtres de ville ET pas de paramètre de date spécifique)
+    if not departure_city and not arrival_city and not travel_date:
         from django.db.models import F, ExpressionWrapper, DateTimeField, OuterRef, Subquery, Count, IntegerField
         from django.utils import timezone
         from .models import Booking
