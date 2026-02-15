@@ -211,8 +211,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#4CAF50',
   },
   occupiedSeat: {
-    backgroundColor: '#FF6347',
-    borderColor: '#696969', // DimGrey
+    backgroundColor: '#D3D3D3', // Light gray for occupied seats
+    borderColor: '#A9A9A9', // Dark gray border
   },
   emptySeat: {
     width: 45,

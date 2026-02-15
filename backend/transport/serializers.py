@@ -480,6 +480,7 @@ class ScheduledTripSerializer(serializers.ModelSerializer):
     - `departure_city_display` / `arrival_city_display` : valeurs adaptées au contexte de recherche
     - `stops` : arrêts ordonnés du trajet
     - `available_seats` : calculé selon le segment demandé si présent dans le contexte
+    - `seats` : liste de tous les sièges avec leur statut (occupé/disponible)
     """
     # Champ writeable pour permettre la création via l'ID du Trip
     trip = serializers.PrimaryKeyRelatedField(queryset=Trip.objects.all(), write_only=True, required=True)
@@ -488,11 +489,12 @@ class ScheduledTripSerializer(serializers.ModelSerializer):
     arrival_city_display = serializers.SerializerMethodField()
     stops = serializers.SerializerMethodField()
     available_seats = serializers.SerializerMethodField()
+    seats = serializers.SerializerMethodField()
 
     class Meta:
         model = ScheduledTrip
         fields = [
-            'id', 'trip', 'trip_info', 'date', 'departure_city_display', 'arrival_city_display', 'stops', 'available_seats'
+            'id', 'trip', 'trip_info', 'date', 'departure_city_display', 'arrival_city_display', 'stops', 'available_seats', 'seats'
         ]
 
     def get_departure_city_display(self, obj):
@@ -567,6 +569,40 @@ class ScheduledTripSerializer(serializers.ModelSerializer):
             ).count()
             return obj.trip.capacity - confirmed_bookings
         return obj.trip.capacity
+
+    def get_seats(self, obj):
+        """
+        Retourne la liste de tous les sièges avec leur statut.
+        - id: format "seat-{seat_number}"
+        - status: 'available' ou 'occupied'
+        - number: numéro du siège (1 à capacity)
+        """
+        # Récupérer tous les sièges réservés pour ce voyage planifié
+        booked_seats = set()
+        booked_bookings = Booking.objects.filter(
+            scheduled_trip=obj,
+            status__in=['confirmed', 'pending']
+        ).values_list('seat_number', flat=True)
+        # Convertir les numéros de siège en entiers pour la comparaison
+        for seat_num in booked_bookings:
+            if seat_num:
+                try:
+                    booked_seats.add(int(seat_num))
+                except (ValueError, TypeError):
+                    pass
+
+        # Créer la liste de tous les sièges
+        seats = []
+        for seat_number in range(1, obj.trip.capacity + 1):
+            seat_id = f"seat-{seat_number}"
+            status = 'occupied' if seat_number in booked_seats else 'available'
+            seats.append({
+                'id': seat_id,
+                'status': status,
+                'number': seat_number
+            })
+
+        return seats
 
 
 class BookingCreateSerializer(serializers.ModelSerializer):

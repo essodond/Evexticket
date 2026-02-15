@@ -49,20 +49,8 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
     setSelectedSeat(prevSelectedSeat => (prevSelectedSeat === seatId ? null : seatId));
   };
 
-  const generateSeats = (count: number, currentSelectedSeat: string | null): Seat[] => {
-    const seatsArray: Seat[] = [];
-    for (let i = 1; i <= count; i++) {
-      const seatId = `seat-${i}`;
-      seatsArray.push({
-        id: seatId,
-        number: i,
-        status: seatId === currentSelectedSeat ? SeatStatus.Selected : SeatStatus.Available,
-      });
-    }
-    return seatsArray;
-  };
-
-  const seatsData = trip ? generateSeats(trip.available_seats || trip.trip_info.available_seats || 0, selectedSeat) : [];
+  // Utiliser les sièges réels de l'API, avec gestion du statut "occupied"
+  const seatsData = trip?.seats ? trip.seats : [];
 
   useEffect(() => {
     const fetchTrip = async () => {
@@ -233,7 +221,15 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
         </View>
 
         {/* Seat Selection Component */}
-        <SeatSelection seats={seatsData} onSeatPress={handleSeatPress} selectedSeatId={selectedSeat} />
+        <SeatSelection
+          seats={seatsData.map(seat =>
+            seat.id === selectedSeat
+              ? { ...seat, status: SeatStatus.Selected }
+              : seat
+          )}
+          onSeatPress={handleSeatPress}
+          selectedSeatId={selectedSeat}
+        />
 
         <View style={styles.footer}>
           <View style={styles.footerPrice}>
