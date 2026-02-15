@@ -110,12 +110,10 @@ export interface DashboardStats {
 }
 
 export interface CompanyStats {
-  total_trips: number;
   total_bookings: number;
   total_revenue: number;
-  active_trips: number;
-  pending_bookings: number;
-  monthly_growth: number;
+  active_clients: number;
+  scheduled_trips: number;
 }
 
 export interface TripSearchParams {
@@ -257,10 +255,6 @@ class ApiService {
     return this.request<void>(`/companies/${id}/`, {
       method: 'DELETE',
     });
-  }
-
-  async getCompanyStats(id: number): Promise<CompanyStats> {
-    return this.request<CompanyStats>(`/companies/${id}/stats/`);
   }
 
   // Trajets
@@ -446,6 +440,16 @@ class ApiService {
   // Statistiques
   async getDashboardStats(): Promise<DashboardStats> {
     return this.request<DashboardStats>('/dashboard/stats/');
+  }
+
+  async getCompanyStats(id: number): Promise<CompanyStats> {
+    return this.request<CompanyStats>(`/companies/${id}/stats/`);
+  }
+
+  async getMyBookings(): Promise<Booking[]> {
+    // This endpoint will need to be created in the backend.
+    // It should return a list of bookings for the currently authenticated user.
+    return this.request<Booking[]>('/my-bookings/');
   }
 
   // Authentification (pour l'instant, simulation)

@@ -1,4 +1,5 @@
 import React from 'react';
+import { CompanyStats } from '../services/api';
 import {
   LineChart,
   Line,
@@ -18,10 +19,11 @@ import {
 } from 'recharts';
 
 interface CompanyChartsProps {
+  stats: CompanyStats;
   className?: string;
 }
 
-const CompanyCharts: React.FC<CompanyChartsProps> = ({ className = '' }) => {
+const CompanyCharts: React.FC<CompanyChartsProps> = ({ stats, className = '' }) => {
   // Données simulées pour les graphiques de la compagnie
   const bookingTrendData = [
     { month: 'Jan', bookings: 45, revenue: 225000 },
@@ -84,6 +86,26 @@ const CompanyCharts: React.FC<CompanyChartsProps> = ({ className = '' }) => {
 
   return (
     <div className={`space-y-8 ${className}`}>
+      {/* Simple stats display */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h4 className="text-sm text-gray-500">Voyages programmés</h4>
+          <p className="text-2xl font-bold">{stats.scheduled_trips}</p>
+        </div>
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h4 className="text-sm text-gray-500">Réservations totales</h4>
+          <p className="text-2xl font-bold">{stats.total_bookings}</p>
+        </div>
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h4 className="text-sm text-gray-500">Revenu total</h4>
+          <p className="text-2xl font-bold">{stats.total_revenue} FCFA</p>
+        </div>
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h4 className="text-sm text-gray-500">Clients actifs</h4>
+          <p className="text-2xl font-bold">{stats.active_clients}</p>
+        </div>
+      </div>
+
       {/* Évolution des réservations */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Évolution des réservations</h3>

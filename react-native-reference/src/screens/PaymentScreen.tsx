@@ -130,7 +130,18 @@ export default function PaymentScreen({ navigation, route }: Props) {
       const response = await createBooking(bookingData);
       console.log('✅ Réponse de réservation:', JSON.stringify(response, null, 2));
       Alert.alert('Succès', 'Votre réservation a été effectuée avec succès!');
-      navigation.navigate('Ticket', { trip: response.trip }); // Naviguer vers l'écran du ticket
+
+      // Construire l'objet trip pour l'écran de ticket
+      const tripForTicket = {
+        ...trip, // Garde les informations de base du trajet
+        ...response, // Ajoute les informations de la réservation (id, seat_number, etc.)
+        trip_info: {
+          ...trip.trip_info, // Garde les détails du trajet (villes, heures, etc.)
+          ...response.trip_details, // Ajoute les détails du trajet depuis la réponse de réservation
+        },
+      };
+
+      navigation.navigate('Ticket', { trip: tripForTicket }); // Naviguer vers l'écran du ticket
     } catch (error: any) {
       console.error('💥 Erreur lors du paiement:', {
         message: error.message,

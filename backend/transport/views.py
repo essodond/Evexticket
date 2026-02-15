@@ -17,6 +17,7 @@ from django.contrib.auth import authenticate
 from .models import ScheduledTrip
 from .serializers import ScheduledTripSerializer
 from .serializers import RegisterSerializer, UserSerializer, CompanySerializer, TripSerializer, BookingSerializer, PaymentSerializer, ReviewSerializer, NotificationSerializer, ScheduledTripSerializer, CompanyStatsSerializer, TripStopSerializer, BoardingZoneSerializer, CitySerializer, TripSearchSerializer, BookingCreateSerializer, DashboardStatsSerializer
+from django.http import Http404
 from .models import Company, City, Trip, Booking, Payment, Review, Notification, ScheduledTrip, UserProfile, TripStop, BoardingZone
 from django.contrib.auth import authenticate
 
@@ -63,252 +64,64 @@ class EmailAuthToken(APIView):
         else:
             return Response({'detail': 'Identifiants invalides.'}, status=status.HTTP_401_UNAUTHORIZED)
 
-class ScheduledTripDetailView(generics.RetrieveAPIView):
+class ScheduledTripViewSet(viewsets.ModelViewSet):
     queryset = ScheduledTrip.objects.all()
     serializer_class = ScheduledTripSerializer
-    lookup_field = 'pk'
+    permission_classes = [permissions.AllowAny]
 
-    def put(self, request, *args, **kwargs):
-        # Update schedule metadata (date, is_active, available_seats)
-        scheduled_trip = self.get_object()
-        data = request.data
-        user = request.user
-        trip = scheduled_trip.trip
-
-        if not user.is_staff:
-            is_admin = (trip.company.admin_user_id == user.id) or trip.company.admins.filter(id=user.id).exists()
-            if not is_admin:
-                return Response({'detail': 'Not authorized to update this scheduled trip.'}, status=status.HTTP_403_FORBIDDEN)
-
-        date = data.get('date')
-        if date:
-            scheduled_trip.date = date
-        if 'is_active' in data:
-            scheduled_trip.is_active = bool(data.get('is_active'))
-        if 'available_seats' in data:
-            scheduled_trip.available_seats = data.get('available_seats')
-        scheduled_trip.save()
-        serializer = ScheduledTripSerializer(scheduled_trip)
-        return Response(serializer.data)
-
-    def delete(self, request, *args, **kwargs):
-        scheduled_trip = self.get_object()
-        user = request.user
-        trip = scheduled_trip.trip
-        if not user.is_staff:
-            is_admin = (trip.company.admin_user_id == user.id) or trip.company.admins.filter(id=user.id).exists()
-            if not is_admin:
-                return Response({'detail': 'Not authorized to delete this scheduled trip.'}, status=status.HTTP_403_FORBIDDEN)
-        scheduled_trip.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-    def post(self, request, *args, **kwargs):
-        serializer = TripSearchSerializer(data=request.data)
-        if serializer.is_valid():
-            departure_city = serializer.validated_data['departure_city']
-            arrival_city = serializer.validated_data['arrival_city']
-            travel_date = serializer.validated_data['travel_date']
-            passengers = serializer.validated_data['passengers']
-
-            from unidecode import unidecode
-
-            dep_norm = unidecode(departure_city).lower()
-            arr_norm = unidecode(arrival_city).lower()
-
-            # Récupérer tous les voyages planifiés pour la date donnée
-            scheduled_trips = ScheduledTrip.objects.filter(
-                date=travel_date,
-                trip__is_active=True
-            ).select_related('trip__company', 'trip__departure_city', 'trip__arrival_city')
-
-            matches = []
-            for st in scheduled_trips:
-                trip = st.trip
-                # Récupérer les escales ordonnées
-                stops = list(TripStop.objects.filter(trip=trip).select_related('city').order_by('sequence'))
-
-                # Cas 1: correspondance directe aux extrémités du trajet
-                direct_match = (
-                    dep_norm in unidecode((trip.departure_city.name or '')).lower() and
-                    arr_norm in unidecode((trip.arrival_city.name or '')).lower()
+    def perform_create(self, serializer):
+        # Logic to ensure only company admins or staff can create scheduled trips
+        trip = serializer.validated_data.get('trip')
+        if trip:
+            company = trip.company
+            if not (self.request.user.is_staff or company.admins.filter(id=self.request.user.id).exists()):
+                raise serializers.ValidationError(
+                    f"Vous n'avez pas la permission de créer des trajets planifiés pour la compagnie '{company.name}' (ID: {company.id})."
                 )
-                if direct_match:
-                    booked = Booking.objects.filter(
-                        trip=trip,
-                        travel_date=st.date,
-                        status__in=['confirmed', 'pending']
-                    ).values_list('seat_number', flat=True)
-                    available = max(trip.capacity - len(set(booked)), 0)
-                    if available >= passengers:
-                        matches.append(st)
-                        continue
+        serializer.save()
 
-                # Cas 2: recherche par escales (segments)
-                origin_candidates = [s for s in stops if dep_norm in unidecode(s.city.name or '').lower()]
-                dest_candidates = [s for s in stops if arr_norm in unidecode(s.city.name or '').lower()]
-                found = False
-                for o in origin_candidates:
-                    for d in dest_candidates:
-                        if o.sequence < d.sequence:
-                            qs = Booking.objects.filter(
-                                trip=trip,
-                                travel_date=st.date,
-                                status__in=['confirmed', 'pending']
-                            ).select_related('origin_stop', 'destination_stop')
-
-                            occupied = set()
-                            for b in qs:
-                                try:
-                                    if b.origin_stop and b.destination_stop:
-                                        # chevauchement si NOT (b.dest <= o OR b.orig >= d)
-                                        if not (b.destination_stop.sequence <= o.sequence or b.origin_stop.sequence >= d.sequence):
-                                            occupied.add(b.seat_number)
-                                    else:
-                                        # réservation sans escales: considérer comme occupant toutes les sections
-                                        occupied.add(b.seat_number)
-                                except Exception:
-                                    occupied.add(b.seat_number)
-
-                            available = max(trip.capacity - len(occupied), 0)
-                            if available >= passengers:
-                                matches.append(st)
-                                found = True
-                                break
-                    if found:
-                        break
-
-            # Sérialiser avec le contexte pour calculer available_seats par segment
-            st_serializer = ScheduledTripSerializer(
-                matches,
-                many=True,
-                context={'origin_city': departure_city, 'destination_city': arrival_city}
+    def perform_update(self, serializer):
+        scheduled_trip = self.get_object()
+        trip = scheduled_trip.trip
+        if not (self.request.user.is_staff or trip.company.admins.filter(id=self.request.user.id).exists()):
+            raise serializers.ValidationError(
+                f"Vous n'avez pas la permission de modifier ce trajet planifié pour la compagnie '{trip.company.name}'."
             )
-            return Response(st_serializer.data)
+        serializer.save()
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    def perform_destroy(self, instance):
+        trip = instance.trip
+        if not (self.request.user.is_staff or trip.company.admins.filter(id=self.request.user.id).exists()):
+            raise serializers.ValidationError(
+                f"Vous n'avez pas la permission de supprimer ce trajet planifié pour la compagnie '{trip.company.name}'."
+            )
+        instance.delete()
+
+
+class MyBookingsView(generics.ListAPIView):
+    """
+    Renvoie la liste des réservations pour l'utilisateur actuellement authentifié.
+    """
+    serializer_class = BookingSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        """
+        Cette vue doit retourner une liste de toutes les réservations
+        pour l'utilisateur actuellement authentifié.
+        """
+        user = self.request.user
+        # Filter bookings by user, and prefetch related trip details for efficiency
+        return Booking.objects.filter(user=user).select_related(
+            'trip', 
+            'trip__company', 
+            'trip__departure_city', 
+            'trip__arrival_city'
+        ).order_by('-booking_date')
+
 
 class TripSyncView(APIView):
-    permission_classes = [permissions.IsAuthenticated] # Cette ligne sera corrigée par la modification ci-dessus
-
-    def get(self, request, *args, **kwargs):
-        last_sync_str = request.query_params.get('last_sync_timestamp')
-        
-        if last_sync_str:
-            try:
-                last_sync_timestamp = datetime.fromisoformat(last_sync_str).replace(tzinfo=timezone.utc)
-            except ValueError:
-                return Response({"error": "Invalid last_sync_timestamp format. Use ISO 8601."}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Fetch trips that were created or updated since last_sync_timestamp
-            updated_trips = ScheduledTrip.objects.filter(
-                Q(created_at__gte=last_sync_timestamp) | Q(updated_at__gte=last_sync_timestamp)
-            ).distinct()
-            
-            updated_trip_serializer = TripSearchSerializer(updated_trips, many=True)
-            
-            return Response({
-                "updated_trips": updated_trip_serializer.data,
-                "current_timestamp": datetime.now(timezone.utc).isoformat()
-            })
-
-
-
-
-
-
-
-class ScheduledTripDetailView(generics.RetrieveAPIView):
-    queryset = ScheduledTrip.objects.all()
-    serializer_class = ScheduledTripSerializer
-    lookup_field = 'pk'
-
-    def post(self, request, *args, **kwargs):
-        serializer = TripSearchSerializer(data=request.data)
-        if serializer.is_valid():
-            departure_city = serializer.validated_data['departure_city']
-            arrival_city = serializer.validated_data['arrival_city']
-            travel_date = serializer.validated_data['travel_date']
-            passengers = serializer.validated_data['passengers']
-
-            from unidecode import unidecode
-
-            dep_norm = unidecode(departure_city).lower()
-            arr_norm = unidecode(arrival_city).lower()
-
-            # Récupérer tous les voyages planifiés pour la date donnée
-            scheduled_trips = ScheduledTrip.objects.filter(
-                date=travel_date,
-                trip__is_active=True
-            ).select_related('trip__company', 'trip__departure_city', 'trip__arrival_city')
-
-            matches = []
-            for st in scheduled_trips:
-                trip = st.trip
-                # Récupérer les escales ordonnées
-                stops = list(TripStop.objects.filter(trip=trip).select_related('city').order_by('sequence'))
-
-                # Cas 1: correspondance directe aux extrémités du trajet
-                direct_match = (
-                    dep_norm in unidecode((trip.departure_city.name or '')).lower() and
-                    arr_norm in unidecode((trip.arrival_city.name or '')).lower()
-                )
-                if direct_match:
-                    booked = Booking.objects.filter(
-                        trip=trip,
-                        travel_date=st.date,
-                        status__in=['confirmed', 'pending']
-                    ).values_list('seat_number', flat=True)
-                    available = max(trip.capacity - len(set(booked)), 0)
-                    if available >= passengers:
-                        matches.append(st)
-                        continue
-
-                # Cas 2: recherche par escales (segments)
-                origin_candidates = [s for s in stops if dep_norm in unidecode(s.city.name or '').lower()]
-                dest_candidates = [s for s in stops if arr_norm in unidecode(s.city.name or '').lower()]
-                found = False
-                for o in origin_candidates:
-                    for d in dest_candidates:
-                        if o.sequence < d.sequence:
-                            qs = Booking.objects.filter(
-                                trip=trip,
-                                travel_date=st.date,
-                                status__in=['confirmed', 'pending']
-                            ).select_related('origin_stop', 'destination_stop')
-
-                            occupied = set()
-                            for b in qs:
-                                try:
-                                    if b.origin_stop and b.destination_stop:
-                                        # chevauchement si NOT (b.dest <= o OR b.orig >= d)
-                                        if not (b.destination_stop.sequence <= o.sequence or b.origin_stop.sequence >= d.sequence):
-                                            occupied.add(b.seat_number)
-                                    else:
-                                        # réservation sans escales: considérer comme occupant toutes les sections
-                                        occupied.add(b.seat_number)
-                                except Exception:
-                                    occupied.add(b.seat_number)
-
-                            available = max(trip.capacity - len(occupied), 0)
-                            if available >= passengers:
-                                matches.append(st)
-                                found = True
-                                break
-                    if found:
-                        break
-
-            # Sérialiser avec le contexte pour calculer available_seats par segment
-            st_serializer = ScheduledTripSerializer(
-                matches,
-                many=True,
-                context={'origin_city': departure_city, 'destination_city': arrival_city}
-            )
-            return Response(st_serializer.data)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-class TripSyncView(APIView):
-    permission_classes = [permissions.IsAuthenticated] # Cette ligne sera corrigée par la modification ci-dessus
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
         last_sync_str = request.query_params.get('last_sync_timestamp')
@@ -392,13 +205,13 @@ class DashboardStatsView(APIView):
         bookings_this_month = Booking.objects.filter(booking_date__gte=month_ago).count()
         
         # Total revenue
-        total_revenue = Booking.objects.aggregate(total=Sum('amount'))['total'] or 0
+        total_revenue = Booking.objects.aggregate(total=Sum('total_price'))['total'] or 0
         
         # Revenue this week
-        revenue_this_week = Booking.objects.filter(booking_date__gte=week_ago).aggregate(total=Sum('amount'))['total'] or 0
+        revenue_this_week = Booking.objects.filter(booking_date__gte=week_ago).aggregate(total=Sum('total_price'))['total'] or 0
         
         # Revenue this month
-        revenue_this_month = Booking.objects.filter(booking_date__gte=month_ago).aggregate(total=Sum('amount'))['total'] or 0
+        revenue_this_month = Booking.objects.filter(booking_date__gte=month_ago).aggregate(total=Sum('total_price'))['total'] or 0
         
         # Active trips
         active_trips = Trip.objects.filter(is_active=True).count()
@@ -414,11 +227,142 @@ class DashboardStatsView(APIView):
             'revenue_this_week': revenue_this_week,
             'revenue_this_month': revenue_this_month,
             'active_trips': active_trips,
-            'active_companies': active_companies
+            'active_companies': active_companies,
         }
         
         serializer = DashboardStatsSerializer(stats)
         return Response(serializer.data)
+from django.db.models import Sum
+class CompanyStatsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, company_id, *args, **kwargs):
+        try:
+            company = Company.objects.get(pk=company_id)
+        except Company.DoesNotExist:
+            return Response({"detail": "Compagnie non trouvée."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Vérifier si l'utilisateur est un admin de la compagnie
+        if not (request.user.is_staff or company.admins.filter(id=request.user.id).exists()):
+            return Response({"detail": "Vous n'êtes pas autorisé à voir les statistiques de cette compagnie."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Calculer les statistiques pour la compagnie
+        total_bookings = Booking.objects.filter(trip__company=company).count()
+        total_revenue = Booking.objects.filter(trip__company=company, status='confirmed').aggregate(total=Sum('total_price'))['total'] or 0
+        active_clients = Booking.objects.filter(trip__company=company).values('passenger_email').distinct().count()
+        scheduled_trips = ScheduledTrip.objects.filter(trip__company=company, date__gte=timezone.now().date()).count()
+        
+# Nombre de réservations confirmées
+        confirmed_bookings = Booking.objects.filter(
+            trip__company=company,
+            status='confirmed'
+        ).count()
+
+        # Nombre total de places disponibles
+        total_seats = ScheduledTrip.objects.filter(
+            trip__company=company
+        ).aggregate(
+            total=Sum('trip__capacity')
+        )['total'] or 0
+
+        # Calcul du taux moyen d’occupation
+        average_occupancy = (
+            confirmed_bookings / total_seats
+            if total_seats > 0 else 0
+        )
+        stats = {
+            'total_bookings': total_bookings,
+            'total_revenue': total_revenue,
+            'active_clients': active_clients,
+            'scheduled_trips': scheduled_trips,
+            "average_occupancy": average_occupancy,
+        }
+        
+        serializer = CompanyStatsSerializer(stats)
+        return Response(serializer.data)
+
+class CompanyViewSet(viewsets.ModelViewSet):
+    queryset = Company.objects.all()
+    serializer_class = CompanySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            self.permission_classes = [permissions.IsAuthenticated]
+        elif self.action == 'retrieve':
+            self.permission_classes = [permissions.IsAuthenticated]
+        return super().get_permissions()
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
+class CompanyDetailView(generics.RetrieveAPIView):
+    queryset = Company.objects.all()
+    serializer_class = CompanySerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'pk'
+
+class CompanyBookingsView(generics.ListAPIView):
+    serializer_class = BookingSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        company_id = self.kwargs['company_id']
+        try:
+            company = Company.objects.get(pk=company_id)
+        except Company.DoesNotExist:
+            raise Http404
+
+        # Check if the user is an admin of the company or a staff member
+        if not (self.request.user.is_staff or company.admins.filter(id=self.request.user.id).exists()):
+            # If not, return an empty queryset or raise a permission denied error
+            # For now, returning an empty queryset to avoid 403 for non-admins
+            return Booking.objects.none()
+
+        return Booking.objects.filter(trip__company=company).select_related(
+            'trip',
+            'trip__company',
+            'trip__departure_city',
+            'trip__arrival_city'
+        ).order_by('-booking_date')
+
+class TripViewSet(viewsets.ModelViewSet):
+    queryset = Trip.objects.all()
+    serializer_class = TripSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        # Allow staff to see all trips, company admins to see their company's trips
+        if self.request.user.is_staff:
+            return Trip.objects.all()
+        # Filter trips by companies the user administers
+        return Trip.objects.filter(company__admins=self.request.user).distinct()
+
+    def perform_create(self, serializer):
+        # Ensure the user creating the trip is an admin of the associated company
+        company = serializer.validated_data.get('company')
+        if not (self.request.user.is_staff or company.admins.filter(id=self.request.user.id).exists()):
+            raise serializers.ValidationError(
+                f"Vous n'avez pas la permission de créer des trajets pour la compagnie '{company.name}' (ID: {company.id}). "
+                f"Votre ID utilisateur: {self.request.user.id}. Admins de la compagnie: {[admin.id for admin in company.admins.all()]}"
+            )
+        serializer.save()
+
+    def perform_update(self, serializer):
+        # Ensure the user updating the trip is an admin of the associated company
+        company = serializer.instance.company
+        if not (self.request.user.is_staff or company.admins.filter(id=self.request.user.id).exists()):
+            raise serializers.ValidationError("You do not have permission to update trips for this company.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        # Ensure the user deleting the trip is an admin of the associated company
+        company = instance.company
+        if not (self.request.user.is_staff or company.admins.filter(id=self.request.user.id).exists()):
+            raise serializers.ValidationError("You do not have permission to delete trips for this company.")
+        instance.delete()
 
 class ScheduledTripSearchView(APIView):
     permission_classes = [permissions.AllowAny]

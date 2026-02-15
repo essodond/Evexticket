@@ -357,8 +357,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
       // close after short delay to show confirmation
       setTimeout(() => {
         setSuccessMessage(null);
-        onClose();
-      }, 900);
+      }, 3000);
     } catch (error: any) {
       console.error('Erreur lors de la sauvegarde du trajet:', error);
       const msg = error?.message || (error?.data && JSON.stringify(error.data)) || 'Erreur inconnue';

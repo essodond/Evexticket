@@ -238,87 +238,99 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
 
       {/* Stats Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow duration-300">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 mb-1">Voyages</p>
-              <p className="text-3xl font-bold text-gray-800">
-                {stats?.total_trips ? formatNumber(stats.total_trips) : '0'}
-              </p>
-            </div>
-            <div className="p-3 bg-blue-100 rounded-full">
-              <Bus className="h-8 w-8 text-blue-500" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <p className="text-sm text-gray-400">
-              Voyages programmés
-            </p>
-          </div>
-        </div>
+                <div className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow duration-300">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-500 mb-1">Voyages</p>
+                            <p className="text-3xl font-bold text-gray-800">
+                                {stats?.scheduled_trips ? formatNumber(stats.scheduled_trips) : '0'}
+                            </p>
+                        </div>
+                        <div className="p-3 bg-blue-100 rounded-full">
+                            <Bus className="h-8 w-8 text-blue-500" />
+                        </div>
+                    </div>
+                    <div className="mt-4">
+                        <p className="text-sm text-gray-400">
+                            Voyages programmés
+                        </p>
+                    </div>
+                </div>
 
-        <div className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow duration-300">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 mb-1">Réservations</p>
-              <p className="text-3xl font-bold text-gray-800">
-                {stats?.total_bookings ? formatNumber(stats.total_bookings) : '0'}
-              </p>
-            </div>
-            <div className="p-3 bg-green-100 rounded-full">
-              <FileText className="h-8 w-8 text-green-500" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <p className="text-sm text-gray-400">
-              Total des réservations
-            </p>
-          </div>
-        </div>
+                <div className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow duration-300">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-500 mb-1">Réservations</p>
+                            <p className="text-3xl font-bold text-gray-800">
+                                {stats?.total_bookings ? formatNumber(stats.total_bookings) : '0'}
+                            </p>
+                        </div>
+                        <div className="p-3 bg-green-100 rounded-full">
+                            <FileText className="h-8 w-8 text-green-500" />
+                        </div>
+                    </div>
+                    <div className="mt-4">
+                        <p className="text-sm text-gray-400">
+                            Total des réservations
+                        </p>
+                    </div>
+                </div>
 
-        <div className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow duration-300">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 mb-1">Revenu total</p>
-              <p className="text-3xl font-bold text-gray-800">
-                {stats?.total_revenue ? formatCurrency(stats.total_revenue) : '0'} FCFA
-              </p>
-            </div>
-            <div className="p-3 bg-yellow-100 rounded-full">
-              <DollarSign className="h-8 w-8 text-yellow-500" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <p className="text-sm text-gray-400">
-              Chiffre d'affaires
-            </p>
-          </div>
-        </div>
+                <div className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow duration-300">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-500 mb-1">Revenu total</p>
+                            <p className="text-3xl font-bold text-gray-800">
+                                {stats?.total_revenue ? formatCurrency(stats.total_revenue) : '0'} FCFA
+                            </p>
+                        </div>
+                        <div className="p-3 bg-yellow-100 rounded-full">
+                            <DollarSign className="h-8 w-8 text-yellow-500" />
+                        </div>
+                    </div>
+                    <div className="mt-4">
+                        <p className="text-sm text-gray-400">
+                            Chiffre d'affaires
+                        </p>
+                    </div>
+                </div>
 
-        <div className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow duration-300">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 mb-1">Utilisateurs actifs</p>
-              <p className="text-3xl font-bold text-gray-800">
-                {stats?.active_users ? formatNumber(stats.active_users) : '0'}
-              </p>
+                <div className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow duration-300">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-500 mb-1">Clients actifs</p>
+                            <p className="text-3xl font-bold text-gray-800">
+                                {stats?.active_clients ? formatNumber(stats.active_clients) : '0'}
+                            </p>
+                        </div>
+                        <div className="p-3 bg-red-100 rounded-full">
+                            <Users className="h-8 w-8 text-red-500" />
+                        </div>
+                    </div>
+                    <div className="mt-4">
+                        <p className="text-sm text-gray-400">
+                            Clients réguliers
+                        </p>
+                    </div>
+                </div>
             </div>
-            <div className="p-3 bg-red-100 rounded-full">
-              <Users className="h-8 w-8 text-red-500" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <p className="text-sm text-gray-400">
-              Clients réguliers
-            </p>
-          </div>
-        </div>
-      </div>
 
-      {/* Tabs for Trips and Bookings */}
+      {/* Tabs for Dashboard, Trips, and Bookings */}
       <div className="mb-8">
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`
+                ${activeTab === 'dashboard'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }
+                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center
+              `}
+            >
+              <BarChart3 className="h-5 w-5 mr-2" /> Tableau de bord
+            </button>
             <button
               onClick={() => setActiveTab('trips')}
               className={`
@@ -326,10 +338,10 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }
-                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
+                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center
               `}
             >
-              Voyages ({trips.length})
+              <Bus className="h-5 w-5 mr-2" /> Voyages ({trips.length})
             </button>
             <button
               onClick={() => setActiveTab('bookings')}
@@ -338,16 +350,19 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }
-                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
+                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center
               `}
             >
-              Réservations ({bookings.length})
+              <FileText className="h-5 w-5 mr-2" /> Réservations ({bookings.length})
             </button>
           </nav>
         </div>
       </div>
 
       {/* Content based on active tab */}
+      {activeTab === 'dashboard' && stats && (
+        <CompanyCharts stats={stats} />
+      )}
       {activeTab === 'trips' && (
         <div className="bg-white p-6 rounded-lg shadow">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Voyages</h2>

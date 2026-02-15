@@ -109,6 +109,7 @@ class UserSerializer(serializers.ModelSerializer):
     """Serializer pour les utilisateurs"""
     is_company_admin = serializers.SerializerMethodField()
     phone_number = serializers.SerializerMethodField()
+    company_id = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -116,9 +117,9 @@ class UserSerializer(serializers.ModelSerializer):
         # décider de la redirection (is_staff => Admin Général, is_company_admin calculé côté /me/)
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'is_active', 'is_staff', 'is_superuser', 'date_joined', 'is_company_admin', 'phone_number'
+            'is_active', 'is_staff', 'is_superuser', 'date_joined', 'is_company_admin', 'phone_number', 'company_id'
         ]
-        read_only_fields = ['id', 'date_joined', 'is_company_admin', 'phone_number']
+        read_only_fields = ['id', 'date_joined', 'is_company_admin', 'phone_number', 'company_id']
 
     def get_is_company_admin(self, obj):
         # Vérifie si l'utilisateur est admin d'au moins une compagnie
@@ -130,6 +131,11 @@ class UserSerializer(serializers.ModelSerializer):
             return profile.phone if profile else None
         except Exception:
             return None
+
+    def get_company_id(self, obj):
+        # Récupère l'ID de la première compagnie administrée par l'utilisateur
+        company = obj.admin_companies.first()
+        return company.id if company else None
 
 
 class CitySerializer(serializers.ModelSerializer):
@@ -219,6 +225,7 @@ class BoardingZoneSerializer(serializers.ModelSerializer):
 
 
 class TripSerializer(serializers.ModelSerializer):
+    company = serializers.PrimaryKeyRelatedField(queryset=Company.objects.all(), required=False)
     """Serializer pour les trajets (aligné avec models.base.Trip)"""
     company_name = serializers.CharField(source='company.name', read_only=True)
     departure_city_name = serializers.CharField(source='departure_city.name', read_only=True)
@@ -231,6 +238,7 @@ class TripSerializer(serializers.ModelSerializer):
         model = Trip
         fields = [
             'id',
+            'company',
             'company_name', 'departure_city', 'departure_city_name', 'arrival_city', 'arrival_city_name',
             'price', 'departure_time', 'arrival_time',
             'duration', 'bus_type', 'capacity',
@@ -473,6 +481,8 @@ class ScheduledTripSerializer(serializers.ModelSerializer):
     - `stops` : arrêts ordonnés du trajet
     - `available_seats` : calculé selon le segment demandé si présent dans le contexte
     """
+    # Champ writeable pour permettre la création via l'ID du Trip
+    trip = serializers.PrimaryKeyRelatedField(queryset=Trip.objects.all(), write_only=True, required=True)
     trip_info = TripSerializer(source='trip', read_only=True)
     departure_city_display = serializers.SerializerMethodField()
     arrival_city_display = serializers.SerializerMethodField()
@@ -482,7 +492,7 @@ class ScheduledTripSerializer(serializers.ModelSerializer):
     class Meta:
         model = ScheduledTrip
         fields = [
-            'id', 'trip_info', 'date', 'departure_city_display', 'arrival_city_display', 'stops', 'available_seats'
+            'id', 'trip', 'trip_info', 'date', 'departure_city_display', 'arrival_city_display', 'stops', 'available_seats'
         ]
 
     def get_departure_city_display(self, obj):
@@ -650,13 +660,13 @@ class BookingCreateSerializer(serializers.ModelSerializer):
 
 
 class CompanyStatsSerializer(serializers.Serializer):
-    total_trips = serializers.IntegerField()
+    scheduled_trips = serializers.IntegerField()
     total_bookings = serializers.IntegerField()
     total_revenue = serializers.DecimalField(max_digits=10, decimal_places=2)
     average_occupancy = serializers.FloatField()
 
 class DashboardStatsSerializer(serializers.Serializer):
-    total_trips = serializers.IntegerField()
+    scheduled_trips = serializers.IntegerField()
     total_bookings = serializers.IntegerField()
     total_revenue = serializers.DecimalField(max_digits=10, decimal_places=2)
     average_occupancy = serializers.FloatField()
