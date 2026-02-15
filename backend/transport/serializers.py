@@ -345,19 +345,26 @@ class BookingSerializer(serializers.ModelSerializer):
     """Serializer pour les réservations"""
     trip_details = TripSerializer(source='trip', read_only=True)
     passenger_full_name = serializers.SerializerMethodField()
-    
+    scheduled_trip_date = serializers.SerializerMethodField()
+
     class Meta:
         model = Booking
         fields = [
-            'id', 'trip', 'trip_details', 'passenger_name', 'passenger_email',
+            'id', 'trip', 'trip_details', 'scheduled_trip_date', 'passenger_name', 'passenger_email',
             'passenger_phone', 'seat_number', 'origin_stop', 'destination_stop', 'status', 'payment_method',
             'total_price', 'booking_date', 'user',
             'passenger_full_name'
         ]
-        read_only_fields = ['id', 'booking_date', 'passenger_full_name']
+        read_only_fields = ['id', 'booking_date', 'passenger_full_name', 'scheduled_trip_date']
 
     def get_passenger_full_name(self, obj):
         return f"{obj.passenger_name}"
+
+    def get_scheduled_trip_date(self, obj):
+        """Retourne la date du voyage programmé si disponible"""
+        if obj.scheduled_trip:
+            return str(obj.scheduled_trip.date)
+        return None
 
     def validate_seat_number(self, value):
         # Vérifier que le siège n'est pas déjà pris pour ce voyage programmé
@@ -687,6 +694,9 @@ class BookingCreateSerializer(serializers.ModelSerializer):
         # EN MODE DEVELOPPEMENT: créer la réservation directement en statut 'confirmed'
         # (sans attendre la confirmation de paiement)
         validated_data['status'] = 'confirmed'
+        # Assigner l'utilisateur connecté à la réservation
+        # (pour pouvoir retrouver ses réservations avec GET /bookings/)
+        validated_data['user'] = self.context['request'].user
 
         # Créer la réservation
         booking = super().create(validated_data)

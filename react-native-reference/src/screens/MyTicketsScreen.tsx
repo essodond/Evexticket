@@ -40,30 +40,39 @@ export default function MyTicketsScreen({ navigation }: Props) {
       }
       
       const bookings = await getMyBookings();
-      console.log('✅ Tickets chargés:', bookings);
-      
+      console.log('✅ Bookings reçus:', bookings, 'Type:', typeof bookings);
+
+      // Vérifier que bookings est un tableau
+      if (!Array.isArray(bookings)) {
+        console.error('❌ Les bookings ne sont pas un tableau:', bookings);
+        setTickets([]);
+        return;
+      }
+
       // Transformer les réservations en format Trip attendu par l'écran
       const transformedTickets = bookings.map((booking: any) => {
+        console.log('📋 Transformation du booking:', booking.id, booking.seat_number);
         const tripDetails = booking.trip_details || booking.trip_info || {};
         return {
           id: booking.id,
-          date: booking.scheduled_trip?.date || 'Date non disponible',
+          date: booking.scheduled_trip_date || 'Date non disponible',
           company: tripDetails.company_name || 'Compagnie inconnue',
           price: booking.total_price || tripDetails.price || 0,
           from: tripDetails.departure_city_name || 'Ville de départ',
           to: tripDetails.arrival_city_name || 'Ville d\'arrivée',
           departure: tripDetails.departure_time || 'Heure non disponible',
           arrival: tripDetails.arrival_time || 'Heure non disponible',
-          // Ajouter d'autres champs nécessaires
           seat_number: booking.seat_number || 'Siège non assigné',
           status: booking.status || 'Confirmé',
           trip_info: tripDetails
         };
       });
       
+      console.log('✅ Tickets transformés:', transformedTickets.length);
       setTickets(transformedTickets);
     } catch (error) {
       console.error('💥 Erreur lors du chargement des tickets:', error);
+      setTickets([]);
     } finally {
       setLoading(false);
     }

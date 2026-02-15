@@ -337,15 +337,33 @@ export async function createBooking(data: BookingData): Promise<any> {
 
 export async function getMyBookings(): Promise<any[]> {
   try {
-    console.log('📡 Appel API vers /bookings/');
-    const response = await request<any[]>('/bookings/', {
+    console.log('📡 Appel API vers /my-bookings/');
+    const response = await request<any>('/my-bookings/', {
       method: 'GET',
     });
-    console.log('✅ Réponse des réservations:', JSON.stringify(response, null, 2));
-    return response;
+    console.log('✅ Réponse brute des réservations:', JSON.stringify(response, null, 2));
+
+    // Gérer les différents formats de réponse du backend
+    if (Array.isArray(response)) {
+      console.log('✅ Format: tableau direct');
+      return response;
+    }
+    if (response && Array.isArray(response.results)) {
+      console.log('✅ Format: objet avec results (pagination)');
+      return response.results;
+    }
+    if (response && Array.isArray(response.data)) {
+      console.log('✅ Format: objet avec data');
+      return response.data;
+    }
+
+    console.warn('⚠️  Format de réponse inattendu:', response);
+    // Retourner un tableau vide plutôt que undefined
+    return [];
   } catch (error) {
-    console.error('Erreur lors de la récupération des réservations:', error);
-    throw error;
+    console.error('💥 Erreur lors de la récupération des réservations:', error);
+    // Retourner un tableau vide plutôt que de lever l'erreur
+    return [];
   }
 }
 

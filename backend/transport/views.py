@@ -101,9 +101,11 @@ class ScheduledTripViewSet(viewsets.ModelViewSet):
 class MyBookingsView(generics.ListAPIView):
     """
     Renvoie la liste des réservations pour l'utilisateur actuellement authentifié.
+    Retourne directement un tableau sans pagination.
     """
     serializer_class = BookingSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None  # Désactiver la pagination
 
     def get_queryset(self):
         """
@@ -116,8 +118,10 @@ class MyBookingsView(generics.ListAPIView):
             'trip', 
             'trip__company', 
             'trip__departure_city', 
-            'trip__arrival_city'
+            'trip__arrival_city',
+            'scheduled_trip'
         ).order_by('-booking_date')
+
 
 
 class TripSyncView(APIView):
