@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -22,11 +22,49 @@ type Props = NativeStackScreenProps<RootStackParamList, 'MainTabs'>;
 export default function MyTicketsScreen({ navigation }: Props) {
   const [tickets, setTickets] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hiddenTickets, setHiddenTickets] = useState<Set<number>>(new Set());
   const { user } = useAuth();
 
   useEffect(() => {
     loadTickets();
   }, [user]);
+
+  // Fonction pour masquer un ticket
+  const handleDeleteTicket = (ticketId: number) => {
+    setHiddenTickets(prev => {
+      const newHidden = new Set(prev);
+      newHidden.add(ticketId);
+      return newHidden;
+    });
+    console.log(`🗑️  Ticket ${ticketId} masqué de la liste`);
+  };
+
+  // Filtrer les tickets masqués
+  const visibleTickets = tickets.filter(ticket => !hiddenTickets.has(ticket.id));
+
+  // Trier les tickets : valides d'abord, puis expirés
+  const sortedTickets = useMemo(() => {
+    const valid = [];
+    const expired = [];
+
+    visibleTickets.forEach(ticket => {
+      if (isTravelPassed(ticket.date)) {
+        expired.push(ticket);
+      } else {
+        valid.push(ticket);
+      }
+    });
+
+    // Trier les valides par date décroissante (plus récents en premier)
+    valid.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // Trier les expirés par date décroissante (plus récents en premier)
+    expired.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    return [...valid, ...expired];
+  }, [visibleTickets]);
+
+
 
   const loadTickets = async () => {
     try {
@@ -78,6 +116,28 @@ export default function MyTicketsScreen({ navigation }: Props) {
     }
   };
 
+  // Fonction pour vérifier si un voyage est passé
+  const isTravelPassed = (travelDate: string): boolean => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Réinitialiser l'heure à minuit
+
+      // Parser la date au format YYYY-MM-DD
+      const parts = travelDate.split('-');
+      if (parts.length !== 3) {
+        console.warn('Format de date invalide:', travelDate);
+        return false;
+      }
+
+      const travelDateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+
+      return travelDateObj < today;
+    } catch (error) {
+      console.error('Erreur lors de la vérification de la date:', error);
+      return false;
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -89,20 +149,37 @@ export default function MyTicketsScreen({ navigation }: Props) {
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>Chargement de vos tickets...</Text>
         </View>
-      ) : tickets.length === 0 ? (
+      ) : sortedTickets.length === 0 ? (
         <View style={styles.emptyContainer}>
           <View style={styles.emptyIcon}>
             <Ionicons name="ticket-outline" size={48} color={COLORS.textSecondary} />
           </View>
-          <Text style={styles.emptyTitle}>Aucun ticket</Text>
-          <Text style={styles.emptyDescription}>
-            Vous n'avez pas encore de réservation. Réservez votre premier voyage maintenant !
+          <Text style={styles.emptyTitle}>
+            {tickets.length === 0 ? 'Aucun ticket' : 'Tous les tickets sont masqués'}
           </Text>
-          <Button
-            title="Réserver un trajet"
-            onPress={() => navigation.navigate('Home' as any)}
-            style={styles.emptyButton}
-          />
+          <Text style={styles.emptyDescription}>
+            {tickets.length === 0
+              ? 'Vous n\'avez pas encore de réservation. Réservez votre premier voyage maintenant !'
+              : 'Vous avez masqué tous vos tickets. Rechargez la page pour les afficher à nouveau.'}
+          </Text>
+          {tickets.length > 0 && (
+            <TouchableOpacity
+              onPress={() => {
+                // Masquer tous les tickets masqués
+                setHiddenTickets(new Set());
+              }}
+              style={styles.unhideButton}
+            >
+              <Text style={styles.unhideButtonText}>Afficher tous les tickets</Text>
+            </TouchableOpacity>
+          )}
+          {tickets.length === 0 && (
+            <Button
+              title="Réserver un trajet"
+              onPress={() => navigation.navigate('Home' as any)}
+              style={styles.emptyButton}
+            />
+          )}
         </View>
       ) : (
         <ScrollView
@@ -112,17 +189,42 @@ export default function MyTicketsScreen({ navigation }: Props) {
         >
           <Text style={styles.sectionTitle}>BILLETS ACTIFS</Text>
 
-          {tickets.map((ticket, index) => (
+          {/* Section Billets valides */}
+          {sortedTickets.some(t => !isTravelPassed(t.date)) && (
+            <Text style={styles.subsectionTitle}>📅 Billets à venir</Text>
+          )}
+
+          {sortedTickets.map((ticket, index) => {
+            const isExpired = isTravelPassed(ticket.date);
+
+            // Ne pas afficher le titre des expirés ici, le faire avant le premier expiré
+            return (
             <View key={ticket.id || index} style={styles.ticketCard}>
-              <View style={styles.ticketCardHeader}>
-                <View style={styles.ticketCardHeaderLeft}>
-                  <Ionicons name="calendar-outline" size={16} color={COLORS.white} />
-                  <Text style={styles.ticketCardDate}>{ticket.date}</Text>
+              {/* Badge INVALIDE pour les voyages passés - compact et sur le côté */}
+              {isExpired && (
+                <View style={styles.ticketCardHeader}>
+                  <View style={styles.ticketCardHeaderLeft}>
+                    <Ionicons name="calendar-outline" size={16} color={COLORS.white} />
+                    <Text style={styles.ticketCardDate}>{ticket.date}</Text>
+                  </View>
+                  <View style={styles.invalidBadgeCompact}>
+                    <Ionicons name="alert-circle" size={14} color={COLORS.white} />
+                    <Text style={styles.invalidBadgeCompactText}>Expiré</Text>
+                  </View>
                 </View>
-                <View style={styles.ticketCardBadge}>
-                  <Text style={styles.ticketCardBadgeText}>{ticket.status}</Text>
+              )}
+
+              {!isExpired && (
+                <View style={styles.ticketCardHeader}>
+                  <View style={styles.ticketCardHeaderLeft}>
+                    <Ionicons name="calendar-outline" size={16} color={COLORS.white} />
+                    <Text style={styles.ticketCardDate}>{ticket.date}</Text>
+                  </View>
+                  <View style={styles.ticketCardBadge}>
+                    <Text style={styles.ticketCardBadgeText}>{ticket.status}</Text>
+                  </View>
                 </View>
-              </View>
+              )}
 
               <View style={styles.ticketCardBody}>
                 <View style={styles.ticketCardInfo}>
@@ -159,15 +261,24 @@ export default function MyTicketsScreen({ navigation }: Props) {
                   <Text style={styles.ticketCardValue}>{ticket.seat_number}</Text>
                 </View>
 
-                <Button
-                  title="Voir le billet"
-                  onPress={() => navigation.navigate('Ticket' as any, { trip: ticket })}
-                  icon={<Ionicons name="ticket-outline" size={20} color={COLORS.white} style={{ marginRight: 8 }} />}
-                  style={styles.viewButton}
-                />
+                <View style={styles.ticketCardActions}>
+                  <Button
+                    title="Voir le billet"
+                    onPress={() => navigation.navigate('Ticket' as any, { trip: ticket })}
+                    icon={<Ionicons name="ticket-outline" size={20} color={COLORS.white} style={{ marginRight: 8 }} />}
+                    style={[styles.viewButton, { flex: 1 }]}
+                  />
+                  <TouchableOpacity
+                    onPress={() => handleDeleteTicket(ticket.id)}
+                    style={styles.deleteButton}
+                  >
+                    <Ionicons name="trash-outline" size={20} color={COLORS.white} />
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
-          ))}
+            );
+          })}
         </ScrollView>
       )}
     </View>
@@ -259,6 +370,36 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
+  },
+  invalidBadge: {
+    backgroundColor: '#EF4444', // Rouge
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  invalidBadgeText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: COLORS.white,
+    letterSpacing: 0.5,
+  },
+  invalidBadgeCompact: {
+    backgroundColor: COLORS.warning,  // Orange doux (#FF9500)
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    gap: 4,
+  },
+  invalidBadgeCompactText: {
+    fontSize: FONT_SIZES.xs || 12,
+    fontWeight: FONT_WEIGHTS.semibold,
+    color: COLORS.white,
   },
   ticketCardHeader: {
     backgroundColor: COLORS.primary,
@@ -361,8 +502,39 @@ const styles = StyleSheet.create({
   ticketCardSeat: {
     marginBottom: 16,
   },
+  ticketCardActions: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
   viewButton: {
     height: 48,
     borderRadius: 12,
+  },
+  deleteButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#999999',  // Gris doux et discret
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  unhideButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  unhideButtonText: {
+    color: COLORS.white,
+    fontWeight: FONT_WEIGHTS.semibold,
+    fontSize: FONT_SIZES.base,
+    textAlign: 'center',
   },
 });
