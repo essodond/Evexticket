@@ -643,7 +643,7 @@ class BookingCreateSerializer(serializers.ModelSerializer):
                 status__in=['confirmed', 'pending']
             ).exists():
                 raise serializers.ValidationError(f"Le siège {seat_number} est déjà réservé pour ce voyage.")
-        
+
         # Vérifier si le voyage programmé a des places disponibles
         if scheduled_trip.available_seats <= 0:
             raise serializers.ValidationError("Aucune place disponible pour ce voyage.")
@@ -684,7 +684,10 @@ class BookingCreateSerializer(serializers.ModelSerializer):
         scheduled_trip = validated_data.pop('scheduled_trip')
         validated_data['trip'] = scheduled_trip.trip
         validated_data['scheduled_trip'] = scheduled_trip
-        
+        # EN MODE DEVELOPPEMENT: créer la réservation directement en statut 'confirmed'
+        # (sans attendre la confirmation de paiement)
+        validated_data['status'] = 'confirmed'
+
         # Créer la réservation
         booking = super().create(validated_data)
         
