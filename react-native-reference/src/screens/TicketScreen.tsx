@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,15 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import QRCode from 'react-native-qrcode-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import ViewShot, { captureRef } from 'react-native-view-shot';
+import * as MediaLibrary from 'expo-media-library';
+import * as Sharing from 'expo-sharing';
 import { RootStackParamList } from '../types';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
@@ -23,13 +27,86 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Ticket'>;
 export default function TicketScreen({ navigation, route }: Props) {
   const { trip } = route.params;
   const ticketNumber = `EVEX-${trip.trip_info?.id || trip.id}-${Date.now().toString().slice(-6)}`;
+  const viewShotRef = useRef<any>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleDownload = () => {
-    Alert.alert('Téléchargement', 'Votre ticket PDF a été téléchargé avec succès !');
+  // Capturer le ticket en image
+  const captureTicket = async (): Promise<string | null> => {
+    try {
+      if (!viewShotRef.current) return null;
+      const uri = await captureRef(viewShotRef, {
+        format: 'png',
+        quality: 1,
+      });
+      return uri;
+    } catch (error) {
+      console.error('Erreur capture ticket:', error);
+      return null;
+    }
   };
 
-  const handleShare = () => {
-    Alert.alert('Partage', 'Fonctionnalité de partage à venir...');
+  // Enregistrer le ticket en photo dans la galerie
+  const handleDownload = async () => {
+    try {
+      setIsProcessing(true);
+
+      // Demander la permission d'accéder à la galerie
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission requise',
+          'Veuillez autoriser l\'accès à la galerie pour enregistrer votre ticket.'
+        );
+        return;
+      }
+
+      const uri = await captureTicket();
+      if (!uri) {
+        Alert.alert('Erreur', 'Impossible de capturer le ticket. Réessayez.');
+        return;
+      }
+
+      await MediaLibrary.saveToLibraryAsync(uri);
+      Alert.alert(
+        '✅ Enregistré !',
+        'Votre ticket a été enregistré dans votre galerie photo.',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Erreur sauvegarde:', error);
+      Alert.alert('Erreur', 'Une erreur est survenue lors de l\'enregistrement.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Partager le ticket
+  const handleShare = async () => {
+    try {
+      setIsProcessing(true);
+
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        Alert.alert('Indisponible', 'Le partage n\'est pas disponible sur cet appareil.');
+        return;
+      }
+
+      const uri = await captureTicket();
+      if (!uri) {
+        Alert.alert('Erreur', 'Impossible de capturer le ticket. Réessayez.');
+        return;
+      }
+
+      await Sharing.shareAsync(uri, {
+        mimeType: 'image/png',
+        dialogTitle: 'Partager mon ticket EVEX',
+      });
+    } catch (error) {
+      console.error('Erreur partage:', error);
+      Alert.alert('Erreur', 'Une erreur est survenue lors du partage.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   // Helpers pour afficher correctement selon les champs backend
@@ -83,7 +160,12 @@ export default function TicketScreen({ navigation, route }: Props) {
           </View>
         </View>
 
-        <View style={styles.ticket}>
+        <ViewShot
+          ref={viewShotRef}
+          options={{ format: 'png', quality: 1 }}
+          style={{ backgroundColor: COLORS.white }}
+        >
+        <View style={styles.ticket} collapsable={false}>
           <LinearGradient
             colors={[COLORS.primary, COLORS.primaryDark]}
             style={styles.ticketHeader}
@@ -153,6 +235,14 @@ export default function TicketScreen({ navigation, route }: Props) {
             </Text>
           </View>
         </View>
+        </ViewShot>
+
+        {isProcessing && (
+          <View style={styles.processingOverlay}>
+            <ActivityIndicator size="small" color={COLORS.primary} />
+            <Text style={styles.processingText}>Traitement en cours...</Text>
+          </View>
+        )}
 
         <View style={styles.notice}>
           <Text style={styles.noticeText}>
@@ -167,12 +257,14 @@ export default function TicketScreen({ navigation, route }: Props) {
             variant="outline"
             icon={<Ionicons name="share-outline" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />}
             style={styles.actionButton}
+            disabled={isProcessing}
           />
           <Button
-            title="Télécharger"
+            title="Enregistrer"
             onPress={handleDownload}
             icon={<Ionicons name="download-outline" size={20} color={COLORS.white} style={{ marginRight: 8 }} />}
             style={styles.actionButton}
+            disabled={isProcessing}
           />
         </View>
       </ScrollView>
@@ -416,5 +508,20 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 56,
     borderRadius: 16,
+  },
+  processingOverlay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0F8FF',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    gap: 8,
+  },
+  processingText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.primary,
+    fontWeight: FONT_WEIGHTS.medium,
   },
 });

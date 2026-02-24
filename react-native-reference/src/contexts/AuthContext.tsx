@@ -30,7 +30,7 @@ async function registerForPushNotificationsAsync() {
     finalStatus = status;
   }
   if (finalStatus !== 'granted') {
-    alert('Failed to get push token for push notification!');
+    console.warn('Permissions de notification non accordées');
     return;
   }
 }
@@ -39,21 +39,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Au lancement : vérifier si un token existe et s'il est toujours valide
   useEffect(() => {
     registerForPushNotificationsAsync();
-    const loadUser = async () => {
+
+    const restoreSession = async () => {
       try {
+        const token = await AsyncStorage.getItem('token');
         const storedUser = await AsyncStorage.getItem('user');
-        if (storedUser) {
-          setUser(JSON.parse(storedUser));
+
+        if (token && storedUser) {
+          // Le token existe, on essaie de valider auprès du serveur
+          try {
+            const freshUser = await api.getCurrentUser();
+            // Token valide → on met à jour avec les données fraîches
+            setUser(freshUser);
+            await AsyncStorage.setItem('user', JSON.stringify(freshUser));
+            console.log('✅ Session restaurée pour:', freshUser.first_name);
+          } catch (err) {
+            // Token invalide/expiré → on essaie quand même avec les données locales
+            // (utile si le serveur est temporairement injoignable)
+            console.warn('⚠️ Impossible de valider le token, utilisation du cache local');
+            setUser(JSON.parse(storedUser));
+          }
+        } else {
+          // Pas de token → pas connecté
+          console.log('👤 Aucune session trouvée');
+          setUser(null);
         }
       } catch (error) {
-        console.error('Erreur lors du chargement de l\'utilisateur:', error);
+        console.error('Erreur lors de la restauration de session:', error);
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
     };
-    loadUser();
+
+    restoreSession();
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -74,8 +96,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       Notifications.scheduleNotificationAsync({
         content: {
-          title: "Connexion réussie !",
-          body: `Bienvenue ${response.user.firstName} ${response.user.lastName} sur Evexticket !`,
+          title: "Connexion réussie ! 👋",
+          body: `Bienvenue ${response.user.first_name} ${response.user.last_name} sur Evexticket !`,
+          sound: 'default',
         },
         trigger: null,
       });
@@ -96,14 +119,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setIsLoading(true);
       const response = await api.register(userData);
-      console.log('Register API Response:', response);
-      if (!response.user || !response.token) {
+      console.log('Register API Response:', JSON.stringify(response, null, 2));
+
+      if (!response.token) {
         throw new Error('Réponse d\'inscription invalide');
       }
 
-      setUser(response.user);
-      await AsyncStorage.setItem('user', JSON.stringify(response.user));
-      return response.user;
+      // Le user peut venir de response.user (normalisé dans api.ts)
+      const newUser = response.user;
+
+      setUser(newUser);
+      await AsyncStorage.setItem('user', JSON.stringify(newUser));
+      await AsyncStorage.setItem('token', response.token);
+
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Inscription réussie ! 🎉",
+          body: `Bienvenue ${newUser?.first_name || ''} sur Evexticket !`,
+          sound: 'default',
+        },
+        trigger: null,
+      });
+
+      return newUser;
     } catch (error) {
       console.error('Erreur lors de l\'inscription:', error);
       if (error instanceof Error) {
@@ -121,9 +159,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await api.logout();
       setUser(null);
       await AsyncStorage.removeItem('user');
+      await AsyncStorage.removeItem('token');
     } catch (error) {
       console.error('Erreur lors de la déconnexion:', error);
-      throw new Error('Erreur lors de la déconnexion');
+      // Même en cas d'erreur, on déconnecte localement
+      setUser(null);
+      await AsyncStorage.removeItem('user');
+      await AsyncStorage.removeItem('token');
     } finally {
       setIsLoading(false);
     }

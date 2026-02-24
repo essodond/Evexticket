@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { RootStackParamList, MainTabParamList } from '../types';
 import { COLORS } from '../constants/colors';
+import { useAuth } from '../contexts/AuthContext';
 
 // Screens
 import SplashScreen from '../screens/SplashScreen';
@@ -80,6 +81,7 @@ function MainTabs() {
 export default function AppNavigator() {
   const [isFirstLaunch, setIsFirstLaunch] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { user, isLoading: authLoading } = useAuth();
 
   useEffect(() => {
     const checkFirstLaunch = async () => {
@@ -87,7 +89,7 @@ export default function AppNavigator() {
         const hasLaunched = await AsyncStorage.getItem('hasLaunched');
         setIsFirstLaunch(hasLaunched === null);
         
-        // Simuler le splash screen
+        // Splash screen minimum 2s
         setTimeout(() => {
           setIsLoading(false);
         }, 2000);
@@ -100,17 +102,31 @@ export default function AppNavigator() {
     checkFirstLaunch();
   }, []);
 
-  if (isLoading) {
+  // Attendre que le splash et l'auth soient prêts
+  if (isLoading || authLoading) {
     return <SplashScreen />;
   }
+
+  // Déterminer l'écran initial en fonction de l'état de connexion
+  const getInitialRoute = () => {
+    if (user) {
+      // Utilisateur connecté → directement sur l'app
+      return 'MainTabs';
+    }
+    if (isFirstLaunch) {
+      return 'Onboarding';
+    }
+    return 'PublicHome';
+  };
 
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',
+        gestureEnabled: false,
       }}
-      initialRouteName={isFirstLaunch ? 'Onboarding' : 'PublicHome'}
+      initialRouteName={getInitialRoute()}
     >
       <Stack.Screen name="Splash" component={SplashScreen} />
       <Stack.Screen name="Onboarding" component={OnboardingScreen} />

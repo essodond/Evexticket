@@ -76,11 +76,11 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({ seats, onSeatPress, selec
       {/* Driver's Section and Front Door */}
       <View style={styles.busFront}>
         <View style={styles.driverArea}>
-```
-          <Text style={styles.driverText}>Driver</Text> {/* Driver's position */}
+          <Text style={styles.driverText}>Driver</Text>
         </View>
-        <View style={styles.frontDoor}><Text style={styles.doorText}>Porte Avant</Text></View>
-```
+        <View style={styles.frontDoor}>
+          <Text style={styles.doorText}>Porte Avant</Text>
+        </View>
       </View>
 
       {/* First Row after driver (Seats 1, 2, 3, 4) */}

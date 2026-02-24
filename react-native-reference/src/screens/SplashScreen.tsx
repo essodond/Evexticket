@@ -1,53 +1,75 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
   withSequence,
   withTiming,
+  withDelay,
 } from 'react-native-reanimated';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
 
 export default function SplashScreen() {
-  const scale = useSharedValue(0.5);
-  const opacity = useSharedValue(0);
+  const logoScale = useSharedValue(0.3);
+  const logoOpacity = useSharedValue(0);
+  const logoRotate = useSharedValue(-10);
+  const textOpacity = useSharedValue(0);
+  const textTranslateY = useSharedValue(20);
 
   useEffect(() => {
-    // Animation d'entrée
-    scale.value = withSpring(1, {
-      damping: 10,
-      stiffness: 100,
+    // Logo : fade in + scale spring + légère rotation
+    logoOpacity.value = withTiming(1, { duration: 600 });
+    logoScale.value = withSpring(1, {
+      damping: 12,
+      stiffness: 90,
     });
-    
-    opacity.value = withTiming(1, { duration: 800 });
+    logoRotate.value = withSpring(0, {
+      damping: 12,
+      stiffness: 90,
+    });
 
-    // Animation de pulsation
+    // Pulsation douce du logo après l'entrée
     setTimeout(() => {
-      scale.value = withSequence(
-        withTiming(1.05, { duration: 500 }),
-        withTiming(1, { duration: 500 })
+      logoScale.value = withSequence(
+        withTiming(1.08, { duration: 400 }),
+        withTiming(1, { duration: 400 })
       );
-    }, 800);
+    }, 900);
+
+    // Texte : apparition avec slide up
+    textOpacity.value = withDelay(500, withTiming(1, { duration: 600 }));
+    textTranslateY.value = withDelay(500, withSpring(0, { damping: 14, stiffness: 80 }));
   }, []);
 
-  const animatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ scale: scale.value }],
-      opacity: opacity.value,
-    };
-  });
+  const logoAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: logoScale.value },
+      { rotate: `${logoRotate.value}deg` },
+    ],
+    opacity: logoOpacity.value,
+  }));
+
+  const textAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: textOpacity.value,
+    transform: [{ translateY: textTranslateY.value }],
+  }));
 
   return (
     <View style={styles.container}>
-      <Animated.View style={[styles.logoContainer, animatedStyle]}>
-        <View style={styles.logo}>
-          <Text style={styles.logoText}>EVEX</Text>
+      <Animated.View style={[styles.logoContainer, logoAnimatedStyle]}>
+        <View style={styles.logoShadow}>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
         </View>
       </Animated.View>
-      
-      <Animated.View style={animatedStyle}>
+
+      <Animated.View style={[styles.textContainer, textAnimatedStyle]}>
+        <Text style={styles.appName}>EVEX Ticket</Text>
         <Text style={styles.subtitle}>Réservation simplifiée</Text>
       </Animated.View>
     </View>
@@ -62,26 +84,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoContainer: {
-    marginBottom: 24,
+    marginBottom: 32,
   },
-  logo: {
-    width: 120,
-    height: 120,
-    backgroundColor: COLORS.primary,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+  logoShadow: {
     shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
   },
-  logoText: {
-    fontSize: 42,
+  logoImage: {
+    width: 150,
+    height: 150,
+  },
+  textContainer: {
+    alignItems: 'center',
+  },
+  appName: {
+    fontSize: FONT_SIZES['2xl'],
     fontWeight: FONT_WEIGHTS.bold,
-    color: COLORS.white,
-    letterSpacing: -1,
+    color: COLORS.primary,
+    marginBottom: 6,
+    letterSpacing: 0.5,
   },
   subtitle: {
     fontSize: FONT_SIZES.base,

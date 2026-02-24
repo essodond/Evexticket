@@ -29,7 +29,7 @@ export default function PublicHomeScreen({ navigation }: Props) {
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.heroContainer}>
         <Image
-          source={{ uri: 'https://images.unsplash.com/photo-1710074987341-a05470a5de2f?w=800' }}
+          source={{ uri: 'https://i.pinimg.com/1200x/e9/cd/9f/e9cd9fdd26dd8c095795557dd97f2faf.jpg?w=800' }}
           style={styles.heroImage}
         />
         <LinearGradient
@@ -37,11 +37,7 @@ export default function PublicHomeScreen({ navigation }: Props) {
           style={styles.gradient}
         />
         
-        <View style={styles.logoContainer}>
-          <View style={styles.logoBadge}>
-            <Text style={styles.logoText}>EVEX</Text>
-          </View>
-        </View>
+
 
         <View style={styles.heroContent}>
           <Text style={styles.heroTitle}>Réserve ton ticket en toute simplicité</Text>

@@ -184,7 +184,7 @@ export async function login(data: LoginData): Promise<AuthResponse> {
 
 export async function register(data: RegisterData): Promise<AuthResponse> {
   try {
-    const response = await request<AuthResponse>('/register/', {
+    const response = await request<any>('/register/', {
       method: 'POST',
       body: JSON.stringify({
         email: data.email,
@@ -196,8 +196,28 @@ export async function register(data: RegisterData): Promise<AuthResponse> {
         phone: data.phone,
       }),
     });
-    await AsyncStorage.setItem('token', response.token);
-    return response;
+
+    // Le backend register renvoie une structure plate : { username, email, token, ... }
+    // alors que login renvoie { user: {...}, token: "..." }
+    // On normalise ici pour que les deux aient le même format
+    let normalizedResponse: AuthResponse;
+
+    if (response.user && response.token) {
+      // Déjà au bon format (comme login)
+      normalizedResponse = response;
+    } else if (response.token) {
+      // Structure plate du register : extraire token et construire user
+      const { token, ...userData } = response;
+      normalizedResponse = {
+        token,
+        user: userData as User,
+      };
+    } else {
+      throw new Error('Réponse d\'inscription invalide');
+    }
+
+    await AsyncStorage.setItem('token', normalizedResponse.token);
+    return normalizedResponse;
   } catch (error) {
     console.error('Erreur d\'inscription:', error);
     throw error;

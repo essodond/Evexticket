@@ -23,6 +23,7 @@ import Button from '../components/Button';
 import Input from '../components/Input';
 import { createBooking, BookingData } from '../services/api'; // Import createBooking and BookingData
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
+import * as Notifications from 'expo-notifications';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Payment'>;
 
@@ -130,6 +131,18 @@ export default function PaymentScreen({ navigation, route }: Props) {
       const response = await createBooking(bookingData);
       console.log('✅ Réponse de réservation:', JSON.stringify(response, null, 2));
       Alert.alert('Succès', 'Votre réservation a été effectuée avec succès!');
+
+      // Envoyer une notification locale de confirmation
+      const seatLabel = selectedSeat ? selectedSeat.replace('seat-', '') : '';
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'EVEX: Réservation confirmée 🎫',
+          body: `${fromCity} → ${toCity}\n ${dateLabel} à ${departureTimeLabel}\n Siège ${seatLabel} • ${companyName}`,
+          sound: 'default',
+          data: { screen: 'Ticket' },
+        },
+        trigger: null, // Notification immédiate
+      });
 
       // Construire l'objet trip pour l'écran de ticket
       const tripForTicket = {

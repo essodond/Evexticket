@@ -52,9 +52,9 @@ export default function ProfileScreen({ navigation }: Props) {
             <Ionicons name="person" size={40} color={COLORS.white} />
           </View>
           <View style={styles.userInfo}>
-            <Text style={styles.userName}>{user?.first_name || 'Utilisateur'}</Text>
+            <Text style={styles.userName}>{user?.first_name || ''} {user?.last_name || ''}</Text>
             <Text style={styles.userMember}>
-              Membre depuis {user?.date_joined ? new Date(user.date_joined).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' }) : '...'}
+              Membre depuis {user?.date_joined ? new Date(user.date_joined).getFullYear() : '...'}
             </Text>
           </View>
         </View>

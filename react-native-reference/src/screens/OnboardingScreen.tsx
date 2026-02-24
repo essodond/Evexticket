@@ -25,7 +25,7 @@ const slides = [
     id: '1',
     title: 'Voyagez en toute sérénité',
     description: 'Réservez vos billets de bus en quelques clics et voyagez à travers tout le Togo.',
-    image: 'https://images.unsplash.com/photo-1639432035906-59ee00df24bd?w=800',
+    image: 'https://i.pinimg.com/1200x/e9/cd/9f/e9cd9fdd26dd8c095795557dd97f2faf.jpg',
   },
   {
     id: '2',

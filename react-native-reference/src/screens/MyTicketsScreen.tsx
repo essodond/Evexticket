@@ -39,10 +39,31 @@ export default function MyTicketsScreen({ navigation }: Props) {
     console.log(`🗑️  Ticket ${ticketId} masqué de la liste`);
   };
 
-  // Filtrer les tickets masqués
+  // Fonction pour verifier si un voyage est passe
+  const isTravelPassed = (travelDate: string): boolean => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const parts = travelDate.split('-');
+      if (parts.length !== 3) {
+        console.warn('Format de date invalide:', travelDate);
+        return false;
+      }
+
+      const travelDateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+
+      return travelDateObj < today;
+    } catch (error) {
+      console.error('Erreur lors de la verification de la date:', error);
+      return false;
+    }
+  };
+
+  // Filtrer les tickets masques
   const visibleTickets = tickets.filter(ticket => !hiddenTickets.has(ticket.id));
 
-  // Trier les tickets : valides d'abord, puis expirés
+  // Trier les tickets : valides d'abord, puis expires
   const sortedTickets = useMemo(() => {
     const valid = [];
     const expired = [];
@@ -63,8 +84,6 @@ export default function MyTicketsScreen({ navigation }: Props) {
 
     return [...valid, ...expired];
   }, [visibleTickets]);
-
-
 
   const loadTickets = async () => {
     try {
@@ -113,28 +132,6 @@ export default function MyTicketsScreen({ navigation }: Props) {
       setTickets([]);
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Fonction pour vérifier si un voyage est passé
-  const isTravelPassed = (travelDate: string): boolean => {
-    try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0); // Réinitialiser l'heure à minuit
-
-      // Parser la date au format YYYY-MM-DD
-      const parts = travelDate.split('-');
-      if (parts.length !== 3) {
-        console.warn('Format de date invalide:', travelDate);
-        return false;
-      }
-
-      const travelDateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-
-      return travelDateObj < today;
-    } catch (error) {
-      console.error('Erreur lors de la vérification de la date:', error);
-      return false;
     }
   };
 
@@ -190,9 +187,7 @@ export default function MyTicketsScreen({ navigation }: Props) {
           <Text style={styles.sectionTitle}>BILLETS ACTIFS</Text>
 
           {/* Section Billets valides */}
-          {sortedTickets.some(t => !isTravelPassed(t.date)) && (
-            <Text style={styles.subsectionTitle}>📅 Billets à venir</Text>
-          )}
+          {sortedTickets.some(t => !isTravelPassed(t.date)) }
 
           {sortedTickets.map((ticket, index) => {
             const isExpired = isTravelPassed(ticket.date);
@@ -208,7 +203,7 @@ export default function MyTicketsScreen({ navigation }: Props) {
                     <Text style={styles.ticketCardDate}>{ticket.date}</Text>
                   </View>
                   <View style={styles.invalidBadgeCompact}>
-                    <Ionicons name="alert-circle" size={14} color={COLORS.white} />
+                    <Ionicons name="alert-circle" size={14} color={COLORS.warning} />
                     <Text style={styles.invalidBadgeCompactText}>Expiré</Text>
                   </View>
                 </View>
@@ -272,7 +267,7 @@ export default function MyTicketsScreen({ navigation }: Props) {
                     onPress={() => handleDeleteTicket(ticket.id)}
                     style={styles.deleteButton}
                   >
-                    <Ionicons name="trash-outline" size={20} color={COLORS.white} />
+                    <Ionicons name="trash-outline" size={20} color={COLORS.textSecondary} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -387,19 +382,21 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   invalidBadgeCompact: {
-    backgroundColor: COLORS.warning,  // Orange doux (#FF9500)
+    backgroundColor: 'rgba(255, 149, 0, 0.12)',
+    borderColor: 'rgba(255, 149, 0, 0.35)',
+    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 6,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 10,
     gap: 4,
   },
   invalidBadgeCompactText: {
     fontSize: FONT_SIZES.xs || 12,
     fontWeight: FONT_WEIGHTS.semibold,
-    color: COLORS.white,
+    color: COLORS.warning,
   },
   ticketCardHeader: {
     backgroundColor: COLORS.primary,
@@ -515,14 +512,16 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: '#999999',  // Gris doux et discret
+    backgroundColor: COLORS.grayLight,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: COLORS.black,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
   },
   unhideButton: {
     backgroundColor: COLORS.primary,
