@@ -206,10 +206,29 @@ CORS_ALLOWED_ORIGINS = [
     "http://192.168.1.65:8000",
 ]
 
-# En production, on autorise toutes les origines (ou ajuster selon vos besoins)
+# Ajouter dynamiquement les origines Render depuis les variables d'environnement
+_extra_cors = os.environ.get('CORS_EXTRA_ORIGINS', '')
+if _extra_cors:
+    CORS_ALLOWED_ORIGINS += [o.strip() for o in _extra_cors.split(',') if o.strip()]
+
+# En production, autoriser toutes les origines
 CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL', 'False').lower() == 'true'
 
-CORS_ALLOW_CREDENTIALS = True
+# IMPORTANT : CORS_ALLOW_CREDENTIALS ne peut pas être True si CORS_ALLOW_ALL_ORIGINS est True
+# On le met à False quand ALLOW_ALL est activé (on utilise Token auth, pas les cookies)
+CORS_ALLOW_CREDENTIALS = not CORS_ALLOW_ALL_ORIGINS
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 # Configuration de la langue et du fuseau horaire
 LANGUAGE_CODE = 'fr-fr'

@@ -22,12 +22,12 @@ function resolveApiBaseUrl(): string {
   try {
     const host = typeof window !== 'undefined' ? window.location.hostname : undefined;
     if (host) {
-      return `http://${host}:8000/api`;
+      return `https://evexticket-api.onrender.com/api`;
     }
   } catch (_) {}
 
   // 3) Repli par défaut en développement local
-  return 'http://127.0.0.1:8000/api';
+  return 'https://evexticket-api.onrender.com/api';
 }
 
 const API_BASE_URL = resolveApiBaseUrl();
@@ -156,8 +156,6 @@ class ApiService {
         ...defaultHeaders,
         ...options.headers,
       },
-      // Permet d'envoyer les cookies si SessionAuthentication est utilisée
-      credentials: 'include',
     };
 
     try {
