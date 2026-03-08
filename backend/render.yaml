@@ -11,8 +11,8 @@ services:
     runtime: python
     region: frankfurt
     plan: free
-    buildCommand: "./build.sh"
-    startCommand: "bash start.sh"
+    buildCommand: "cd backend && bash build.sh"
+    startCommand: "cd backend && bash start.sh"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -26,5 +26,6 @@ services:
         value: "True"
       - key: PYTHON_VERSION
         value: "3.12.3"
+
 
 
