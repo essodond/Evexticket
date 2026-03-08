@@ -715,12 +715,14 @@ class CompanyStatsSerializer(serializers.Serializer):
     average_occupancy = serializers.FloatField()
 
 class DashboardStatsSerializer(serializers.Serializer):
-    scheduled_trips = serializers.IntegerField()
     total_bookings = serializers.IntegerField()
-    total_revenue = serializers.DecimalField(max_digits=10, decimal_places=2)
-    average_occupancy = serializers.FloatField()
-    upcoming_trips = ScheduledTripSerializer(many=True)
-    recent_bookings = BookingSerializer(many=True)
+    bookings_this_week = serializers.IntegerField()
+    bookings_this_month = serializers.IntegerField()
+    total_revenue = serializers.DecimalField(max_digits=12, decimal_places=2)
+    revenue_this_week = serializers.DecimalField(max_digits=12, decimal_places=2)
+    revenue_this_month = serializers.DecimalField(max_digits=12, decimal_places=2)
+    active_trips = serializers.IntegerField()
+    active_companies = serializers.IntegerField()
 
 class TripSearchSerializer(serializers.Serializer):
     departure_city = serializers.CharField(required=True)
