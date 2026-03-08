@@ -2,8 +2,6 @@
 # Script de build pour Render
 set -o errexit
 
-cd "$(dirname "$0")"
-
 echo "=== BUILD START (pwd: $(pwd)) ==="
 
 # Installer les dépendances
@@ -18,4 +16,5 @@ echo "=== STATIC FILES COLLECTED ==="
 
 echo "=== BUILD COMPLETE ==="
 echo "NOTE: Migrations will run at startup (start.sh)"
+
 
