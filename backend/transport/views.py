@@ -390,7 +390,12 @@ class ScheduledTripSearchView(APIView):
             travel_date = serializer.validated_data['travel_date']
             passengers = serializer.validated_data['passengers']
 
-            from unidecode import unidecode
+            try:
+                from unidecode import unidecode
+            except ImportError:
+                # Fallback si unidecode n'est pas installé
+                def unidecode(s):
+                    return s
 
             dep_norm = unidecode(departure_city).lower()
             arr_norm = unidecode(arrival_city).lower()
@@ -414,8 +419,7 @@ class ScheduledTripSearchView(APIView):
                 )
                 if direct_match:
                     booked = Booking.objects.filter(
-                        trip=trip,
-                        travel_date=st.date,
+                        scheduled_trip=st,
                         status__in=['confirmed', 'pending']
                     ).values_list('seat_number', flat=True)
                     available = max(trip.capacity - len(set(booked)), 0)
@@ -431,8 +435,7 @@ class ScheduledTripSearchView(APIView):
                     for d in dest_candidates:
                         if o.sequence < d.sequence:
                             qs = Booking.objects.filter(
-                                trip=trip,
-                                travel_date=st.date,
+                                scheduled_trip=st,
                                 status__in=['confirmed', 'pending']
                             ).select_related('origin_stop', 'destination_stop')
 
