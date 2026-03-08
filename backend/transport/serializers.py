@@ -723,6 +723,7 @@ class DashboardStatsSerializer(serializers.Serializer):
     revenue_this_month = serializers.DecimalField(max_digits=12, decimal_places=2)
     active_trips = serializers.IntegerField()
     active_companies = serializers.IntegerField()
+    total_users = serializers.IntegerField()
 
 class TripSearchSerializer(serializers.Serializer):
     departure_city = serializers.CharField(required=True)

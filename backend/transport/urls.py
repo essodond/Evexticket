@@ -9,6 +9,7 @@ router.register(r'bookings', views.BookingViewSet, basename='booking')
 router.register(r'companies', views.CompanyViewSet, basename='company')
 router.register(r'trips', views.TripViewSet, basename='trip')
 router.register(r'scheduled_trips', views.ScheduledTripViewSet, basename='scheduled-trip')
+router.register(r'users', views.UserViewSet, basename='user')
 
 urlpatterns = [
     path('companies/<int:pk>/', views.CompanyDetailView.as_view(), name='company-detail'),

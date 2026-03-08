@@ -201,6 +201,47 @@ class CurrentUserView(APIView):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
 
+
+class UserViewSet(viewsets.ModelViewSet):
+    """CRUD utilisateurs — réservé aux admins (is_staff)."""
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAdminUser]
+    pagination_class = None
+
+    def get_queryset(self):
+        return User.objects.all().order_by('-date_joined')
+
+    def update(self, request, *args, **kwargs):
+        user = self.get_object()
+        data = request.data
+        if 'first_name' in data:
+            user.first_name = data['first_name']
+        if 'last_name' in data:
+            user.last_name = data['last_name']
+        if 'email' in data:
+            user.email = data['email']
+        if 'is_active' in data:
+            user.is_active = data['is_active']
+        user.save()
+        phone = data.get('phone_number') or data.get('phone')
+        if phone is not None:
+            try:
+                profile = getattr(user, 'profile', None)
+                if profile:
+                    profile.phone = phone
+                    profile.save()
+            except Exception:
+                pass
+        return Response(UserSerializer(user).data)
+
+    def destroy(self, request, *args, **kwargs):
+        user = self.get_object()
+        if user == request.user:
+            return Response({'detail': 'Vous ne pouvez pas supprimer votre propre compte.'}, status=status.HTTP_400_BAD_REQUEST)
+        user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class DashboardStatsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -233,7 +274,10 @@ class DashboardStatsView(APIView):
         
         # Active companies
         active_companies = Company.objects.filter(is_active=True).count()
-        
+
+        # Total users
+        total_users = User.objects.count()
+
         stats = {
             'total_bookings': total_bookings,
             'bookings_this_week': bookings_this_week,
@@ -243,6 +287,7 @@ class DashboardStatsView(APIView):
             'revenue_this_month': revenue_this_month,
             'active_trips': active_trips,
             'active_companies': active_companies,
+            'total_users': total_users,
         }
         
         serializer = DashboardStatsSerializer(stats)
