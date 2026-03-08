@@ -85,7 +85,7 @@ function App() {
       navigate('/results');
     } catch (error) {
       console.error("Error searching for trips:", error);
-      // Optionally, handle error display to the user
+      throw error;
     }
   };
 
