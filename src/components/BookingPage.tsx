@@ -65,8 +65,8 @@ const BookingPage: React.FC<BookingPageProps> = ({ trip, searchData, onBack, onP
   // Fetch occupied seat numbers
   useEffect(() => {
     let mounted = true;
-    const tripId = Number((trip as any)?.trip ?? (trip as any)?.id ?? (trip as any));
-    const travelDate = searchData?.date || searchData?.travel_date;
+    const tripId = Number((trip as any)?.scheduled_trip_id ?? (trip as any)?.trip ?? (trip as any)?.id ?? (trip as any));
+    const travelDate = searchData?.date || searchData?.travel_date || (trip as any)?.date;
     if (!tripId || !travelDate) return;
 
     console.log('DEBUG: Fetching occupied seats for tripId:', tripId, 'and travelDate:', travelDate);
@@ -163,7 +163,7 @@ const BookingPage: React.FC<BookingPageProps> = ({ trip, searchData, onBack, onP
   const displayDeparture = trip.departure_city_name || trip.departure || (searchData?.departure || '-');
   const displayArrival = trip.arrival_city_name || trip.arrival || (searchData?.arrival || '-');
   const displayCompany = trip.company_name || (trip.company !== undefined ? String(trip.company) : '-');
-  const displayDateStr = searchData?.date || searchData?.travel_date;
+  const displayDateStr = searchData?.date || searchData?.travel_date || (trip as any)?.date;
   const displayDate = displayDateStr ? new Date(displayDateStr).toLocaleDateString('fr-FR') : '-';
   const priceNum = typeof trip.price === 'number' ? trip.price : parseFloat(String(trip.price));
 

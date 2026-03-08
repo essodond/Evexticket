@@ -81,6 +81,9 @@ export interface Trip {
 
 export interface ScheduledTrip extends Trip {
   date: string;
+  scheduled_trip_id?: number;
+  seats?: any[];
+  stops?: any[];
 }
 
 export interface Booking {
@@ -308,17 +311,43 @@ class ApiService {
     return this.deleteRoute(id);
   }
 
+  /**
+   * Flatten scheduled trip objects: the backend returns { id, trip_info: {...}, date, ... }
+   * but the frontend expects flat objects with all Trip fields + scheduled trip fields.
+   */
+  private flattenScheduledTrips(data: any[]): ScheduledTrip[] {
+    if (!Array.isArray(data)) return [];
+    return data.map((item: any) => {
+      if (item && item.trip_info && typeof item.trip_info === 'object') {
+        return {
+          ...item.trip_info,
+          scheduled_trip_id: item.id,
+          id: item.trip_info.id, // keep route/trip id as id
+          date: item.date,
+          available_seats: item.available_seats ?? item.trip_info.available_seats,
+          seats: item.seats,
+          stops: item.stops,
+          departure_city_display: item.departure_city_display || item.trip_info.departure_city_name,
+          arrival_city_display: item.arrival_city_display || item.trip_info.arrival_city_name,
+        };
+      }
+      return item;
+    });
+  }
+
   async searchScheduledTrips(params: TripSearchParams): Promise<ScheduledTrip[]> {
-    return this.request<ScheduledTrip[]>('/scheduled_trips/search/', {
+    const raw = await this.request<any[]>('/scheduled_trips/search/', {
       method: 'POST',
       body: JSON.stringify(params),
     });
+    return this.flattenScheduledTrips(raw);
   }
 
   // Voyages datés
   async getScheduledTrips(companyId?: number): Promise<ScheduledTrip[]> {
     const query = companyId ? `?company_id=${encodeURIComponent(String(companyId))}` : '';
-    return this.request<ScheduledTrip[]>(`/scheduled_trips/${query}`);
+    const raw = await this.request<any[]>(`/scheduled_trips/${query}`);
+    return this.flattenScheduledTrips(raw);
   }
 
   async getScheduledTrip(id: number): Promise<ScheduledTrip> {

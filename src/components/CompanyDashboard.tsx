@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Plus, Edit, Trash2, Users, Download, Calendar, MapPin, DollarSign, TrendingUp, Bus, BarChart3, FileText, Eye, XCircle } from 'lucide-react';
-import apiService, { ScheduledTrip, Booking, CompanyStats, City } from '../services/api';
+import { Plus, Edit, Trash2, Users, Download, Calendar, MapPin, DollarSign, Bus, BarChart3, FileText, Eye, XCircle } from 'lucide-react';
+import apiService, { ScheduledTrip, Booking, CompanyStats, City, Trip } from '../services/api';
 import { useCities } from '../hooks/useApi';
 import AddTripModal from './AddTripModal';
 import ConfirmationModal from './ConfirmationModal';
@@ -170,7 +170,7 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
 
   const handleCancelBooking = async (bookingId: number) => {
     try {
-      await apiService.updateBookingStatus(bookingId, 'cancelled');
+      await apiService.updateBooking(bookingId, { status: 'cancelled' } as any);
       await fetchCompanyData();
       setShowCancelModal(false);
       setNotificationData({
@@ -226,372 +226,474 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
   }
 
   return (
-    <div className="company-dashboard p-6">
-      <div className="flex items-center mb-6">
-        {logoUrl && (
-          <img src={logoUrl} alt={siteTitle || "Logo"} className="h-10 w-10 mr-3" />
-        )}
-        <h1 className="text-3xl font-bold text-gray-900">
-          Tableau de bord de la compagnie <span className="text-blue-600">{companyName}</span>
-        </h1>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-      {/* Stats Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <div className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow duration-300">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-gray-500 mb-1">Voyages</p>
-                            <p className="text-3xl font-bold text-gray-800">
-                                {stats?.scheduled_trips ? formatNumber(stats.scheduled_trips) : '0'}
-                            </p>
-                        </div>
-                        <div className="p-3 bg-blue-100 rounded-full">
-                            <Bus className="h-8 w-8 text-blue-500" />
-                        </div>
-                    </div>
-                    <div className="mt-4">
-                        <p className="text-sm text-gray-400">
-                            Voyages programmés
-                        </p>
-                    </div>
-                </div>
-
-                <div className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow duration-300">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-gray-500 mb-1">Réservations</p>
-                            <p className="text-3xl font-bold text-gray-800">
-                                {stats?.total_bookings ? formatNumber(stats.total_bookings) : '0'}
-                            </p>
-                        </div>
-                        <div className="p-3 bg-green-100 rounded-full">
-                            <FileText className="h-8 w-8 text-green-500" />
-                        </div>
-                    </div>
-                    <div className="mt-4">
-                        <p className="text-sm text-gray-400">
-                            Total des réservations
-                        </p>
-                    </div>
-                </div>
-
-                <div className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow duration-300">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-gray-500 mb-1">Revenu total</p>
-                            <p className="text-3xl font-bold text-gray-800">
-                                {stats?.total_revenue ? formatCurrency(stats.total_revenue) : '0'} FCFA
-                            </p>
-                        </div>
-                        <div className="p-3 bg-yellow-100 rounded-full">
-                            <DollarSign className="h-8 w-8 text-yellow-500" />
-                        </div>
-                    </div>
-                    <div className="mt-4">
-                        <p className="text-sm text-gray-400">
-                            Chiffre d'affaires
-                        </p>
-                    </div>
-                </div>
-
-                <div className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow duration-300">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-gray-500 mb-1">Clients actifs</p>
-                            <p className="text-3xl font-bold text-gray-800">
-                                {stats?.active_clients ? formatNumber(stats.active_clients) : '0'}
-                            </p>
-                        </div>
-                        <div className="p-3 bg-red-100 rounded-full">
-                            <Users className="h-8 w-8 text-red-500" />
-                        </div>
-                    </div>
-                    <div className="mt-4">
-                        <p className="text-sm text-gray-400">
-                            Clients réguliers
-                        </p>
-                    </div>
-                </div>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-4">
+            {logoUrl && (
+              <img src={logoUrl} alt={siteTitle || "Logo"} className="h-12 w-12 rounded-xl shadow-sm" />
+            )}
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Tableau de bord
+              </h1>
+              <p className="text-sm text-gray-500 mt-0.5">Compagnie <span className="font-semibold text-blue-600">{companyName}</span></p>
             </div>
-
-      {/* Tabs for Dashboard, Trips, and Bookings */}
-      <div className="mb-8">
-        <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`
-                ${activeTab === 'dashboard'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }
-                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center
-              `}
-            >
-              <BarChart3 className="h-5 w-5 mr-2" /> Tableau de bord
-            </button>
-            <button
-              onClick={() => setActiveTab('trips')}
-              className={`
-                ${activeTab === 'trips'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }
-                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center
-              `}
-            >
-              <Bus className="h-5 w-5 mr-2" /> Voyages ({trips.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('bookings')}
-              className={`
-                ${activeTab === 'bookings'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }
-                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center
-              `}
-            >
-              <FileText className="h-5 w-5 mr-2" /> Réservations ({bookings.length})
-            </button>
-          </nav>
-        </div>
-      </div>
-
-      {/* Content based on active tab */}
-      {activeTab === 'dashboard' && stats && (
-        <CompanyCharts stats={stats} />
-      )}
-      {activeTab === 'trips' && (
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Voyages</h2>
-          <div className="flex justify-between mb-4">
-            <button
-              onClick={() => setShowAddTripModal(true)}
-              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 flex items-center"
-            >
-              <Plus size={20} className="mr-2" /> Ajouter un voyage
-            </button>
-            <button
-              onClick={handleExportTickets}
-              className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center"
-            >
-              <Download size={20} className="mr-2" /> Exporter les billets
-            </button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trajet</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Heure</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Prix</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Places disponibles</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {trips.map((trip) => (
-                  <tr key={trip.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{trip.departure_city_display || 'N/A'} → {trip.arrival_city_display || 'N/A'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(trip.date).toLocaleDateString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{trip.trip_info?.departure_time || 'N/A'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{(trip.trip_info?.price ? `${trip.trip_info.price} FCFA` : 'N/A')}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{trip.available_seats}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button onClick={() => setEditingTrip(trip)} className="text-indigo-600 hover:text-indigo-900 mr-4" title="Modifier"><Edit size={18} /></button>
-                      <button onClick={() => { setItemToDelete({ type: 'trip', id: trip.id, name: `${trip.trip_info?.departure_city_name} → ${trip.trip_info?.arrival_city_name}` }); setShowDeleteModal(true); }} className="text-red-600 hover:text-red-900" title="Supprimer"><Trash2 size={18} /></button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'bookings' && (
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Réservations</h2>
-          <div className="flex justify-end mb-4">
+          <div className="flex items-center gap-3">
             <button
               onClick={handleDownloadReport}
-              className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center"
+              className="flex items-center gap-2 px-4 py-2.5 bg-white text-gray-700 text-sm font-medium rounded-xl border border-gray-200 hover:bg-gray-50 transition-all shadow-sm"
             >
-              <Download size={20} className="mr-2" /> Télécharger le rapport
+              <Download size={16} />
+              Rapport
+            </button>
+            <button
+              onClick={() => setShowAddTripModal(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-all shadow-sm"
+            >
+              <Plus size={16} />
+              Nouveau voyage
             </button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Voyageur</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trajet</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Siège</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date de réservation</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {bookings.map((booking) => (
-                  <tr key={booking.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{booking.passenger_name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{booking.trip_details?.departure_city_display} → {booking.trip_details?.arrival_city_display}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{booking.seat_number}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{booking.status}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(booking.booking_date).toLocaleDateString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                      <button 
-                        onClick={() => { 
-                          setSelectedBooking(booking); 
-                          setShowBookingDetails(true); 
-                        }} 
-                        className="text-blue-600 hover:text-blue-900 inline-block"
-                        title="Voir les détails"
-                      >
-                        <Eye size={18} />
-                      </button>
-                      <button 
-                        onClick={() => { 
-                          setSelectedBooking(booking); 
-                          setShowCancelModal(true); 
-                        }} 
-                        className="text-yellow-600 hover:text-yellow-900 inline-block"
-                        title="Annuler la réservation"
-                      >
-                        <XCircle size={18} />
-                      </button>
-                      <button 
-                        onClick={() => { 
-                          setItemToDelete({ 
-                            type: 'booking', 
-                            id: booking.id, 
-                            name: `Réservation de ${booking.passenger_name}` 
-                          }); 
-                          setShowDeleteModal(true); 
-                        }} 
-                        className="text-red-600 hover:text-red-900 inline-block"
-                        title="Supprimer"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        </div>
+
+        {/* Stats Section */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+          <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center">
+                <Bus className="h-5 w-5 text-blue-600" />
+              </div>
+              <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-full uppercase tracking-wider">Voyages</span>
+            </div>
+            <p className="text-3xl font-extrabold text-gray-900">
+              {stats?.scheduled_trips ? formatNumber(stats.scheduled_trips) : '0'}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">Voyages programmés</p>
+          </div>
+
+          <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center">
+                <FileText className="h-5 w-5 text-emerald-600" />
+              </div>
+              <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full uppercase tracking-wider">Réservations</span>
+            </div>
+            <p className="text-3xl font-extrabold text-gray-900">
+              {stats?.total_bookings ? formatNumber(stats.total_bookings) : '0'}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">Total des réservations</p>
+          </div>
+
+          <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-11 h-11 rounded-xl bg-amber-50 flex items-center justify-center">
+                <DollarSign className="h-5 w-5 text-amber-600" />
+              </div>
+              <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-2 py-1 rounded-full uppercase tracking-wider">Revenu</span>
+            </div>
+            <p className="text-2xl font-extrabold text-gray-900">
+              {stats?.total_revenue ? formatCurrency(stats.total_revenue) : '0'} <span className="text-sm font-normal text-gray-400">FCFA</span>
+            </p>
+            <p className="text-xs text-gray-400 mt-1">Chiffre d'affaires</p>
+          </div>
+
+          <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-11 h-11 rounded-xl bg-purple-50 flex items-center justify-center">
+                <Users className="h-5 w-5 text-purple-600" />
+              </div>
+              <span className="text-[10px] font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded-full uppercase tracking-wider">Clients</span>
+            </div>
+            <p className="text-3xl font-extrabold text-gray-900">
+              {stats?.active_clients ? formatNumber(stats.active_clients) : '0'}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">Clients réguliers</p>
           </div>
         </div>
-      )}
 
-      {/* Modals */}
-      {showAddTripModal && (
-        <AddTripModal
-          isOpen={showAddTripModal}
-          onClose={() => {
-            setShowAddTripModal(false);
-            setEditingTrip(null);
-          }}
-          onSave={handleSaveTrip}
-          editingTrip={editingTrip}
-          cities={apiCities}
-          companyId={companyId}
-        />
-      )}
+        {/* Tabs */}
+        <div className="mb-6">
+          <div className="flex gap-2 bg-white rounded-xl p-1.5 shadow-sm border border-gray-100 w-fit">
+            {[{
+              key: 'dashboard', label: 'Tableau de bord', icon: <BarChart3 size={16} /> },
+              { key: 'trips', label: 'Voyages', icon: <Bus size={16} />, count: trips.length },
+              { key: 'bookings', label: 'Réservations', icon: <FileText size={16} />, count: bookings.length },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === tab.key
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {tab.icon}
+                {tab.label}
+                {tab.count !== undefined && (
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                    activeTab === tab.key ? 'bg-blue-500 text-blue-100' : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
 
-      {showDeleteModal && itemToDelete && (
-        <ConfirmationModal
-          message={`Are you sure you want to delete ${itemToDelete.name} ?`}
-          onConfirm={itemToDelete.type === 'trip' ? handleDeleteTrip : handleDeleteBooking}
-          onCancel={() => { setShowDeleteModal(false); setItemToDelete(null); }}
-        />
-      )}
+        {/* Content based on active tab */}
+        {activeTab === 'dashboard' && stats && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <CompanyCharts stats={stats} />
+          </div>
+        )}
 
-      {showNotification && (
-        <NotificationModal
-          type={notificationData.type}
-          title={notificationData.title}
-          message={notificationData.message}
-          onClose={() => setShowNotification(false)}
-        />
-      )}
-
-      {/* Modal pour les détails de la réservation */}
-      {showBookingDetails && selectedBooking && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3 text-center">
-              <h3 className="text-lg leading-6 font-medium text-gray-900">Détails de la réservation</h3>
-              <div className="mt-2 px-7 py-3">
-                <p className="text-sm text-gray-500 mb-2">
-                  <strong>Voyageur:</strong> {selectedBooking.passenger_name}
-                </p>
-                <p className="text-sm text-gray-500 mb-2">
-                  <strong>Email:</strong> {selectedBooking.passenger_email}
-                </p>
-                <p className="text-sm text-gray-500 mb-2">
-                  <strong>Téléphone:</strong> {selectedBooking.passenger_phone}
-                </p>
-                <p className="text-sm text-gray-500 mb-2">
-                  <strong>Trajet:</strong> {selectedBooking.trip_details?.departure_city_display} → {selectedBooking.trip_details?.arrival_city_display}
-                </p>
-                <p className="text-sm text-gray-500 mb-2">
-                  <strong>Siège:</strong> {selectedBooking.seat_number}
-                </p>
-                <p className="text-sm text-gray-500 mb-2">
-                  <strong>Statut:</strong> {selectedBooking.status}
-                </p>
-                <p className="text-sm text-gray-500 mb-2">
-                  <strong>Date de réservation:</strong> {new Date(selectedBooking.booking_date).toLocaleDateString()}
-                </p>
+        {activeTab === 'trips' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-900">Voyages programmés</h2>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleExportTickets}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200"
+                >
+                  <Download size={15} />
+                  Exporter
+                </button>
+                <button
+                  onClick={() => setShowAddTripModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus size={15} />
+                  Ajouter
+                </button>
               </div>
-              <div className="items-center px-4 py-3">
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead>
+                  <tr className="bg-gray-50/80">
+                    <th className="px-6 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Trajet</th>
+                    <th className="px-6 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Heure</th>
+                    <th className="px-6 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Prix</th>
+                    <th className="px-6 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Places</th>
+                    <th className="px-6 py-3.5 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {trips.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-12 text-center">
+                        <Bus size={40} className="text-gray-200 mx-auto mb-3" />
+                        <p className="text-gray-400 text-sm">Aucun voyage programmé</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    trips.map((trip) => (
+                      <tr key={trip.id} className="hover:bg-blue-50/30 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                              <MapPin size={14} className="text-blue-500" />
+                            </div>
+                            <span className="text-sm font-medium text-gray-900">
+                              {trip.departure_city_display || trip.departure_city_name || 'N/A'} → {trip.arrival_city_display || trip.arrival_city_name || 'N/A'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-1.5">
+                            <Calendar size={13} className="text-gray-400" />
+                            <span className="text-sm text-gray-600">{trip.date ? new Date(trip.date).toLocaleDateString('fr-FR') : 'N/A'}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-sm font-medium text-gray-700">{trip.departure_time || (trip as any).trip_info?.departure_time || 'N/A'}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-sm font-bold text-blue-600">
+                            {trip.price ? `${formatCurrency(Number(trip.price))}` : (trip as any).trip_info?.price ? `${formatCurrency(Number((trip as any).trip_info.price))}` : 'N/A'} <span className="text-xs font-normal text-gray-400">FCFA</span>
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                            (trip.available_seats || 0) > 10 ? 'bg-emerald-50 text-emerald-700' :
+                            (trip.available_seats || 0) > 0 ? 'bg-amber-50 text-amber-700' :
+                            'bg-red-50 text-red-700'
+                          }`}>
+                            <Users size={12} />
+                            {trip.available_seats ?? 0}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => setEditingTrip(trip)}
+                              className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                              title="Modifier"
+                            >
+                              <Edit size={16} />
+                            </button>
+                            <button
+                              onClick={() => { setItemToDelete({ type: 'trip', id: trip.scheduled_trip_id || trip.id, name: `${trip.departure_city_name || ''} → ${trip.arrival_city_name || ''}` }); setShowDeleteModal(true); }}
+                              className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                              title="Supprimer"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'bookings' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-900">Réservations</h2>
+              <button
+                onClick={handleDownloadReport}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200"
+              >
+                <Download size={15} />
+                Télécharger le rapport
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead>
+                  <tr className="bg-gray-50/80">
+                    <th className="px-6 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Voyageur</th>
+                    <th className="px-6 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Trajet</th>
+                    <th className="px-6 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Siège</th>
+                    <th className="px-6 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Statut</th>
+                    <th className="px-6 py-3.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-3.5 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {bookings.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-12 text-center">
+                        <FileText size={40} className="text-gray-200 mx-auto mb-3" />
+                        <p className="text-gray-400 text-sm">Aucune réservation</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    bookings.map((booking) => (
+                      <tr key={booking.id} className="hover:bg-blue-50/30 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs font-bold text-blue-600">
+                                {booking.passenger_name?.charAt(0)?.toUpperCase() || '?'}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{booking.passenger_name}</p>
+                              <p className="text-xs text-gray-400">{booking.passenger_phone}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-sm text-gray-600">
+                            {booking.trip_details?.departure_city_display || booking.trip_details?.departure_city_name || '?'} → {booking.trip_details?.arrival_city_display || booking.trip_details?.arrival_city_name || '?'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="inline-flex items-center text-xs font-bold text-gray-700 bg-gray-100 px-2.5 py-1 rounded-lg">
+                            {booking.seat_number}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center text-[11px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                            booking.status === 'confirmed' ? 'bg-emerald-50 text-emerald-700' :
+                            booking.status === 'cancelled' ? 'bg-red-50 text-red-600' :
+                            booking.status === 'pending' ? 'bg-amber-50 text-amber-700' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>
+                            {booking.status === 'confirmed' ? '✓ Confirmé' :
+                             booking.status === 'cancelled' ? 'Annulé' :
+                             booking.status === 'pending' ? 'En attente' :
+                             booking.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-sm text-gray-500">{new Date(booking.booking_date).toLocaleDateString('fr-FR')}</span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => { setSelectedBooking(booking); setShowBookingDetails(true); }}
+                              className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                              title="Voir les détails"
+                            >
+                              <Eye size={16} />
+                            </button>
+                            {booking.status !== 'cancelled' && (
+                              <button
+                                onClick={() => { setSelectedBooking(booking); setShowCancelModal(true); }}
+                                className="p-2 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                title="Annuler"
+                              >
+                                <XCircle size={16} />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => { setItemToDelete({ type: 'booking', id: booking.id, name: `Réservation de ${booking.passenger_name}` }); setShowDeleteModal(true); }}
+                              className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                              title="Supprimer"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Modals */}
+        {showAddTripModal && (
+          <AddTripModal
+            isOpen={showAddTripModal}
+            onClose={() => { setShowAddTripModal(false); setEditingTrip(null); }}
+            onSave={handleSaveTrip}
+            editingTrip={editingTrip}
+            cities={apiCities}
+            companyId={companyId}
+          />
+        )}
+
+        {showDeleteModal && itemToDelete && (
+          <ConfirmationModal
+            message={`Êtes-vous sûr de vouloir supprimer ${itemToDelete.name} ?`}
+            onConfirm={itemToDelete.type === 'trip' ? handleDeleteTrip : handleDeleteBooking}
+            onCancel={() => { setShowDeleteModal(false); setItemToDelete(null); }}
+          />
+        )}
+
+        {showNotification && (
+          <NotificationModal
+            type={notificationData.type}
+            title={notificationData.title}
+            message={notificationData.message}
+            onClose={() => setShowNotification(false)}
+          />
+        )}
+
+        {/* Modal détails réservation */}
+        {showBookingDetails && selectedBooking && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
+                <h3 className="text-lg font-bold text-white">Détails de la réservation</h3>
+                <p className="text-blue-200 text-sm">#{selectedBooking.id}</p>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                    <span className="text-sm font-bold text-blue-600">{selectedBooking.passenger_name?.charAt(0)?.toUpperCase()}</span>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">{selectedBooking.passenger_name}</p>
+                    <p className="text-xs text-gray-400">{selectedBooking.passenger_email}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Téléphone</p>
+                    <p className="text-sm font-medium text-gray-800 mt-0.5">{selectedBooking.passenger_phone}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Siège</p>
+                    <p className="text-sm font-medium text-gray-800 mt-0.5">{selectedBooking.seat_number}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Trajet</p>
+                    <p className="text-sm font-medium text-gray-800 mt-0.5">{selectedBooking.trip_details?.departure_city_display || selectedBooking.trip_details?.departure_city_name} → {selectedBooking.trip_details?.arrival_city_display || selectedBooking.trip_details?.arrival_city_name}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Statut</p>
+                    <span className={`inline-flex mt-0.5 text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                      selectedBooking.status === 'confirmed' ? 'bg-emerald-50 text-emerald-700' :
+                      selectedBooking.status === 'cancelled' ? 'bg-red-50 text-red-600' :
+                      'bg-amber-50 text-amber-700'
+                    }`}>
+                      {selectedBooking.status === 'confirmed' ? '✓ Confirmé' : selectedBooking.status === 'cancelled' ? 'Annulé' : selectedBooking.status}
+                    </span>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Date de réservation</p>
+                    <p className="text-sm font-medium text-gray-800 mt-0.5">{new Date(selectedBooking.booking_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="px-6 py-4 bg-gray-50 flex justify-end">
                 <button
                   onClick={() => setShowBookingDetails(false)}
-                  className="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md shadow-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                  className="px-5 py-2.5 bg-gray-200 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-300 transition-colors"
                 >
                   Fermer
                 </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Modal de confirmation d'annulation */}
-      {showCancelModal && selectedBooking && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3 text-center">
-              <h3 className="text-lg leading-6 font-medium text-gray-900">Confirmer l'annulation</h3>
-              <div className="mt-2 px-7 py-3">
+        {/* Modal annulation */}
+        {showCancelModal && selectedBooking && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+              <div className="p-6 text-center">
+                <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+                  <XCircle size={28} className="text-red-500" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 mb-2">Confirmer l'annulation</h3>
                 <p className="text-sm text-gray-500">
-                  Êtes-vous sûr de vouloir annuler la réservation de {selectedBooking.passenger_name} ?
+                  Êtes-vous sûr de vouloir annuler la réservation de <span className="font-semibold text-gray-700">{selectedBooking.passenger_name}</span> ?
                 </p>
               </div>
-              <div className="items-center px-4 py-3">
-                <button
-                  onClick={() => handleCancelBooking(selectedBooking.id)}
-                  className="px-4 py-2 bg-red-500 text-white text-base font-medium rounded-md shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300 mr-2"
-                >
-                  Confirmer
-                </button>
+              <div className="flex gap-3 px-6 py-4 bg-gray-50">
                 <button
                   onClick={() => setShowCancelModal(false)}
-                  className="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md shadow-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                  className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-300 transition-colors"
                 >
-                  Annuler
+                  Non, garder
+                </button>
+                <button
+                  onClick={() => handleCancelBooking(selectedBooking.id)}
+                  className="flex-1 px-4 py-2.5 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700 transition-colors"
+                >
+                  Oui, annuler
                 </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+      </div>
     </div>
   );
 };
 
 export default CompanyDashboard;
+
+
+
+

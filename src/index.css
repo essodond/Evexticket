@@ -1,3 +1,517 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ===== LANDING PAGE — CUSTOM STYLES ===== */
+
+/* Perspective container for 3D effects */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+/* 3D Card tilt on hover */
+.card-3d {
+  transition: transform 0.5s ease, box-shadow 0.5s ease;
+  transform-style: preserve-3d;
+}
+.card-3d:hover {
+  transform: rotateY(-5deg) rotateX(5deg) translateZ(20px);
+  box-shadow: 20px 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+/* Glassmorphism card */
+.glass {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-strong {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* Gradient text */
+.text-gradient-blue {
+  background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 50%, #93c5fd 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-white-blue {
+  background: linear-gradient(135deg, #ffffff 0%, #bfdbfe 50%, #3b82f6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Animated gradient background */
+.bg-gradient-animated {
+  background: linear-gradient(-45deg, #0f172a, #1e3a5f, #1e40af, #0f172a);
+  background-size: 400% 400%;
+  animation: gradientShift 15s ease infinite;
+}
+
+/* Glowing button */
+.btn-glow {
+  position: relative;
+  overflow: hidden;
+}
+.btn-glow::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(from 0deg, transparent, rgba(59, 130, 246, 0.3), transparent 30%);
+  animation: spin 4s linear infinite;
+}
+.btn-glow::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: inherit;
+  background: inherit;
+  z-index: 1;
+}
+.btn-glow > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* Scrollbar styling */
+.landing-page::-webkit-scrollbar {
+  width: 6px;
+}
+.landing-page::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+.landing-page::-webkit-scrollbar-thumb {
+  background: #3b82f6;
+  border-radius: 3px;
+}
+
+/* Road animation dashes */
+.road-dash {
+  animation: roadScroll 1s linear infinite;
+}
+
+/* Particle effect dots */
+.particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(59, 130, 246, 0.5);
+  animation: particleRise 4s ease-out infinite;
+}
+
+/* Feature card hover glow */
+.feature-card {
+  position: relative;
+  transition: all 0.4s ease;
+}
+.feature-card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, transparent, rgba(59, 130, 246, 0.3), transparent);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.feature-card:hover::before {
+  opacity: 1;
+}
+.feature-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 60px rgba(59, 130, 246, 0.15);
+}
+
+/* Stat counter animation */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Isometric bus shadow */
+.bus-shadow {
+  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.15));
+}
+
+/* Bus rolling animation — body sways gently */
+.bus-rolling {
+  animation: busRoll 1.2s ease-in-out infinite;
+}
+
+@keyframes busRoll {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  25% { transform: translateY(-3px) rotate(-0.5deg); }
+  50% { transform: translateY(0px) rotate(0deg); }
+  75% { transform: translateY(-2px) rotate(0.5deg); }
+}
+
+/* Wheel spin animation */
+.wheel-spin {
+  transform-origin: center;
+  animation: wheelRotate 0.6s linear infinite;
+}
+
+@keyframes wheelRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Exhaust smoke particles */
+.exhaust-puff {
+  animation: exhaustPuff 2s ease-out infinite;
+}
+.exhaust-puff-delay {
+  animation: exhaustPuff 2s ease-out 0.6s infinite;
+}
+.exhaust-puff-delay-2 {
+  animation: exhaustPuff 2s ease-out 1.2s infinite;
+}
+
+@keyframes exhaustPuff {
+  0% { opacity: 0.4; transform: translate(0, 0) scale(1); }
+  50% { opacity: 0.2; transform: translate(-20px, -10px) scale(1.8); }
+  100% { opacity: 0; transform: translate(-40px, -20px) scale(2.5); }
+}
+
+/* Headlight glow pulse */
+.headlight-glow {
+  animation: headlightPulse 2s ease-in-out infinite;
+}
+
+@keyframes headlightPulse {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.4)); }
+  50% { filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.8)); }
+}
+
+/* Speed lines behind bus */
+.speed-lines {
+  animation: speedFade 0.8s linear infinite;
+}
+
+@keyframes speedFade {
+  0% { opacity: 0.3; transform: translateX(0); }
+  100% { opacity: 0; transform: translateX(-30px); }
+}
+
+/* Smooth section reveal */
+.reveal-section {
+  opacity: 0;
+  transform: translateY(30px);
+  animation: slideUp 0.8s ease-out forwards;
+}
+
+/* Grid pattern overlay */
+.grid-pattern {
+  background-image:
+    linear-gradient(rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* ===== AUTH PAGE — 3D EFFECTS ===== */
+
+/* 3D perspective container for auth form */
+.auth-perspective {
+  perspective: 1200px;
+  perspective-origin: 50% 50%;
+}
+
+/* 3D tilt card — interactive mouse follow */
+.auth-card-3d {
+  transform-style: preserve-3d;
+  transition: transform 0.15s ease-out, box-shadow 0.3s ease;
+  will-change: transform;
+}
+
+.auth-card-3d:hover {
+  box-shadow:
+    0 25px 80px -20px rgba(59, 130, 246, 0.2),
+    0 10px 30px -10px rgba(59, 130, 246, 0.1);
+}
+
+/* Floating 3D elements on left panel */
+.auth-float-element {
+  transform-style: preserve-3d;
+  animation: authFloat 5s ease-in-out infinite;
+}
+
+@keyframes authFloat {
+  0%, 100% { transform: translateZ(0) translateY(0) rotateY(0); }
+  25% { transform: translateZ(20px) translateY(-8px) rotateY(3deg); }
+  50% { transform: translateZ(10px) translateY(-4px) rotateY(-2deg); }
+  75% { transform: translateZ(25px) translateY(-12px) rotateY(2deg); }
+}
+
+/* 3D rotating ring decoration */
+.auth-ring-3d {
+  transform-style: preserve-3d;
+  animation: ringRotate3D 12s linear infinite;
+}
+
+@keyframes ringRotate3D {
+  0% { transform: rotateX(60deg) rotateZ(0deg); }
+  100% { transform: rotateX(60deg) rotateZ(360deg); }
+}
+
+/* Feature card lift on hover */
+.auth-feature-card {
+  transform-style: preserve-3d;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.auth-feature-card:hover {
+  transform: translateY(-4px) translateZ(20px) rotateX(-2deg);
+  box-shadow: 0 15px 40px -15px rgba(59, 130, 246, 0.2);
+}
+
+/* Input field 3D focus effect */
+.auth-input-3d:focus-within {
+  transform: translateZ(5px) scale(1.01);
+  box-shadow: 0 8px 25px -8px rgba(59, 130, 246, 0.15);
+}
+
+.auth-input-3d {
+  transform-style: preserve-3d;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Shimmer on glass card */
+.auth-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-shimmer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.08),
+    transparent
+  );
+  animation: authShimmer 4s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes authShimmer {
+  0% { left: -100%; }
+  50% { left: 150%; }
+  100% { left: 150%; }
+}
+
+/* 3D Bus icon floating */
+.auth-bus-3d {
+  transform-style: preserve-3d;
+  animation: bus3DFloat 4s ease-in-out infinite;
+}
+
+@keyframes bus3DFloat {
+  0%, 100% { transform: rotateY(0deg) translateZ(0) scale(1); }
+  25% { transform: rotateY(10deg) translateZ(15px) scale(1.05); }
+  50% { transform: rotateY(0deg) translateZ(5px) scale(1); }
+  75% { transform: rotateY(-10deg) translateZ(15px) scale(1.05); }
+}
+
+/* ===== AUTH PAGE — 3D EFFECTS ===== */
+
+/* 3D perspective container for auth form */
+.auth-perspective {
+  perspective: 1200px;
+  perspective-origin: 50% 50%;
+}
+
+/* 3D tilt card — interactive mouse follow */
+.auth-card-3d {
+  transform-style: preserve-3d;
+  transition: transform 0.15s ease-out, box-shadow 0.3s ease;
+  will-change: transform;
+}
+
+.auth-card-3d:hover {
+  box-shadow:
+    0 25px 80px -20px rgba(59, 130, 246, 0.2),
+    0 10px 30px -10px rgba(59, 130, 246, 0.1);
+}
+
+/* Floating 3D elements on left panel */
+.auth-float-element {
+  transform-style: preserve-3d;
+  animation: authFloat 5s ease-in-out infinite;
+}
+
+@keyframes authFloat {
+  0%, 100% { transform: translateZ(0) translateY(0) rotateY(0); }
+  25% { transform: translateZ(20px) translateY(-8px) rotateY(3deg); }
+  50% { transform: translateZ(10px) translateY(-4px) rotateY(-2deg); }
+  75% { transform: translateZ(25px) translateY(-12px) rotateY(2deg); }
+}
+
+/* 3D rotating ring decoration */
+.auth-ring-3d {
+  transform-style: preserve-3d;
+  animation: ringRotate3D 12s linear infinite;
+}
+
+@keyframes ringRotate3D {
+  0% { transform: rotateX(60deg) rotateZ(0deg); }
+  100% { transform: rotateX(60deg) rotateZ(360deg); }
+}
+
+/* Feature card lift on hover */
+.auth-feature-card {
+  transform-style: preserve-3d;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.auth-feature-card:hover {
+  transform: translateY(-4px) translateZ(20px) rotateX(-2deg);
+  box-shadow: 0 15px 40px -15px rgba(59, 130, 246, 0.2);
+}
+
+/* Input field 3D focus effect */
+.auth-input-3d:focus-within {
+  transform: translateZ(5px) scale(1.01);
+  box-shadow: 0 8px 25px -8px rgba(59, 130, 246, 0.15);
+}
+
+.auth-input-3d {
+  transform-style: preserve-3d;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Orbiting particles */
+.auth-particle-orbit {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+}
+
+/* Shimmer on glass card */
+.auth-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-shimmer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.08),
+    transparent
+  );
+  animation: authShimmer 4s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes authShimmer {
+  0% { left: -100%; }
+  50% { left: 150%; }
+  100% { left: 150%; }
+}
+
+/* 3D Bus icon floating */
+.auth-bus-3d {
+  transform-style: preserve-3d;
+  animation: bus3DFloat 4s ease-in-out infinite;
+}
+
+@keyframes bus3DFloat {
+  0%, 100% { transform: rotateY(0deg) translateZ(0) scale(1); }
+  25% { transform: rotateY(10deg) translateZ(15px) scale(1.05); }
+  50% { transform: rotateY(0deg) translateZ(5px) scale(1); }
+  75% { transform: rotateY(-10deg) translateZ(15px) scale(1.05); }
+}
+
+/* ===== BUS DRIVING ANIMATION ===== */
+
+/* Bus body sway animation */
+.bus-body {
+  animation: busSway 1.5s ease-in-out infinite;
+  transform-origin: center;
+}
+
+@keyframes busSway {
+  0%, 100% { transform: translateY(0px) scaleY(1); }
+  25% { transform: translateY(-2px) scaleY(0.98); }
+  50% { transform: translateY(0px) scaleY(1); }
+  75% { transform: translateY(-1px) scaleY(0.99); }
+}
+
+/* Bus wheels spinning */
+.bus-wheel {
+  animation: wheelSpin 0.4s linear infinite;
+  transform-origin: center;
+}
+
+@keyframes wheelSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Bus cabin bounce */
+.bus-cabin {
+  animation: cabinBounce 1.2s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+
+@keyframes cabinBounce {
+  0%, 100% { transform: translateY(0px) rotateZ(0deg); }
+  50% { transform: translateY(-1px) rotateZ(0.5deg); }
+}
+
+/* Window reflections */
+.bus-window {
+  animation: windowReflection 3s ease-in-out infinite;
+}
+
+@keyframes windowReflection {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 0.9; }
+}
+
+/* Headlight glow */
+.headlight-glow {
+  filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.6));
+  animation: headlightGlow 2s ease-in-out infinite;
+}
+
+@keyframes headlightGlow {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.6)); }
+  50% { filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.9)); }
+}
+

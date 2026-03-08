@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 // HOME PAGE
 // Page d'accueil pour les voyageurs : formulaire de recherche de trajets.
-// Elle stocke et récupère quelques informations (username) depuis localStorage
-// pour afficher un avatar ou état de connexion simple.
 import { Search, MapPin, Calendar, ArrowRight } from 'lucide-react';
-// import { useCities } from '../hooks/useApi'; // Commented out
+import apiService from '../services/api';
+import type { City } from '../services/api';
 
 interface HomePageProps {
   onSearch: (searchData: any) => void;
@@ -14,24 +13,37 @@ interface HomePageProps {
   onListAllTrips?: () => void;
 }
 
-const HomePage: React.FC<HomePageProps> = ({ onSearch, isAuthenticated = false, onNavigateToAuth, onLogout, onListAllTrips }) => {
+const HomePage: React.FC<HomePageProps> = ({ onSearch, onListAllTrips }) => {
   const [departure, setDeparture] = useState('');
   const [arrival, setArrival] = useState('');
   const [date, setDate] = useState('');
-  const [username, setUsername] = useState<string | null>(null);
+  const [cities, setCities] = useState<City[]>([]);
+  const [citiesLoading, setCitiesLoading] = useState(true);
 
-  // const { cities: apiCities, loading: citiesLoading } = useCities(); // Commented out
-  const cities = ['Lomé', 'Sokodé', 'Kara', 'Atakpamé', 'Kpalimé', 'Dapaong', 'Tsévié', 'Aného']; // Hardcoded cities
-  const citiesLoading = false; // Set loading to false
-
-  // load username from localStorage for avatar initial
-  React.useEffect(() => {
-    try {
-      const u = typeof localStorage !== 'undefined' ? localStorage.getItem('username') : null;
-      setUsername(u);
-    } catch (e) {
-      setUsername(null);
-    }
+  useEffect(() => {
+    const loadCities = async () => {
+      try {
+        setCitiesLoading(true);
+        const data = await apiService.getCities();
+        setCities(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error('Erreur chargement villes:', err);
+        // Fallback hardcodé en cas d'erreur API
+        setCities([
+          { id: 1, name: 'Lomé', region: '', is_active: true, created_at: '' },
+          { id: 2, name: 'Kara', region: '', is_active: true, created_at: '' },
+          { id: 3, name: 'Sokodé', region: '', is_active: true, created_at: '' },
+          { id: 4, name: 'Atakpamé', region: '', is_active: true, created_at: '' },
+          { id: 5, name: 'Kpalimé', region: '', is_active: true, created_at: '' },
+          { id: 6, name: 'Dapaong', region: '', is_active: true, created_at: '' },
+          { id: 7, name: 'Tsévié', region: '', is_active: true, created_at: '' },
+          { id: 8, name: 'Aného', region: '', is_active: true, created_at: '' },
+        ]);
+      } finally {
+        setCitiesLoading(false);
+      }
+    };
+    loadCities();
   }, []);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -43,35 +55,6 @@ const HomePage: React.FC<HomePageProps> = ({ onSearch, isAuthenticated = false, 
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-blue-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-2">
-              <img src="/logo.jpg" alt="EvexTicket" className="w-14 h-14 rounded-xl object-cover shadow-md" />
-              <span className="text-3xl font-extrabold text-gray-900 tracking-tight">EvexTicket</span>
-            </div>
-            <nav className="hidden md:flex items-center space-x-8">
-              <a href="#" className="text-gray-600 hover:text-blue-600 transition-colors">Mes Réservations</a>
-              <a href="#" className="text-gray-600 hover:text-blue-600 transition-colors">Aide</a>
-              {isAuthenticated ? (
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold">
-                    {username ? username.charAt(0).toUpperCase() : 'U'}
-                  </div>
-                  <button onClick={() => onLogout && onLogout()} className="text-gray-600 hover:text-red-600 transition-colors text-sm">
-                    Déconnexion
-                  </button>
-                </div>
-              ) : (
-                <button onClick={() => onNavigateToAuth && onNavigateToAuth('login')} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                  Connexion
-                </button>
-              )}
-            </nav>
-          </div>
-        </div>
-      </header>
 
       {/* Hero Section */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -102,9 +85,9 @@ const HomePage: React.FC<HomePageProps> = ({ onSearch, isAuthenticated = false, 
                       className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       required
                     >
-                        <option value="">{citiesLoading ? 'Chargement...' : 'Sélectionnez une ville'}</option>
+                      <option value="">{citiesLoading ? 'Chargement...' : 'Sélectionnez une ville'}</option>
                         {!citiesLoading && cities.map(city => (
-                          <option key={city} value={city}>{city}</option>
+                          <option key={city.id} value={city.name}>{city.name}</option>
                         ))}
                     </select>
                   </div>
@@ -124,8 +107,8 @@ const HomePage: React.FC<HomePageProps> = ({ onSearch, isAuthenticated = false, 
                       required
                     >
                       <option value="">{citiesLoading ? 'Chargement...' : 'Sélectionnez une ville'}</option>
-                      {!citiesLoading && cities.filter((city:any) => city !== departure).map(city => (
-                        <option key={city} value={city}>{city}</option>
+                      {!citiesLoading && cities.filter(city => city.name !== departure).map(city => (
+                        <option key={city.id} value={city.name}>{city.name}</option>
                       ))}
                     </select>
                   </div>

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import apiService from './services/api';
 import type { ScheduledTrip } from './services/api';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { useAuth } from './contexts/AuthContext';
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
+import Navbar from './components/Navbar';
 import LandingPage from './components/LandingPage';
 import AuthPage from './components/AuthPage';
 import HomePage from './components/HomePage';
@@ -11,6 +12,8 @@ import ResultsPage from './components/ResultsPage';
 import BookingPage from './components/BookingPage';
 import PaymentPage from './components/PaymentPage';
 import ConfirmationPage from './components/ConfirmationPage';
+import MyTicketsPage from './components/MyTicketsPage';
+import ProfilePage from './components/ProfilePage';
 import CompanyDashboard from './components/CompanyDashboard';
 import AdminDashboard from './components/AdminDashboard';
 
@@ -88,7 +91,7 @@ function App() {
 
   const handleListAllTrips = async () => {
     try {
-      const trips = await apiService.getTrips();
+      const trips = await apiService.getScheduledTrips();
       setSearchResults(trips);
       setSearchData(null);
       try {
@@ -167,6 +170,18 @@ function App() {
 
   const handleTripSelect = (trip: any) => {
     setSelectedTrip(trip);
+    // If searchData is null (e.g. from "Voir tous les trajets"), create minimal searchData from the trip
+    if (!searchData && trip) {
+      const minimalSearchData = {
+        departure_city: trip.departure_city_name || trip.departure_city_display || '',
+        arrival_city: trip.arrival_city_name || trip.arrival_city_display || '',
+        travel_date: trip.date || '',
+        date: trip.date || '',
+        passengers: 1,
+      };
+      setSearchData(minimalSearchData);
+      localStorage.setItem('searchData', JSON.stringify(minimalSearchData));
+    }
     localStorage.setItem('selectedTrip', JSON.stringify(trip));
     localStorage.setItem('currentView', 'booking');
     navigate('/booking');
@@ -291,17 +306,29 @@ function App() {
   );
 
   return (
-    <AuthProvider>
       <div className="App">
+        <Navbar />
         <Routes>
-          <Route path="/" element={<LandingPage onNavigateToAuth={handleNavigateToAuth} onNavigateToHome={() => navigate('/')} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
+          <Route path="/" element={isAuthenticated ? <Navigate to="/home" replace /> : <LandingPage onNavigateToAuth={handleNavigateToAuth} onNavigateToHome={() => navigate('/')} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
           <Route path="/login" element={<AuthPage mode={authMode} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
           <Route path="/register" element={<AuthPage mode={'register'} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
           <Route path="/home" element={<HomePage onSearch={handleSearch} isAuthenticated={isAuthenticated} onNavigateToAuth={handleNavigateToAuth} onLogout={handleLogout} onListAllTrips={handleListAllTrips} />} />
-          <Route path="/results" element={<ResultsPage searchData={searchData} searchResults={searchResults.map((sr: any) => sr?.trip_info ? sr.trip_info : sr)} onBack={() => navigate('/home')} onSelectTrip={handleTripSelect} />} />
+          <Route path="/results" element={<ResultsPage searchData={searchData} searchResults={searchResults as any} onBack={() => navigate('/home')} onSelectTrip={handleTripSelect} />} />
           <Route path="/booking" element={<BookingPage trip={selectedTrip} searchData={searchData} onBack={() => navigate('/results')} onProceedToPayment={handleProceedToPayment} />} />
           <Route path="/payment" element={<PaymentPage bookingData={bookingData} onBack={() => navigate('/booking')} onPaymentSuccess={handlePaymentSuccess} />} />
           <Route path="/confirmation" element={<ConfirmationPage paymentData={paymentData} onNewBooking={handleNewBooking} />} />
+
+          <Route path="/my-tickets" element={
+            <ProtectedRoute allowed={['user', 'company', 'admin']}>
+              <MyTicketsPage />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/profile" element={
+            <ProtectedRoute allowed={['user', 'company', 'admin']}>
+              <ProfilePage />
+            </ProtectedRoute>
+          } />
 
           <Route path="/company" element={
             <ProtectedRoute allowed={['company']}>
@@ -319,7 +346,6 @@ function App() {
 
         {/* {showDashboardControls()} */}
       </div>
-    </AuthProvider>
   );
 }
 

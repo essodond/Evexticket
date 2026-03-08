@@ -70,9 +70,9 @@ const PaymentPage: React.FC<PaymentPageProps> = ({ bookingData, onBack, onPaymen
     setApiError(null);
 
     try {
-      const tripId = Number(trip?.id ?? trip?.trip_id ?? trip);
+      const scheduledTripId = Number(trip?.scheduled_trip_id ?? trip?.id ?? trip?.trip_id ?? trip);
       const payload: any = {
-        scheduled_trip: tripId,
+        scheduled_trip: scheduledTripId,
         passenger_name: `${passengerInfo.firstName || ''} ${passengerInfo.lastName || ''}`.trim(),
         passenger_email: passengerInfo.email || undefined,
         passenger_phone: passengerInfo.phone,
