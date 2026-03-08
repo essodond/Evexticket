@@ -57,20 +57,20 @@ const HomePage: React.FC<HomePageProps> = ({ onSearch, onListAllTrips }) => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50">
 
       {/* Hero Section */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-12">
+        <div className="text-center mb-8 sm:mb-12">
+          <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-3 sm:mb-4">
             Voyagez à travers le <span className="text-green-600">Togo</span>
           </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+          <p className="text-base sm:text-xl text-gray-600 max-w-2xl mx-auto px-2">
             Réservez votre billet de bus en ligne et voyagez confortablement vers votre destination
           </p>
         </div>
 
         {/* Search Form */}
         <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-2xl shadow-xl p-8 border border-blue-100">
-            <form onSubmit={handleSearch} className="space-y-6">
+          <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-8 border border-blue-100">
+            <form onSubmit={handleSearch} className="space-y-4 sm:space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Departure */}
                 <div className="relative">
@@ -134,10 +134,10 @@ const HomePage: React.FC<HomePageProps> = ({ onSearch, onListAllTrips }) => {
               </div>
 
               {/* Search & List Buttons */}
-              <div className="flex items-center justify-center gap-4">
-                <button 
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+                <button
                   type="submit"
-                  className="inline-flex items-center px-8 py-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-lg hover:shadow-xl"
+                  className="w-full sm:w-auto inline-flex items-center justify-center px-6 sm:px-8 py-3 sm:py-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-lg hover:shadow-xl"
                 >
                   <Search className="w-5 h-5 mr-2" />
                   Rechercher
@@ -146,7 +146,7 @@ const HomePage: React.FC<HomePageProps> = ({ onSearch, onListAllTrips }) => {
                 <button
                   type="button"
                   onClick={() => onListAllTrips && onListAllTrips()}
-                  className="inline-flex items-center px-6 py-4 bg-white text-blue-600 border border-blue-200 font-semibold rounded-lg hover:bg-blue-50 transition-colors shadow-sm"
+                  className="w-full sm:w-auto inline-flex items-center justify-center px-4 sm:px-6 py-3 sm:py-4 bg-white text-blue-600 border border-blue-200 font-semibold rounded-lg hover:bg-blue-50 transition-colors shadow-sm"
                 >
                   Voir tous les trajets disponibles
                 </button>
@@ -156,7 +156,7 @@ const HomePage: React.FC<HomePageProps> = ({ onSearch, onListAllTrips }) => {
         </div>
 
         {/* Features */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-8 mt-8 sm:mt-16">
           <div className="text-center p-6 bg-white rounded-xl shadow-md border border-blue-100">
             <div className="w-12 h-12 bg-blue-100 rounded-lg mx-auto mb-4 flex items-center justify-center">
               <Search className="w-6 h-6 text-blue-600" />
