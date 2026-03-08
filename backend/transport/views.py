@@ -31,29 +31,40 @@ class EmailAuthToken(APIView):
 
     def post(self, request, *args, **kwargs):
         email = request.data.get('email')
-        phone_number = request.data.get('phone_number')
+        # Le frontend peut envoyer 'phone' ou 'phone_number'
+        phone = request.data.get('phone') or request.data.get('phone_number')
+        username = request.data.get('username')
         password = request.data.get('password')
         
-        # Vérifier que password est fourni et soit email soit phone_number
         if not password:
             return Response({'detail': 'Le champ password est requis.'}, status=status.HTTP_400_BAD_REQUEST)
         
-        if not email and not phone_number:
-            return Response({'detail': 'Vous devez fournir soit un email soit un numéro de téléphone.'}, status=status.HTTP_400_BAD_REQUEST)
-        
+        if not email and not phone and not username:
+            return Response({'detail': 'Vous devez fournir un email, un numéro de téléphone ou un username.'}, status=status.HTTP_400_BAD_REQUEST)
+
         user = None
         
         if email:
-            # Connexion avec email
-            user = authenticate(request, username=email, password=password)
-        elif phone_number:
+            # Connexion avec email — chercher l'utilisateur par email
+            try:
+                user_obj = User.objects.get(email=email)
+                user = authenticate(request, username=user_obj.username, password=password)
+            except User.DoesNotExist:
+                # Tenter aussi avec email comme username
+                user = authenticate(request, username=email, password=password)
+
+        if not user and phone:
             # Connexion avec numéro de téléphone
             try:
-                user_profile = UserProfile.objects.get(phone_number=phone_number)
+                user_profile = UserProfile.objects.get(phone=phone)
                 user = authenticate(request, username=user_profile.user.username, password=password)
             except UserProfile.DoesNotExist:
                 user = None
         
+        if not user and username:
+            # Connexion avec username direct (fallback)
+            user = authenticate(request, username=username, password=password)
+
         if user:
             token, created = Token.objects.get_or_create(user=user)
             user_serializer = UserSerializer(user)

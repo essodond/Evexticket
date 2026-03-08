@@ -12,7 +12,7 @@ services:
     region: frankfurt
     plan: free
     buildCommand: "./build.sh"
-    startCommand: "gunicorn togotrans_api.wsgi:application"
+    startCommand: "bash start.sh"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -26,4 +26,5 @@ services:
         value: "True"
       - key: PYTHON_VERSION
         value: "3.12.3"
+
 
