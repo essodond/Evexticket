@@ -190,7 +190,7 @@ class Booking(models.Model):
 
     trip = models.ForeignKey(
         Trip, 
-        on_delete=models.CASCADE, 
+        on_delete=models.PROTECT, 
         related_name='bookings',
         verbose_name="Trajet"
     )
@@ -405,3 +405,53 @@ class TripStop(models.Model):
 
     def __str__(self):
         return f"{self.trip} - {self.city.name} (#{self.sequence})"
+
+
+# ──────────────────────────────────────────────────────────────
+# Signals
+# ──────────────────────────────────────────────────────────────
+
+@receiver(post_save, sender=Trip)
+def create_scheduled_trips_on_trip_creation(sender, instance, created, **kwargs):
+    """À la création d'un Trip, génère automatiquement les ScheduledTrip pour les 14 prochains jours."""
+    if not created:
+        return
+    try:
+        today = timezone.localdate()
+        for n in range(1, 15):
+            d = today + timedelta(days=n)
+            ScheduledTrip.objects.get_or_create(
+                trip=instance,
+                date=d,
+                defaults={'is_active': True, 'available_seats': instance.capacity},
+            )
+    except Exception:
+        pass
+
+
+def _recalculate_scheduled_trip_seats(scheduled_trip):
+    """Recalcule available_seats pour un ScheduledTrip en comptant les sièges uniques
+    des réservations actives (pending + confirmed)."""
+    try:
+        booked_count = (
+            Booking.objects.filter(
+                scheduled_trip=scheduled_trip,
+                status__in=['pending', 'confirmed'],
+            )
+            .values_list('seat_number', flat=True)
+            .distinct()
+            .count()
+        )
+        available = max(scheduled_trip.trip.capacity - booked_count, 0)
+        ScheduledTrip.objects.filter(pk=scheduled_trip.pk).update(available_seats=available)
+    except Exception:
+        pass
+
+
+@receiver(post_save, sender=Booking)
+def update_scheduled_trip_seats_on_booking(sender, instance, **kwargs):
+    """Met à jour available_seats du ScheduledTrip chaque fois qu'une réservation
+    est créée ou modifiée (changement de statut inclus)."""
+    if instance.scheduled_trip_id:
+        _recalculate_scheduled_trip_seats(instance.scheduled_trip)
+

@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { Search, MapPin, Calendar, ArrowRight } from 'lucide-react';
 import apiService from '../services/api';
 import type { City } from '../services/api';
+import type { SearchFormData } from '../types';
 
 interface HomePageProps {
-  onSearch: (searchData: any) => void;
+  onSearch: (searchData: SearchFormData) => void;
   isAuthenticated?: boolean;
   onNavigateToAuth?: (mode: 'login' | 'register') => void;
   onLogout?: () => void;

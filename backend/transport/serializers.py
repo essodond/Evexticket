@@ -415,29 +415,45 @@ class BookingSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Ce siège est déjà réservé pour ce voyage.")
 
     def create(self, validated_data):
-        # Commission rate for Evex (e.g., 10%)
+        from django.db import transaction
+
         EVEX_COMMISSION_RATE = Decimal('0.10')
 
-        # Create the booking instance
-        booking = super().create(validated_data)
+        with transaction.atomic():
+            # Verrouiller le ScheduledTrip pour éviter les réservations concurrentes du même siège
+            scheduled_trip = validated_data.get('scheduled_trip')
+            if scheduled_trip:
+                ScheduledTrip.objects.select_for_update().get(pk=scheduled_trip.pk)
 
-        # Calculate total price (assuming it's already set on the booking instance or can be derived)
-        total_price = booking.total_price
+            # Vérifier une dernière fois que le siège est encore disponible (inside the lock)
+            seat_number = validated_data.get('seat_number')
+            if scheduled_trip and seat_number:
+                conflict = Booking.objects.filter(
+                    scheduled_trip=scheduled_trip,
+                    seat_number=seat_number,
+                    status__in=['confirmed', 'pending'],
+                ).exists()
+                if conflict:
+                    raise serializers.ValidationError(
+                        {'seat_number': 'Ce siège vient d\'être réservé. Veuillez en choisir un autre.'}
+                    )
 
-        # Calculate commission and company revenue
-        evex_commission = total_price * EVEX_COMMISSION_RATE
-        company_revenue = total_price - evex_commission
+            booking = super().create(validated_data)
 
-        # Create the Payment instance
-        Payment.objects.create(
-            booking=booking,
-            amount=total_price,
-            payment_method=booking.payment_method,
-            status='completed',  # Assuming payment is completed upon booking creation
-            evex_commission=evex_commission,
-            company_revenue=company_revenue,
-            transaction_id=str(uuid.uuid4())
-        )
+            total_price = booking.total_price
+            evex_commission = total_price * EVEX_COMMISSION_RATE
+            company_revenue = total_price - evex_commission
+
+            # Créer le paiement en statut 'pending' — sera confirmé après le vrai paiement
+            Payment.objects.create(
+                booking=booking,
+                amount=total_price,
+                payment_method=booking.payment_method,
+                status='pending',
+                evex_commission=evex_commission,
+                company_revenue=company_revenue,
+                transaction_id=str(uuid.uuid4())
+            )
 
         return booking
 

@@ -1,24 +1,30 @@
 import { useState, useEffect } from 'react';
 import { apiService, City, Company, Trip, Booking, CreateBookingPayload, DashboardStats, CompanyStats, ScheduledTrip } from '../services/api';
 
-// Hook pour les villes
 // Shared module-level cache to prevent repeated network calls across multiple hook instances
+// TTL: 5 minutes — cache is invalidated after this period to avoid stale city data
+const CITIES_CACHE_TTL_MS = 5 * 60 * 1000;
 let _citiesCache: City[] | null = null;
+let _citiesCacheTimestamp: number | null = null;
 let _citiesPromise: Promise<City[]> | null = null;
 
+function isCitiesCacheValid(): boolean {
+  if (!_citiesCache || _citiesCacheTimestamp === null) return false;
+  return Date.now() - _citiesCacheTimestamp < CITIES_CACHE_TTL_MS;
+}
+
 export const useCities = (filterFn?: (city: City) => boolean) => {
-  const [allCities, setAllCities] = useState<City[] | null>(_citiesCache);
-  const [cities, setCities] = useState<City[]>(_citiesCache || []);
-  const [loading, setLoading] = useState<boolean>(_citiesCache ? false : true);
+  const [allCities, setAllCities] = useState<City[] | null>(isCitiesCacheValid() ? _citiesCache : null);
+  const [cities, setCities] = useState<City[]>(isCitiesCacheValid() && _citiesCache ? _citiesCache : []);
+  const [loading, setLoading] = useState<boolean>(!isCitiesCacheValid());
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch once per app lifecycle and cache the result
   useEffect(() => {
     let mounted = true;
     const fetchOnce = async () => {
       setLoading(true);
       try {
-        if (_citiesCache) {
+        if (isCitiesCacheValid() && _citiesCache) {
           if (mounted) {
             setAllCities(_citiesCache);
             setCities(filterFn ? _citiesCache.filter(filterFn) : _citiesCache);
@@ -27,11 +33,11 @@ export const useCities = (filterFn?: (city: City) => boolean) => {
           return;
         }
 
-        if (!_citiesPromise) {
-          _citiesPromise = apiService.getCities();
-        }
+        // Cache expired or empty — refetch
+        _citiesPromise = apiService.getCities();
         const data = await _citiesPromise;
         _citiesCache = data;
+        _citiesCacheTimestamp = Date.now();
         if (mounted) {
           setAllCities(data);
           setCities(filterFn ? data.filter(filterFn) : data);
@@ -47,9 +53,6 @@ export const useCities = (filterFn?: (city: City) => boolean) => {
     };
     fetchOnce();
     return () => { mounted = false };
-    // We intentionally avoid listing filterFn here because we want to
-    // avoid re-fetching when a new (unstable) filter function is passed.
-    // Filtering is handled in a dedicated effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

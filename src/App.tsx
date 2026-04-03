@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import apiService from './services/api';
 import type { ScheduledTrip } from './services/api';
+import type { SearchData, BookingData, PaymentData, SearchFormData } from './types';
+import { readLocalStorage, writeLocalStorage, removeLocalStorage } from './storage';
 import { useAuth } from './contexts/AuthContext';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
+import ServerWarmupBanner from './components/ServerWarmupBanner';
 import LandingPage from './components/LandingPage';
 import AuthPage from './components/AuthPage';
 import HomePage from './components/HomePage';
@@ -31,15 +34,15 @@ function App() {
   // Routing replaces the older `currentView` state; keep minimal state for UI flows
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const { isAuthenticated, logout: authLogout } = useAuth();
-  const [searchData, setSearchData] = useState<any>(null);
-  const [searchResults, setSearchResults] = useState<ScheduledTrip[]>([]); // New state for search results
-  const [selectedTrip, setSelectedTrip] = useState<any>(null);
-  const [bookingData, setBookingData] = useState<any>(null);
-  const [paymentData, setPaymentData] = useState<any>(null);
+  const [searchData, setSearchData] = useState<SearchData | null>(null);
+  const [searchResults, setSearchResults] = useState<ScheduledTrip[]>([]);
+  const [selectedTrip, setSelectedTrip] = useState<ScheduledTrip | null>(null);
+  const [bookingData, setBookingData] = useState<BookingData | null>(null);
+  const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
 
   const navigate = useNavigate();
 
-  const handleSearch = async (data: any) => {
+  const handleSearch = async (data: SearchFormData) => {
     // normalize the search data to the TripSearchParams shape
     const normalized = {
       departure_city: data.departure,
@@ -77,11 +80,10 @@ function App() {
         travel_date: normalized.travel_date,
         passengers: normalized.passengers,
       });
-      console.log("API search results:", trips);
       setSearchResults(trips);
-      localStorage.setItem('searchData', JSON.stringify(normalized));
-      localStorage.setItem('searchResults', JSON.stringify(trips));
-      localStorage.setItem('currentView', 'results');
+      writeLocalStorage('searchData', normalized);
+      writeLocalStorage('searchResults', trips);
+      writeLocalStorage('currentView', 'results');
       navigate('/results');
     } catch (error) {
       console.error("Error searching for trips:", error);
@@ -95,11 +97,11 @@ function App() {
       setSearchResults(trips);
       setSearchData(null);
       try {
-        localStorage.setItem('searchResults', JSON.stringify(trips));
-        localStorage.removeItem('searchData');
-        localStorage.setItem('currentView', 'results');
+        writeLocalStorage('searchResults', trips);
+        removeLocalStorage('searchData');
+        writeLocalStorage('currentView', 'results');
       } catch (e) {
-        // ignore localStorage errors
+        // ignore storage errors
       }
       navigate('/results');
     } catch (error) {
@@ -107,68 +109,28 @@ function App() {
     }
   };
 
-  // Consolidate localStorage restoration into a single useEffect
+  // Restore data from localStorage on mount
   useEffect(() => {
-    // Restore data from localStorage with validation
-    try {
-      const storedSearchData = localStorage.getItem('searchData');
-      const storedSearchResults = localStorage.getItem('searchResults');
-      const storedSelectedTrip = localStorage.getItem('selectedTrip');
-      const storedBookingData = localStorage.getItem('bookingData');
-      const storedPaymentData = localStorage.getItem('paymentData');
+    const storedSearchData = readLocalStorage<SearchData>('searchData');
+    const storedSearchResults = readLocalStorage<ScheduledTrip[]>('searchResults');
+    const storedSelectedTrip = readLocalStorage<ScheduledTrip>('selectedTrip');
+    const storedBookingData = readLocalStorage<BookingData>('bookingData');
+    const storedPaymentData = readLocalStorage<PaymentData>('paymentData');
 
-      if (storedSearchData) {
-        const parsedSearchData = JSON.parse(storedSearchData);
-        setSearchData(parsedSearchData);
-      }
-      if (storedSearchResults) {
-        const parsedSearchResults = JSON.parse(storedSearchResults);
-        setSearchResults(parsedSearchResults);
-      }
-      if (storedSelectedTrip) {
-        const parsedSelectedTrip = JSON.parse(storedSelectedTrip);
-        // Validate required trip properties
-        if (parsedSelectedTrip && parsedSelectedTrip.id) {
-          setSelectedTrip(parsedSelectedTrip);
-        } else {
-          localStorage.removeItem('selectedTrip');
-        }
-      }
-      if (storedBookingData) {
-        const parsedBookingData = JSON.parse(storedBookingData);
-        setBookingData(parsedBookingData);
-      }
-      if (storedPaymentData) {
-        const parsedPaymentData = JSON.parse(storedPaymentData);
-        setPaymentData(parsedPaymentData);
-      }
-
-      // Check current route against available data
-      const currentPath = window.location.pathname;
-      if (currentPath === '/booking' && !storedSelectedTrip) {
-        navigate('/');
-      }
-      if (currentPath === '/payment' && !storedBookingData) {
-        navigate('/');
-      }
-      if (currentPath === '/confirmation' && !storedPaymentData) {
-        navigate('/');
-      }
-    } catch (e) {
-      console.error('Error restoring data from localStorage:', e);
-      // Clear potentially corrupted data
-      localStorage.removeItem('searchData');
-      localStorage.removeItem('searchResults');
-      localStorage.removeItem('selectedTrip');
-      localStorage.removeItem('bookingData');
-      localStorage.removeItem('paymentData');
-      if (window.location.pathname !== '/') {
-        navigate('/');
-      }
+    if (storedSearchData) setSearchData(storedSearchData);
+    if (storedSearchResults) setSearchResults(storedSearchResults);
+    if (storedSelectedTrip?.id) {
+      setSelectedTrip(storedSelectedTrip);
+    } else if (storedSelectedTrip) {
+      removeLocalStorage('selectedTrip');
     }
-  }, [navigate]); // Only depend on navigate function
+    if (storedBookingData) setBookingData(storedBookingData);
+    if (storedPaymentData) setPaymentData(storedPaymentData);
+    // Note: data guards (redirect if data missing) are now handled synchronously
+    // in the route elements themselves — no useEffect redirect needed.
+  }, []);
 
-  const handleTripSelect = (trip: any) => {
+  const handleTripSelect = (trip: ScheduledTrip) => {
     setSelectedTrip(trip);
     // If searchData is null (e.g. from "Voir tous les trajets"), create minimal searchData from the trip
     if (!searchData && trip) {
@@ -180,24 +142,24 @@ function App() {
         passengers: 1,
       };
       setSearchData(minimalSearchData);
-      localStorage.setItem('searchData', JSON.stringify(minimalSearchData));
+      writeLocalStorage('searchData', minimalSearchData);
     }
-    localStorage.setItem('selectedTrip', JSON.stringify(trip));
-    localStorage.setItem('currentView', 'booking');
+    writeLocalStorage('selectedTrip', trip);
+    writeLocalStorage('currentView', 'booking');
     navigate('/booking');
   };
 
-  const handleProceedToPayment = (data: any) => {
+  const handleProceedToPayment = (data: BookingData) => {
     setBookingData(data);
-    localStorage.setItem('bookingData', JSON.stringify(data));
-    localStorage.setItem('currentView', 'payment');
+    writeLocalStorage('bookingData', data);
+    writeLocalStorage('currentView', 'payment');
     navigate('/payment');
   };
 
-  const handlePaymentSuccess = (data: any) => {
+  const handlePaymentSuccess = (data: PaymentData) => {
     setPaymentData(data);
-    localStorage.setItem('paymentData', JSON.stringify(data));
-    localStorage.setItem('currentView', 'confirmation');
+    writeLocalStorage('paymentData', data);
+    writeLocalStorage('currentView', 'confirmation');
     navigate('/confirmation');
   };
 
@@ -206,24 +168,15 @@ function App() {
     setSelectedTrip(null);
     setBookingData(null);
     setPaymentData(null);
-    localStorage.removeItem('searchData');
-    localStorage.removeItem('searchResults');
-    localStorage.removeItem('selectedTrip');
-    localStorage.removeItem('bookingData');
-    localStorage.removeItem('paymentData');
-    localStorage.setItem('currentView', 'home');
+    removeLocalStorage('searchData', 'searchResults', 'selectedTrip', 'bookingData', 'paymentData');
+    writeLocalStorage('currentView', 'home');
     navigate('/');
   };
 
   const handleLogout = () => {
-    // Delegate to AuthContext logout
     authLogout();
-    localStorage.removeItem('searchData');
-    localStorage.removeItem('searchResults');
-    localStorage.removeItem('selectedTrip');
-    localStorage.removeItem('bookingData');
-    localStorage.removeItem('paymentData');
-    localStorage.setItem('currentView', 'landing');
+    removeLocalStorage('searchData', 'searchResults', 'selectedTrip', 'bookingData', 'paymentData');
+    writeLocalStorage('currentView', 'landing');
     navigate('/');
     setSearchData(null);
     setSelectedTrip(null);
@@ -233,45 +186,27 @@ function App() {
 
   const handleNavigateToAuth = (mode: AuthMode) => {
     setAuthMode(mode);
-    localStorage.setItem('currentView', 'auth');
+    writeLocalStorage('currentView', 'auth');
     navigate('/login');
   };
 
-  const handleAuthSuccess = (user?: any) => {
+  const handleAuthSuccess = (user?: { is_staff?: boolean; is_company_admin?: boolean }) => {
     // Deprecated: handled by AuthContext. Kept for backward compatibility with children components
     if (user) {
       if (user.is_staff) {
-        localStorage.setItem('currentView', 'admin-dashboard');
+        writeLocalStorage('currentView', 'admin-dashboard');
         navigate('/admin');
         return;
       }
       if (user.is_company_admin) {
-        localStorage.setItem('currentView', 'company-dashboard');
+        writeLocalStorage('currentView', 'company-dashboard');
         navigate('/company');
         return;
       }
     }
-    localStorage.setItem('currentView', 'home');
+    writeLocalStorage('currentView', 'home');
     navigate('/home');
   };
-
-  // App now uses AuthProvider to bootstrap auth state; we keep currentView persistence logic
-  useEffect(() => {
-    // Restore a preferred view if present in localStorage (used for UX persistence)
-    try {
-      const storedSearchData = localStorage.getItem('searchData');
-      const storedSearchResults = localStorage.getItem('searchResults');
-      if (storedSearchData) {
-        setSearchData(JSON.parse(storedSearchData));
-      }
-      if (storedSearchResults) {
-        setSearchResults(JSON.parse(storedSearchResults));
-      }
-      // We don't set a local state; we use stored `currentView` only for UX persistence elsewhere.
-    } catch (e) {
-      // ignore
-    }
-  }, []);
 
   // Quick navigation for demonstration
   const showDashboardControls = () => (
@@ -308,15 +243,48 @@ function App() {
   return (
       <div className="App">
         <Navbar />
+        <ServerWarmupBanner />
         <Routes>
           <Route path="/" element={isAuthenticated ? <Navigate to="/home" replace /> : <LandingPage onNavigateToAuth={handleNavigateToAuth} onNavigateToHome={() => navigate('/')} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
           <Route path="/login" element={<AuthPage mode={authMode} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
           <Route path="/register" element={<AuthPage mode={'register'} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
-          <Route path="/home" element={<HomePage onSearch={handleSearch} isAuthenticated={isAuthenticated} onNavigateToAuth={handleNavigateToAuth} onLogout={handleLogout} onListAllTrips={handleListAllTrips} />} />
-          <Route path="/results" element={<ResultsPage searchData={searchData} searchResults={searchResults as any} onBack={() => navigate('/home')} onSelectTrip={handleTripSelect} />} />
-          <Route path="/booking" element={<BookingPage trip={selectedTrip} searchData={searchData} onBack={() => navigate('/results')} onProceedToPayment={handleProceedToPayment} />} />
-          <Route path="/payment" element={<PaymentPage bookingData={bookingData} onBack={() => navigate('/booking')} onPaymentSuccess={handlePaymentSuccess} />} />
-          <Route path="/confirmation" element={<ConfirmationPage paymentData={paymentData} onNewBooking={handleNewBooking} />} />
+          <Route path="/home" element={
+            <ProtectedRoute allowed={['user', 'company', 'admin']}>
+              <HomePage onSearch={handleSearch} isAuthenticated={isAuthenticated} onNavigateToAuth={handleNavigateToAuth} onLogout={handleLogout} onListAllTrips={handleListAllTrips} />
+            </ProtectedRoute>
+          } />
+          <Route path="/results" element={
+            <ProtectedRoute allowed={['user', 'company', 'admin']}>
+              <ResultsPage searchData={searchData} searchResults={searchResults as any} onBack={() => navigate('/home')} onSelectTrip={handleTripSelect} />
+            </ProtectedRoute>
+          } />
+          <Route path="/booking" element={
+            <ProtectedRoute allowed={['user', 'company', 'admin']}>
+              {selectedTrip ? (
+                <BookingPage trip={selectedTrip} searchData={searchData} onBack={() => navigate('/results')} onProceedToPayment={handleProceedToPayment} />
+              ) : (
+                <Navigate to="/home" replace />
+              )}
+            </ProtectedRoute>
+          } />
+          <Route path="/payment" element={
+            <ProtectedRoute allowed={['user', 'company', 'admin']}>
+              {bookingData ? (
+                <PaymentPage bookingData={bookingData} onBack={() => navigate('/booking')} onPaymentSuccess={handlePaymentSuccess} />
+              ) : (
+                <Navigate to="/home" replace />
+              )}
+            </ProtectedRoute>
+          } />
+          <Route path="/confirmation" element={
+            <ProtectedRoute allowed={['user', 'company', 'admin']}>
+              {paymentData ? (
+                <ConfirmationPage paymentData={paymentData} onNewBooking={handleNewBooking} />
+              ) : (
+                <Navigate to="/home" replace />
+              )}
+            </ProtectedRoute>
+          } />
 
           <Route path="/my-tickets" element={
             <ProtectedRoute allowed={['user', 'company', 'admin']}>
@@ -344,7 +312,6 @@ function App() {
 
         </Routes>
 
-        {/* {showDashboardControls()} */}
       </div>
   );
 }

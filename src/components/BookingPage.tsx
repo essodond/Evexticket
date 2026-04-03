@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useEffect } from 'react';
 import apiService from '../services/api';
 import { ArrowLeft, CheckCircle } from 'lucide-react';
+import type { SearchData, BookingData, PassengerInfo } from '../types';
 
 interface Trip {
   id: string;
@@ -23,9 +24,9 @@ interface Trip {
 
 interface BookingPageProps {
   trip: Trip;
-  searchData: any;
+  searchData: SearchData | null;
   onBack: () => void;
-  onProceedToPayment: (bookingData: any) => void;
+  onProceedToPayment: (bookingData: BookingData) => void;
 }
 
 const BookingPage: React.FC<BookingPageProps> = ({ trip, searchData, onBack, onProceedToPayment }) => {
@@ -58,18 +59,29 @@ const BookingPage: React.FC<BookingPageProps> = ({ trip, searchData, onBack, onP
 
   // Initialize all state variables first
   const [selectedSeat, setSelectedSeat] = useState<number | null>(null);
-  const [passengerInfo, setPassengerInfo] = useState({ firstName: '', lastName: '', phone: '', email: '' });
+  const [passengerInfo, setPassengerInfo] = useState<PassengerInfo>({ firstName: '', lastName: '', phone: '', email: '' });
   const [isLoading, setIsLoading] = useState(true);
-  const [occupiedSeatNumbers, setOccupiedSeatNumbers] = useState<Set<string>>(new Set());
+  // Initialize occupied seats from trip.seats (already included in search results)
+  // This gives instant correct display without waiting for the availability API call.
+  const [occupiedSeatNumbers, setOccupiedSeatNumbers] = useState<Set<string>>(() => {
+    const seats = (trip as any)?.seats;
+    if (Array.isArray(seats) && seats.length > 0) {
+      return new Set(
+        seats
+          .filter((s: any) => s.status === 'occupied')
+          .map((s: any) => String(s.number))
+      );
+    }
+    return new Set<string>();
+  });
 
-  // Fetch occupied seat numbers
+  // Refresh occupied seats from the availability API (for up-to-date data)
   useEffect(() => {
     let mounted = true;
-    const tripId = Number((trip as any)?.scheduled_trip_id ?? (trip as any)?.trip ?? (trip as any)?.id ?? (trip as any));
+    // trip.id = Trip (route) ID after flattenScheduledTrips — backend expects Trip.id for ScheduledTrip.objects.get(trip_id=...)
+    const tripId = Number(trip?.id);
     const travelDate = searchData?.date || searchData?.travel_date || (trip as any)?.date;
     if (!tripId || !travelDate) return;
-
-    console.log('DEBUG: Fetching occupied seats for tripId:', tripId, 'and travelDate:', travelDate);
 
     // Prefer availability endpoint which can restrict to a segment
     const originStop = searchData?.origin_stop || searchData?.origin_stop_id || searchData?.originStop || searchData?.departure_city || searchData?.departure;
@@ -78,18 +90,19 @@ const BookingPage: React.FC<BookingPageProps> = ({ trip, searchData, onBack, onP
     apiService.getAvailability(tripId, travelDate, originStop as any, destinationStop as any)
       .then((resp) => {
         if (!mounted) return;
-        console.log('DEBUG: getAvailability response:', resp);
-        const seats = (resp && resp.occupied_seats) ? resp.occupied_seats : [];
-        console.log('DEBUG: Occupied seats from getAvailability:', seats);
-        setOccupiedSeatNumbers(new Set((seats || []).map(s => String(s))));
+        // Only update if the API actually returned occupied_seats (not an old stub response)
+        if (resp && Array.isArray(resp.occupied_seats)) {
+          setOccupiedSeatNumbers(new Set(resp.occupied_seats.map(s => String(s))));
+        }
       })
       .catch((err) => {
         console.warn('Erreur en récupérant la disponibilité:', err);
         // Fallback: try older endpoint
         apiService.getBookedSeats(tripId, travelDate).then((seats) => {
           if (!mounted) return;
-          console.log('DEBUG: getBookedSeats response:', seats);
-          setOccupiedSeatNumbers(new Set((seats || []).map(s => String(s))));
+          if (Array.isArray(seats) && seats.length > 0) {
+            setOccupiedSeatNumbers(new Set(seats.map(s => String(s))));
+          }
         }).catch((err2) => {
           console.warn('Erreur en récupérant les sièges réservés:', err2);
         });

@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import apiService from '../services/api';
+import type { BookingData, PaymentData } from '../types';
 
 interface PaymentPageProps {
-  bookingData: any;
+  bookingData: BookingData;
   onBack: () => void;
-  onPaymentSuccess: (data: any) => void;
+  onPaymentSuccess: (data: PaymentData) => void;
 }
 
 const PaymentPage: React.FC<PaymentPageProps> = ({ bookingData, onBack, onPaymentSuccess }) => {

@@ -177,7 +177,7 @@ class Booking(models.Model):
 
     trip = models.ForeignKey(
         Trip, 
-        on_delete=models.CASCADE, 
+        on_delete=models.PROTECT, 
         related_name='bookings',
         verbose_name="Trajet"
     )
@@ -185,6 +185,15 @@ class Booking(models.Model):
     passenger_email = models.EmailField(verbose_name="Email du passager")
     passenger_phone = models.CharField(max_length=20, verbose_name="Téléphone du passager")
     seat_number = models.CharField(max_length=10, verbose_name="Numéro de siège")
+    # Lien direct vers le voyage planifié (instance datée du trajet)
+    scheduled_trip = models.ForeignKey(
+        'ScheduledTrip',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='bookings',
+        verbose_name='Voyage programmé'
+    )
     # Optional origin/destination stops for segment bookings
     origin_stop = models.ForeignKey('Stop', on_delete=models.SET_NULL, null=True, blank=True, related_name='origin_bookings')
     destination_stop = models.ForeignKey('Stop', on_delete=models.SET_NULL, null=True, blank=True, related_name='destination_bookings')
@@ -445,6 +454,33 @@ def create_scheduled_trips_on_trip_creation(sender, instance, created, **kwargs)
     except Exception:
         # Ne pas lever d'exception lors de la sauvegarde du Trip — log possible si besoin
         pass
+
+
+def _recalculate_scheduled_trip_seats(scheduled_trip):
+    """Recalcule et met à jour available_seats sur le ScheduledTrip en comptant
+    les réservations actives (pending + confirmed)."""
+    try:
+        booked_count = (
+            Booking.objects.filter(
+                scheduled_trip=scheduled_trip,
+                status__in=['pending', 'confirmed'],
+            )
+            .values_list('seat_number', flat=True)
+            .distinct()
+            .count()
+        )
+        available = max(scheduled_trip.trip.capacity - booked_count, 0)
+        ScheduledTrip.objects.filter(pk=scheduled_trip.pk).update(available_seats=available)
+    except Exception:
+        pass
+
+
+@receiver(post_save, sender=Booking)
+def update_scheduled_trip_seats_on_booking(sender, instance, **kwargs):
+    """Met à jour available_seats du ScheduledTrip chaque fois qu'une réservation est
+    créée ou modifiée (changement de statut inclus)."""
+    if instance.scheduled_trip_id:
+        _recalculate_scheduled_trip_seats(instance.scheduled_trip)
 
 
 class UserProfile(models.Model):

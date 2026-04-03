@@ -21,13 +21,13 @@ function resolveApiBaseUrl(): string {
   // 2) Déduire à partir de l'hôte courant (utile en LAN depuis un téléphone)
   try {
     const host = typeof window !== 'undefined' ? window.location.hostname : undefined;
-    if (host) {
-      return `https://evexticket-api.onrender.com/api`;
+    if (host && host !== 'localhost' && host !== '127.0.0.1') {
+      return `http://${host}:8000/api`;
     }
   } catch (_) {}
 
   // 3) Repli par défaut en développement local
-  return 'https://evexticket-api.onrender.com/api';
+  return 'http://localhost:8000/api';
 }
 
 const API_BASE_URL = resolveApiBaseUrl();
@@ -126,6 +126,9 @@ export interface TripSearchParams {
   passengers: number;
 }
 
+/** Default request timeout — avoids indefinite hangs on Render.com free-tier cold starts */
+const REQUEST_TIMEOUT_MS = 12_000;
+
 // Classe de service API
 class ApiService {
   private baseURL: string;
@@ -134,12 +137,28 @@ class ApiService {
     this.baseURL = baseURL;
   }
 
+  /**
+   * Fire-and-forget backend warmup.
+   * Call on app startup to preemptively wake the Render.com free-tier server before the user
+   * needs it. The 60-second window is intentionally long so the server has time to fully start.
+   */
+  warmup(): void {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60_000);
+    fetch(`${this.baseURL}/cities/`, { signal: controller.signal })
+      .catch(() => {})
+      .finally(() => clearTimeout(timeoutId));
+  }
+
   // Méthode générique pour les requêtes
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     
     const token = typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null;
     const defaultHeaders: Record<string, string> = {
@@ -152,6 +171,8 @@ class ApiService {
 
     const config: RequestInit = {
       ...options,
+      // Allow caller to override signal; otherwise use our timeout controller
+      signal: options.signal ?? controller.signal,
       headers: {
         ...defaultHeaders,
         ...options.headers,
@@ -205,12 +226,17 @@ class ApiService {
 
       return data;
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error('La requête a expiré. Vérifiez votre connexion ou réessayez.');
+      }
       console.error('API request failed:', error);
       throw error;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
-  // Stocker le token dans localStorage et mettre l'en-tête Authorization
+  // Stocker le token dans localStorageet mettre l'en-tête Authorization
   setAuthToken(token: string | null) {
     if (token) {
       localStorage.setItem('authToken', token);
@@ -491,13 +517,26 @@ class ApiService {
     // Fournir également username comme repli éventuel
     payload.username = username;
 
-    const tokenResp = await fetch(`${API_BASE_URL}/login/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+    const loginController = new AbortController();
+    const loginTimeoutId = setTimeout(() => loginController.abort(), REQUEST_TIMEOUT_MS);
+    let tokenResp: Response;
+    try {
+      tokenResp = await fetch(`${API_BASE_URL}/login/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: loginController.signal,
+        body: JSON.stringify(payload),
+      });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new Error('La connexion a expiré. Réessayez dans quelques secondes.');
+      }
+      throw err;
+    } finally {
+      clearTimeout(loginTimeoutId);
+    }
 
     if (!tokenResp.ok) {
       const errorData = await tokenResp.json().catch(() => ({}));
@@ -539,13 +578,26 @@ class ApiService {
     phone?: string;
   }): Promise<{ token: string; user: any }> {
     // Appel réel à l'API Django pour l'inscription
-    const response = await fetch(`${API_BASE_URL}/register/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(userData),
-    });
+    const regController = new AbortController();
+    const regTimeoutId = setTimeout(() => regController.abort(), REQUEST_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE_URL}/register/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: regController.signal,
+        body: JSON.stringify(userData),
+      });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new Error('La connexion a expiré. Réessayez dans quelques secondes.');
+      }
+      throw err;
+    } finally {
+      clearTimeout(regTimeoutId);
+    }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));

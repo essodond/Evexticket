@@ -21,6 +21,52 @@ from django.http import Http404
 from .models import Company, City, Trip, Booking, Payment, Review, Notification, ScheduledTrip, UserProfile, TripStop, BoardingZone
 from django.contrib.auth import authenticate
 
+
+def get_occupied_seats(scheduled_trip, origin_stop=None, destination_stop=None):
+    """Retourne l'ensemble des numéros de sièges occupés pour un ScheduledTrip donné.
+
+    Si origin_stop et destination_stop sont fournis (objets TripStop), seuls les
+    sièges dont la réservation chevauche le segment demandé sont comptabilisés.
+    Sinon, tous les sièges des réservations actives sont retournés.
+
+    Args:
+        scheduled_trip: instance ScheduledTrip
+        origin_stop: instance TripStop (optionnel) — début du segment
+        destination_stop: instance TripStop (optionnel) — fin du segment
+
+    Returns:
+        set[str] — numéros de sièges occupés
+    """
+    qs = (
+        Booking.objects
+        .filter(scheduled_trip=scheduled_trip, status__in=['pending', 'confirmed'])
+        .select_related('origin_stop', 'destination_stop')
+    )
+
+    occupied = set()
+
+    if origin_stop and destination_stop:
+        for b in qs:
+            try:
+                if b.origin_stop and b.destination_stop:
+                    # Chevauchement: NOT (b.dest_seq <= origin_seq OR b.orig_seq >= dest_seq)
+                    if not (
+                        b.destination_stop.sequence <= origin_stop.sequence
+                        or b.origin_stop.sequence >= destination_stop.sequence
+                    ):
+                        occupied.add(b.seat_number)
+                else:
+                    # Réservation sans escales = trajet complet = occupe tous les segments
+                    occupied.add(b.seat_number)
+            except Exception:
+                occupied.add(b.seat_number)
+    else:
+        # Pas de segment précisé: tous les sièges réservés sont occupés
+        occupied = set(qs.values_list('seat_number', flat=True))
+
+    return occupied
+
+
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = (AllowAny,)
@@ -418,11 +464,17 @@ class TripViewSet(viewsets.ModelViewSet):
         serializer.save()
 
     def perform_destroy(self, instance):
-        # Ensure the user deleting the trip is an admin of the associated company
+        from django.db.models import ProtectedError
         company = instance.company
         if not (self.request.user.is_staff or company.admins.filter(id=self.request.user.id).exists()):
             raise serializers.ValidationError("You do not have permission to delete trips for this company.")
-        instance.delete()
+        try:
+            instance.delete()
+        except ProtectedError:
+            raise serializers.ValidationError(
+                "Ce trajet ne peut pas être supprimé car il possède des réservations existantes. "
+                "Veuillez d'abord annuler ou supprimer les réservations associées."
+            )
 
 class ScheduledTripSearchView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -438,14 +490,12 @@ class ScheduledTripSearchView(APIView):
             try:
                 from unidecode import unidecode
             except ImportError:
-                # Fallback si unidecode n'est pas installé
                 def unidecode(s):
                     return s
 
             dep_norm = unidecode(departure_city).lower()
             arr_norm = unidecode(arrival_city).lower()
 
-            # Récupérer tous les voyages planifiés pour la date donnée
             scheduled_trips = ScheduledTrip.objects.filter(
                 date=travel_date,
                 trip__is_active=True
@@ -454,7 +504,6 @@ class ScheduledTripSearchView(APIView):
             matches = []
             for st in scheduled_trips:
                 trip = st.trip
-                # Récupérer les escales ordonnées
                 stops = list(TripStop.objects.filter(trip=trip).select_related('city').order_by('sequence'))
 
                 # Cas 1: correspondance directe aux extrémités du trajet
@@ -463,11 +512,8 @@ class ScheduledTripSearchView(APIView):
                     arr_norm in unidecode((trip.arrival_city.name or '')).lower()
                 )
                 if direct_match:
-                    booked = Booking.objects.filter(
-                        scheduled_trip=st,
-                        status__in=['confirmed', 'pending']
-                    ).values_list('seat_number', flat=True)
-                    available = max(trip.capacity - len(set(booked)), 0)
+                    occupied = get_occupied_seats(st)
+                    available = max(trip.capacity - len(occupied), 0)
                     if available >= passengers:
                         matches.append(st)
                         continue
@@ -479,24 +525,7 @@ class ScheduledTripSearchView(APIView):
                 for o in origin_candidates:
                     for d in dest_candidates:
                         if o.sequence < d.sequence:
-                            qs = Booking.objects.filter(
-                                scheduled_trip=st,
-                                status__in=['confirmed', 'pending']
-                            ).select_related('origin_stop', 'destination_stop')
-
-                            occupied = set()
-                            for b in qs:
-                                try:
-                                    if b.origin_stop and b.destination_stop:
-                                        # chevauchement si NOT (b.dest <= o OR b.orig >= d)
-                                        if not (b.destination_stop.sequence <= o.sequence or b.origin_stop.sequence >= d.sequence):
-                                            occupied.add(b.seat_number)
-                                    else:
-                                        # réservation sans escales: considérer comme occupant toutes les sections
-                                        occupied.add(b.seat_number)
-                                except Exception:
-                                    occupied.add(b.seat_number)
-
+                            occupied = get_occupied_seats(st, origin_stop=o, destination_stop=d)
                             available = max(trip.capacity - len(occupied), 0)
                             if available >= passengers:
                                 matches.append(st)
@@ -505,7 +534,6 @@ class ScheduledTripSearchView(APIView):
                     if found:
                         break
 
-            # Sérialiser avec le contexte pour calculer available_seats par segment
             st_serializer = ScheduledTripSerializer(
                 matches,
                 many=True,
@@ -587,25 +615,21 @@ def scheduled_trips_list(request):
                 if departure_city or arrival_city:
                     # Requête de recherche: afficher exactement la date recherchée
                     scheduled_trips = scheduled_trips.filter(date=parsed_date)
-                    print(f"[DEBUG] Date exacte filtrée: {parsed_date}, Nombre de trajets: {scheduled_trips.count()}")
                 else:
                     # Page d'accueil: afficher 3 jours
                     end_date = parsed_date + timedelta(days=3)
                     scheduled_trips = scheduled_trips.filter(date__gte=parsed_date, date__lte=end_date)
-                    print(f"[DEBUG] Dates filtrées pour accueil: {parsed_date} à {end_date}, Nombre de trajets: {scheduled_trips.count()}")
         except Exception as e:
-            print(f"[DEBUG] Erreur de parsing de date: {e}")
+            pass
     else:
         today = datetime.now().date()
         if departure_city or arrival_city:
             # Requête de recherche: afficher tous les trajets futurs
             scheduled_trips = scheduled_trips.filter(date__gte=today)
-            print(f"[DEBUG] Requête de recherche sans date: affichage de tous les trajets futurs à partir de {today}, Nombre de trajets: {scheduled_trips.count()}")
         else:
             # Page d'accueil: afficher 3 jours
             end_date = today + timedelta(days=3)
             scheduled_trips = scheduled_trips.filter(date__gte=today, date__lte=end_date)
-            print(f"[DEBUG] Page d'accueil sans date: affichage des trajets du {today} au {end_date}, Nombre de trajets: {scheduled_trips.count()}")
     
     # Trier les trajets par date ascendante (plus proche d'abord)
     scheduled_trips = scheduled_trips.order_by('date')
@@ -714,10 +738,90 @@ def scheduled_trips_list(request):
 
 @api_view(['GET'])
 def booked_seats_list(request):
-    booked_seats = Booking.objects.values_list('seat_number', flat=True).distinct()
-    return Response({'booked_seats': list(booked_seats)})
+    """Retourne les sièges occupés pour un ScheduledTrip spécifié par trip_id + travel_date.
+    Supporte les paramètres origin_stop et destination_stop pour les réservations partielles.
+    """
+    trip_id = request.query_params.get('trip_id')
+    travel_date = request.query_params.get('travel_date')
+    origin_stop_id = request.query_params.get('origin_stop')
+    dest_stop_id = request.query_params.get('destination_stop')
+
+    if not trip_id or not travel_date:
+        return Response(
+            {'error': 'Les paramètres trip_id et travel_date sont requis.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        st = ScheduledTrip.objects.get(trip_id=trip_id, date=travel_date)
+    except ScheduledTrip.DoesNotExist:
+        return Response({'booked_seats': []})
+
+    origin_stop = None
+    destination_stop = None
+    if origin_stop_id:
+        try:
+            origin_stop = TripStop.objects.get(pk=origin_stop_id)
+        except TripStop.DoesNotExist:
+            pass
+    if dest_stop_id:
+        try:
+            destination_stop = TripStop.objects.get(pk=dest_stop_id)
+        except TripStop.DoesNotExist:
+            pass
+
+    occupied = get_occupied_seats(st, origin_stop=origin_stop, destination_stop=destination_stop)
+    return Response({'booked_seats': sorted(occupied)})
+
 
 @api_view(['GET'])
 def availability_view(request):
-    # This view would typically return availability information based on query parameters
-    return Response({'message': 'Availability view placeholder'})
+    """Retourne la disponibilité des sièges pour un voyage planifié.
+
+    Paramètres requis: trip_id, travel_date
+    Paramètres optionnels: origin_stop, destination_stop (IDs TripStop pour segment)
+
+    Réponse:
+        { occupied_seats: [...], available_seats: N, capacity: M }
+    """
+    trip_id = request.query_params.get('trip_id')
+    travel_date = request.query_params.get('travel_date')
+    origin_stop_id = request.query_params.get('origin_stop')
+    dest_stop_id = request.query_params.get('destination_stop')
+
+    if not trip_id or not travel_date:
+        return Response(
+            {'error': 'Les paramètres trip_id et travel_date sont requis.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        st = ScheduledTrip.objects.select_related('trip').get(trip_id=trip_id, date=travel_date)
+    except ScheduledTrip.DoesNotExist:
+        return Response(
+            {'error': 'Aucun voyage planifié trouvé pour ces paramètres.'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    origin_stop = None
+    destination_stop = None
+    if origin_stop_id:
+        try:
+            origin_stop = TripStop.objects.get(pk=origin_stop_id)
+        except TripStop.DoesNotExist:
+            pass
+    if dest_stop_id:
+        try:
+            destination_stop = TripStop.objects.get(pk=dest_stop_id)
+        except TripStop.DoesNotExist:
+            pass
+
+    occupied = get_occupied_seats(st, origin_stop=origin_stop, destination_stop=destination_stop)
+    capacity = st.trip.capacity
+    available = max(capacity - len(occupied), 0)
+
+    return Response({
+        'occupied_seats': sorted(occupied),
+        'available_seats': available,
+        'capacity': capacity,
+    })
