@@ -24,10 +24,10 @@ function resolveApiBaseUrl(): string {
     if (host && host !== 'localhost' && host !== '127.0.0.1') {
       return `http://${host}:8000/api`;
     }
-  } catch (_) {}
+  } catch (_) { }
 
   // 3) Repli par défaut en développement local
-  return 'http://localhost:8000/api';
+  return 'http://127.0.0.1:8000/api';
 }
 
 const API_BASE_URL = resolveApiBaseUrl();
@@ -146,7 +146,7 @@ class ApiService {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60_000);
     fetch(`${this.baseURL}/cities/`, { signal: controller.signal })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => clearTimeout(timeoutId));
   }
 
@@ -159,7 +159,7 @@ class ApiService {
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    
+
     const token = typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null;
     const defaultHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -552,13 +552,13 @@ class ApiService {
     try {
       const me = await this.request<any>('/me/');
       user = me;
-      try { localStorage.setItem('user', JSON.stringify(user)); } catch (e) {}
+      try { localStorage.setItem('user', JSON.stringify(user)); } catch (e) { }
     } catch (e) {
       // fallback
     }
 
     // Persist username for UI (profile initial)
-    try { localStorage.setItem('username', username); } catch (e) {}
+    try { localStorage.setItem('username', username); } catch (e) { }
 
     return { token, user };
   }
@@ -615,7 +615,7 @@ class ApiService {
     let user = null;
     try {
       user = await this.request<any>('/me/');
-      try { localStorage.setItem('user', JSON.stringify(user)); } catch (e) {}
+      try { localStorage.setItem('user', JSON.stringify(user)); } catch (e) { }
     } catch (e) {
       // ignore
     }

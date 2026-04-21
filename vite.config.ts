@@ -5,8 +5,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: '127.0.0.1',
-    port: 4173,
-    strictPort: true,
+    port: 5173,
+    strictPort: false, // Allow alternative port if 5173 in use
+    open: false,
   },
   optimizeDeps: {
     include: ['lucide-react']

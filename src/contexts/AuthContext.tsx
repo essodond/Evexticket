@@ -34,18 +34,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const run = async () => {
       try {
-        const token = typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null;
+        // Use sessionStorage (cleared on browser close) instead of localStorage for security
+        // TODO: Migrate to httpOnly cookies + refresh tokens (backend support required)
+        const token = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('authToken') : null;
         if (token) {
           apiService.setAuthToken(token);
           try {
             const me = await apiService.getMe();
             if (!mounted) return;
             setUser(me);
-            try { localStorage.setItem('user', JSON.stringify(me)); } catch (e) {}
+            try { sessionStorage.setItem('user', JSON.stringify(me)); } catch (e) {}
           } catch {
             // Token invalid, expired, or server timed out — force clean logout
             apiService.setAuthToken(null);
-            try { localStorage.removeItem('authToken'); localStorage.removeItem('user'); } catch (e) {}
+            try { sessionStorage.removeItem('authToken'); sessionStorage.removeItem('user'); } catch (e) {}
           }
         }
       } finally {
@@ -69,10 +71,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const resp = await apiService.login(email, password);
     if (resp.token) {
       apiService.setAuthToken(resp.token);
+      // Use sessionStorage instead of localStorage for security (cleared on browser close)
+      try { sessionStorage.setItem('authToken', resp.token); } catch (e) {}
     }
     const me = resp.user || await apiService.getMe();
     setUser(me);
-    try { localStorage.setItem('user', JSON.stringify(me)); } catch (e) {}
+    try { sessionStorage.setItem('user', JSON.stringify(me)); } catch (e) {}
     return me;
   };
 
@@ -80,17 +84,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const resp = await apiService.register(payload);
     if (resp.token) {
       apiService.setAuthToken(resp.token);
+      // Use sessionStorage instead of localStorage for security
+      try { sessionStorage.setItem('authToken', resp.token); } catch (e) {}
     }
     const me = resp.user || await apiService.getMe();
     setUser(me);
-    try { localStorage.setItem('user', JSON.stringify(me)); } catch (e) {}
+    try { sessionStorage.setItem('user', JSON.stringify(me)); } catch (e) {}
     return me;
   };
 
   const logout = () => {
     apiService.setAuthToken(null);
     setUser(null);
-    try { localStorage.removeItem('user'); } catch (e) {}
+    try { sessionStorage.removeItem('authToken'); sessionStorage.removeItem('user'); } catch (e) {}
   };
 
   return (

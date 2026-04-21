@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiService from '../services/api';
 import type { Booking } from '../services/api';
-import { Ticket, Calendar, MapPin, ChevronRight, Loader2, TicketX, Bus, CreditCard, Search, Clock, Download } from 'lucide-react';
+import { Ticket, Calendar, MapPin, ChevronRight, Loader2, TicketX, Bus, CreditCard, Search, Clock, Download, XCircle, RotateCcw } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 export default function MyTicketsPage() {
@@ -44,6 +44,16 @@ export default function MyTicketsPage() {
     if (filter === 'past') return isTravelPassed(date);
     return true;
   });
+
+  const handleCancelBooking = async (bookingId: number) => {
+    if (!window.confirm('Êtes-vous sûr de vouloir annuler cette réservation ?')) return;
+    try {
+      await apiService.cancelBooking(bookingId);
+      setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'cancelled' } : b));
+    } catch (err: any) {
+      alert('Erreur lors de l\'annulation: ' + (err.message || 'Impossible d\'annuler'));
+    }
+  };
 
   const sortedBookings = [...filteredBookings].sort((a, b) => {
     const dateA = a.travel_date || (a as any).scheduled_trip_date || '';
@@ -321,19 +331,37 @@ export default function MyTicketsPage() {
                         </div>
                       </div>
 
-                      {/* Action button for active tickets */}
-                      {!isPast && (
-                        <div className="px-5 pb-4">
+                      {/* Action buttons */}
+                      <div className="px-5 pb-4 space-y-2">
+                        {!isPast && (
+                          <>
+                            <button
+                              onClick={() => navigate('/confirmation', { state: { booking } })}
+                              className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-all shadow-sm hover:shadow-md"
+                            >
+                              <Ticket size={15} />
+                              Voir le billet
+                              <ChevronRight size={15} />
+                            </button>
+                            <button
+                              onClick={() => handleCancelBooking(booking.id)}
+                              className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-red-50 text-red-600 text-xs font-medium rounded-lg hover:bg-red-100 transition-all"
+                            >
+                              <XCircle size={14} />
+                              Annuler la réservation
+                            </button>
+                          </>
+                        )}
+                        {isPast && (
                           <button
-                            onClick={() => navigate('/confirmation', { state: { booking } })}
-                            className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-all shadow-sm hover:shadow-md"
+                            onClick={() => navigate('/', { state: { rebook: booking } })}
+                            className="w-full flex items-center justify-center gap-2 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-all shadow-sm hover:shadow-md"
                           >
-                            <Ticket size={15} />
-                            Voir le billet
-                            <ChevronRight size={15} />
+                            <RotateCcw size={15} />
+                            Rebook ce trajet
                           </button>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
 
                     {/* ═══════════ VERTICAL PERFORATION ═══════════ */}

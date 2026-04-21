@@ -72,6 +72,7 @@ const PaymentPage: React.FC<PaymentPageProps> = ({ bookingData, onBack, onPaymen
 
     try {
       const scheduledTripId = Number(trip?.scheduled_trip_id ?? trip?.id ?? trip?.trip_id ?? trip);
+      const travelDate = searchData?.travel_date || searchData?.date || new Date().toISOString().split('T')[0];
       const payload: any = {
         scheduled_trip: scheduledTripId,
         passenger_name: `${passengerInfo.firstName || ''} ${passengerInfo.lastName || ''}`.trim(),
@@ -79,6 +80,7 @@ const PaymentPage: React.FC<PaymentPageProps> = ({ bookingData, onBack, onPaymen
         passenger_phone: passengerInfo.phone,
         seat_number: String(selectedSeat),
         payment_method: paymentMethod,
+        travel_date: travelDate,
         notes: `Payment via ${paymentMethod}${phoneNumber ? ' - ' + phoneNumber : ''}`,
       };
 

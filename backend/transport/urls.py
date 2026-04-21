@@ -18,6 +18,7 @@ urlpatterns = [
     path('companies/<int:company_id>/stats/', views.CompanyStatsView.as_view(), name='company-stats'),
     path('register/', views.RegisterView.as_view(), name='register'),
     path('login/', views.EmailAuthToken.as_view(), name='api-token-auth'),
+    path('token/refresh/', views.TokenRefreshView.as_view(), name='token-refresh'),
     path('me/', views.CurrentUserView.as_view(), name='current-user'),
     path('scheduled_trips/<int:pk>/stops/', views.scheduled_trip_stops, name='scheduled-trip-stops'),
     path('scheduled_trips/search/', views.ScheduledTripSearchView.as_view(), name='scheduled-trip-search'),

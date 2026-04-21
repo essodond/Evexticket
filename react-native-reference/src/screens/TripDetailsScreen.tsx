@@ -40,6 +40,7 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
+  const scheduledTripId = initialTrip?.id ?? initialTrip?.trip_info?.id;
 
   const handleSelectSeat = (seatId: string | null) => {
     setSelectedSeat(seatId);
@@ -54,8 +55,14 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     const fetchTrip = async () => {
+      if (!scheduledTripId) {
+        setError('Identifiant du trajet introuvable.');
+        setLoading(false);
+        return;
+      }
+
       try {
-        const fetchedTrip = await getTripDetails(initialTrip.trip_info.id);
+        const fetchedTrip = await getTripDetails(String(scheduledTripId));
         setTrip(fetchedTrip);
       } catch (err) {
         console.error('Failed to fetch trip details:', err);
@@ -66,7 +73,7 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
     };
 
     fetchTrip();
-  }, [initialTrip.id]);
+  }, [scheduledTripId]);
 
   if (loading) {
     return (

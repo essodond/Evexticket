@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import apiService, { City } from '../services/api';
 import { Company as TCompany, Trip as TTrip, User as TUser } from '../types';
 import { useCities } from '../hooks/useApi';
+import { useAuth } from '../contexts/AuthContext';
 import { Edit, Trash2, Users, Download, Bus, BarChart3, FileText, Eye, Building, Lock, TrendingUp, DollarSign, Calendar, RefreshCw, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import AddCompanyModal from './AddCompanyModal';
 import AddTripModal from './AddTripModal';
@@ -20,6 +21,26 @@ interface AdminDashboardProps {
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
+  const { user } = useAuth();
+  
+  // Permission check: only admins can access this dashboard
+  if (!user?.is_staff && !user?.is_superuser) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-lg p-8 text-center max-w-md">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Lock className="w-8 h-8 text-red-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Accès refusé</h1>
+          <p className="text-gray-600 mb-6">Vous n'avez pas les permissions pour accéder au tableau de bord administrateur.</p>
+          <a href="/" className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+            Retour à l'accueil
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   const [activeTab, setActiveTab] = useState('overview');
   const [showAddCompanyModal, setShowAddCompanyModal] = useState(false);
   const [showAddTripModal, setShowAddTripModal] = useState(false);

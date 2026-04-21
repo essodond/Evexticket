@@ -176,62 +176,31 @@ REST_FRAMEWORK = {
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
+    "http://localhost:4173",
     "http://127.0.0.1:5173",
-    "http://localhost:5174",
-    "http://127.0.0.1:5174",
-    "http://26.5.20.223:5173",
-    "http://169.254.61.140:5173",
-    "http://192.168.1.71:5173",
-    "http://192.168.56.1:5173",
-    "http://172.31.128.1:5173",
-    "http://26.5.20.223:5174",
-    "http://169.254.61.140:5174",
-    "http://192.168.1.71:5174",
-    "http://192.168.56.1:5174",
-    "http://172.31.128.1:5174",
+    "http://127.0.0.1:4173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
     "http://localhost:19006",
     "http://127.0.0.1:19006",
-    "http://192.168.1.64:19006",
     "http://localhost:8081",
     "http://127.0.0.1:8081",
-    "http://192.168.1.64:8081",
-    # Expo LAN alternative port
     "http://localhost:8084",
     "http://127.0.0.1:8084",
-    "http://192.168.1.64:8084",
-    "https://4429be1bde8e.ngrok-free.app",
-    "http://192.168.137.234:8000",
-    "http://192.168.137.172:8000",
-    "http://192.168.1.66:8000",
-    "http://192.168.1.65:8000",
+    "exp://localhost:19000",
 ]
 
-# Ajouter dynamiquement les origines Render depuis les variables d'environnement
+# Add dynamic origins from environment if needed
 _extra_cors = os.environ.get('CORS_EXTRA_ORIGINS', '')
 if _extra_cors:
     CORS_ALLOWED_ORIGINS += [o.strip() for o in _extra_cors.split(',') if o.strip()]
 
-# En production, autoriser toutes les origines
+# Allow all for local development (restrict in production)
 CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL', 'False').lower() == 'true'
-
-# IMPORTANT : CORS_ALLOW_CREDENTIALS ne peut pas être True si CORS_ALLOW_ALL_ORIGINS est True
-# On le met à False quand ALLOW_ALL est activé (on utilise Token auth, pas les cookies)
-CORS_ALLOW_CREDENTIALS = not CORS_ALLOW_ALL_ORIGINS
-
-CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
-]
-
+CORS_ALLOW_CREDENTIALS = True
 # Configuration de la langue et du fuseau horaire
 LANGUAGE_CODE = 'fr-fr'
 TIME_ZONE = 'Africa/Lome'
 USE_I18N = True
 USE_TZ = True
+

@@ -32,7 +32,7 @@ interface SearchTripsParams {
   departure_date?: string;
 }
 
-const API_BASE_URL = 'http://192.168.137.172:8000/api';
+const API_BASE_URL = 'https://evexticket-api.onrender.com/api';
 console.log('API_BASE_URL utilisée:', API_BASE_URL);
 const TIMEOUT = 20000; // 20s pour éviter des attentes prolongées
 

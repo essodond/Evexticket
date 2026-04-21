@@ -121,6 +121,25 @@ class EmailAuthToken(APIView):
         else:
             return Response({'detail': 'Identifiants invalides.'}, status=status.HTTP_401_UNAUTHORIZED)
 
+class TokenRefreshView(APIView):
+    """Refresh authentication token endpoint.
+    
+    Accepts a valid token and returns a fresh one for continued session.
+    Used to keep user logged in without re-entering credentials.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        try:
+            token, created = Token.objects.get_or_create(user=request.user)
+            user_serializer = UserSerializer(request.user)
+            return Response({
+                'token': token.key,
+                'user': user_serializer.data
+            })
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 class ScheduledTripViewSet(viewsets.ModelViewSet):
     queryset = ScheduledTrip.objects.all()
     serializer_class = ScheduledTripSerializer
@@ -289,7 +308,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
 
 class DashboardStatsView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAdminUser]
 
     def get(self, request, *args, **kwargs):
         # Calculate dashboard statistics
@@ -423,9 +442,8 @@ class CompanyBookingsView(generics.ListAPIView):
 
         # Check if the user is an admin of the company or a staff member
         if not (self.request.user.is_staff or company.admins.filter(id=self.request.user.id).exists()):
-            # If not, return an empty queryset or raise a permission denied error
-            # For now, returning an empty queryset to avoid 403 for non-admins
-            return Booking.objects.none()
+            # Properly return 403 Forbidden instead of silently returning empty queryset
+            raise permissions.PermissionDenied("You do not have permission to view this company's bookings.")
 
         return Booking.objects.filter(trip__company=company).select_related(
             'trip',

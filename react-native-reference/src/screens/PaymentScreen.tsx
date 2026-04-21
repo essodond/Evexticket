@@ -39,9 +39,9 @@ export default function PaymentScreen({ navigation, route }: Props) {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('flooz');
 
 
-  const [passengerName, setPassengerName] = useState(`${user?.firstName || ''} ${user?.lastName || ''}`);
+  const [passengerName, setPassengerName] = useState(`${user?.first_name || ''} ${user?.last_name || ''}`);
   const [passengerEmail, setPassengerEmail] = useState(user?.email || '');
-  const [passengerPhone, setPassengerPhone] = useState(user?.phoneNumber || '');
+  const [passengerPhone, setPassengerPhone] = useState(user?.phone_number || '');
   const [processing, setProcessing] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState(''); // Add this line
 

@@ -79,6 +79,29 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"password": "Les mots de passe ne correspondent pas."})
         return attrs
 
+    def validate_phone(self, value):
+        """Validate Togolese phone number format"""
+        if not value:
+            return value
+        
+        # Remove common formatting characters, keep only digits and +
+        cleaned = ''.join(filter(lambda x: x.isdigit() or x == '+', str(value).strip()))
+        
+        # Accept format: +228XXXXXXXX or 228XXXXXXXX (8-11 digits after country code)
+        if not cleaned:
+            return value  # Allow empty
+        
+        if cleaned.startswith('+228') and len(cleaned) >= 13:
+            return value  # Valid
+        elif cleaned.startswith('228') and len(cleaned) >= 11:
+            return value  # Valid
+        elif cleaned.isdigit() and len(cleaned) == 8:
+            return value  # Accept 8-digit format (assume local)
+        else:
+            raise serializers.ValidationError(
+                "Invalid phone format. Use +228XXXXXXXX, 228XXXXXXXX, or 8-digit local format"
+            )
+
     def create(self, validated_data):
         password2 = validated_data.pop('password2', None)
         phone = validated_data.pop('phone', '').strip()
@@ -367,6 +390,18 @@ class BookingSerializer(serializers.ModelSerializer):
         return None
 
     def validate_seat_number(self, value):
+        # Valider que le siège est numérique et dans la bonne plage
+        if not value:
+            raise serializers.ValidationError("Seat number is required")
+        
+        try:
+            seat_num = int(value)
+        except (ValueError, TypeError):
+            raise serializers.ValidationError("Seat number must be numeric")
+        
+        if seat_num < 1 or seat_num > 100:
+            raise serializers.ValidationError("Seat number must be between 1 and 100")
+        
         # Vérifier que le siège n'est pas déjà pris pour ce voyage programmé
         # If booking includes origin/destination stops, we must check overlap by sequence indices
         origin = None
