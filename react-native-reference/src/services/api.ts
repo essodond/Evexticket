@@ -32,7 +32,7 @@ interface SearchTripsParams {
   departure_date?: string;
 }
 
-const API_BASE_URL = 'https://evexticket-api.onrender.com/api';
+const API_BASE_URL = 'http://192.168.1.64:8000/api';
 console.log('API_BASE_URL utilisée:', API_BASE_URL);
 const TIMEOUT = 20000; // 20s pour éviter des attentes prolongées
 
@@ -40,7 +40,7 @@ async function handleResponse(response: Response) {
   const contentType = response.headers.get('content-type');
   const isJson = contentType && contentType.includes('application/json');
   let data;
-  
+
   try {
     data = isJson ? await response.json() : await response.text();
     console.log('📝 handleResponse - Données brute:', data);
@@ -56,7 +56,7 @@ async function handleResponse(response: Response) {
       data: data,
       contentType: contentType
     });
-    
+
     if (isJson && data) {
       if (data.detail) {
         throw new Error(data.detail);
@@ -73,7 +73,7 @@ async function handleResponse(response: Response) {
         }
       }
     }
-    
+
     const errorMessage = `Erreur ${response.status}: ${response.statusText}`;
     throw new Error(errorMessage);
   }
@@ -133,17 +133,17 @@ async function request<T>(
 
     try {
       const response = await fetchWithTimeout(primaryUrl, { ...options, headers });
-      
+
       // Log de la réponse
       console.log('🌐 API Response:', {
         url: primaryUrl,
         status: response.status,
         statusText: response.statusText
       });
-      
+
       const responseData = await handleResponse(response);
       console.log('📋 API Response Data:', responseData);
-      
+
       return responseData;
     } catch (primaryErr) {
       console.error('❌ API Request Error:', primaryErr);

@@ -188,6 +188,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:8084",
     "http://127.0.0.1:8084",
     "exp://localhost:19000",
+    
 ]
 
 # Add dynamic origins from environment if needed
