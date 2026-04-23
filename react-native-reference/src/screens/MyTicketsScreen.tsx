@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,7 +14,6 @@ import { RootStackParamList, Trip } from '../types';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
 import { formatCurrency } from '../utils/mockData';
-import Button from '../components/Button';
 import { getMyBookings } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -29,253 +29,174 @@ export default function MyTicketsScreen({ navigation }: Props) {
     loadTickets();
   }, [user]);
 
-  // Fonction pour masquer un ticket
-  const handleDeleteTicket = (ticketId: number) => {
-    setHiddenTickets(prev => {
-      const newHidden = new Set(prev);
-      newHidden.add(ticketId);
-      return newHidden;
-    });
-    console.log(`🗑️  Ticket ${ticketId} masqué de la liste`);
-  };
-
-  // Fonction pour verifier si un voyage est passe
-  const isTravelPassed = (travelDate: string): boolean => {
-    try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const parts = travelDate.split('-');
-      if (parts.length !== 3) {
-        console.warn('Format de date invalide:', travelDate);
-        return false;
-      }
-
-      const travelDateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-
-      return travelDateObj < today;
-    } catch (error) {
-      console.error('Erreur lors de la verification de la date:', error);
-      return false;
-    }
-  };
-
-  // Filtrer les tickets masques
-  const visibleTickets = tickets.filter(ticket => !hiddenTickets.has(ticket.id));
-
-  // Trier les tickets : valides d'abord, puis expires
-  const sortedTickets = useMemo(() => {
-    const valid = [];
-    const expired = [];
-
-    visibleTickets.forEach(ticket => {
-      if (isTravelPassed(ticket.date)) {
-        expired.push(ticket);
-      } else {
-        valid.push(ticket);
-      }
-    });
-
-    // Trier les valides par date décroissante (plus récents en premier)
-    valid.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-    // Trier les expirés par date décroissante (plus récents en premier)
-    expired.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-    return [...valid, ...expired];
-  }, [visibleTickets]);
-
   const loadTickets = async () => {
     try {
       setLoading(true);
-      console.log('📥 Chargement des tickets...');
-      
-      if (!user) {
-        console.log('👤 Utilisateur non connecté');
-        setTickets([]);
-        return;
-      }
-      
+      if (!user) return setTickets([]);
       const bookings = await getMyBookings();
-      console.log('✅ Bookings reçus:', bookings, 'Type:', typeof bookings);
+      
+      if (!Array.isArray(bookings)) return setTickets([]);
 
-      // Vérifier que bookings est un tableau
-      if (!Array.isArray(bookings)) {
-        console.error('❌ Les bookings ne sont pas un tableau:', bookings);
-        setTickets([]);
-        return;
-      }
-
-      // Transformer les réservations en format Trip attendu par l'écran
       const transformedTickets = bookings.map((booking: any) => {
-        console.log('📋 Transformation du booking:', booking.id, booking.seat_number);
         const tripDetails = booking.trip_details || booking.trip_info || {};
         return {
           id: booking.id,
-          date: booking.scheduled_trip_date || 'Date non disponible',
+          date: booking.scheduled_trip_date || booking.travel_date || 'Date non disponible',
           company: tripDetails.company_name || 'Compagnie inconnue',
           price: booking.total_price || tripDetails.price || 0,
           from: tripDetails.departure_city_name || 'Ville de départ',
           to: tripDetails.arrival_city_name || 'Ville d\'arrivée',
-          departure: tripDetails.departure_time || 'Heure non disponible',
-          arrival: tripDetails.arrival_time || 'Heure non disponible',
-          seat_number: booking.seat_number || 'Siège non assigné',
+          departure: tripDetails.departure_time || '00:00',
+          arrival: tripDetails.arrival_time || '00:00',
+          seat_number: booking.seat_number || '?',
           status: booking.status || 'Confirmé',
-          trip_info: tripDetails
         };
       });
-      
-      console.log('✅ Tickets transformés:', transformedTickets.length);
       setTickets(transformedTickets);
     } catch (error) {
-      console.error('💥 Erreur lors du chargement des tickets:', error);
       setTickets([]);
     } finally {
       setLoading(false);
     }
   };
 
+  const isTravelPassed = (travelDate: string): boolean => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const parts = travelDate.split('-');
+      const travelDateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      return travelDateObj < today;
+    } catch { return false; }
+  };
+
+  const visibleTickets = tickets.filter(ticket => !hiddenTickets.has(ticket.id));
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      
+      {/* HEADER BLEU ARRONDI */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Mes Tickets</Text>
+        <Text style={styles.headerSubtitle}>{visibleTickets.length} voyage(s) enregistré(s)</Text>
       </View>
 
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Chargement de vos tickets...</Text>
-        </View>
-      ) : sortedTickets.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <View style={styles.emptyIcon}>
-            <Ionicons name="ticket-outline" size={48} color={COLORS.textSecondary} />
+      <ScrollView 
+        style={styles.content} 
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.sectionTitle}>BILLETS ACTIFS</Text>
+
+        {visibleTickets.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Ionicons name="ticket-outline" size={40} color="#CBD5E1" />
+            <Text style={styles.emptyText}>Aucun ticket trouvé</Text>
           </View>
-          <Text style={styles.emptyTitle}>
-            {tickets.length === 0 ? 'Aucun ticket' : 'Tous les tickets sont masqués'}
-          </Text>
-          <Text style={styles.emptyDescription}>
-            {tickets.length === 0
-              ? 'Vous n\'avez pas encore de réservation. Réservez votre premier voyage maintenant !'
-              : 'Vous avez masqué tous vos tickets. Rechargez la page pour les afficher à nouveau.'}
-          </Text>
-          {tickets.length > 0 && (
-            <TouchableOpacity
-              onPress={() => {
-                // Masquer tous les tickets masqués
-                setHiddenTickets(new Set());
-              }}
-              style={styles.unhideButton}
-            >
-              <Text style={styles.unhideButtonText}>Afficher tous les tickets</Text>
-            </TouchableOpacity>
-          )}
-          {tickets.length === 0 && (
-            <Button
-              title="Réserver un trajet"
-              onPress={() => navigation.navigate('Home' as any)}
-              style={styles.emptyButton}
-            />
-          )}
-        </View>
-      ) : (
-        <ScrollView
-          style={styles.content}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.contentContainer}
-        >
-          <Text style={styles.sectionTitle}>BILLETS ACTIFS</Text>
-
-          {/* Section Billets valides */}
-          {sortedTickets.some(t => !isTravelPassed(t.date)) }
-
-          {sortedTickets.map((ticket, index) => {
+        ) : (
+          visibleTickets.map((ticket) => {
             const isExpired = isTravelPassed(ticket.date);
-
-            // Ne pas afficher le titre des expirés ici, le faire avant le premier expiré
             return (
-            <View key={ticket.id || index} style={styles.ticketCard}>
-              {/* Badge INVALIDE pour les voyages passés - compact et sur le côté */}
-              {isExpired && (
-                <View style={styles.ticketCardHeader}>
-                  <View style={styles.ticketCardHeaderLeft}>
-                    <Ionicons name="calendar-outline" size={16} color={COLORS.white} />
-                    <Text style={styles.ticketCardDate}>{ticket.date}</Text>
-                  </View>
-                  <View style={styles.invalidBadgeCompact}>
-                    <Ionicons name="alert-circle" size={14} color={COLORS.warning} />
-                    <Text style={styles.invalidBadgeCompactText}>Expiré</Text>
-                  </View>
-                </View>
-              )}
-
-              {!isExpired && (
-                <View style={styles.ticketCardHeader}>
-                  <View style={styles.ticketCardHeaderLeft}>
-                    <Ionicons name="calendar-outline" size={16} color={COLORS.white} />
-                    <Text style={styles.ticketCardDate}>{ticket.date}</Text>
-                  </View>
-                  <View style={styles.ticketCardBadge}>
-                    <Text style={styles.ticketCardBadgeText}>{ticket.status}</Text>
-                  </View>
-                </View>
-              )}
-
-              <View style={styles.ticketCardBody}>
-                <View style={styles.ticketCardInfo}>
-                  <View>
-                    <Text style={styles.ticketCardLabel}>Compagnie</Text>
-                    <Text style={styles.ticketCardValue}>{ticket.company}</Text>
-                  </View>
-                  <View style={styles.ticketCardInfoRight}>
-                    <Text style={styles.ticketCardLabel}>Prix</Text>
-                    <Text style={styles.ticketCardPrice}>{formatCurrency(ticket.price)}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.ticketCardRoute}>
-                  <View style={styles.ticketCardRouteItem}>
-                    <Text style={styles.ticketCardRouteLabel}>Départ</Text>
-                    <Text style={styles.ticketCardRouteCity}>{ticket.from}</Text>
-                    <Text style={styles.ticketCardRouteTime}>{ticket.departure}</Text>
+              <View key={ticket.id} style={styles.ticketWrapper}>
+                <View style={[styles.ticketCard, isExpired && styles.expiredCard]}>
+                  
+                  {/* Header du ticket (Date & Statut) */}
+                  <View style={[styles.cardHeader, isExpired ? styles.expiredHeader : styles.activeHeader]}>
+                    <View style={styles.headerRow}>
+                      <Ionicons name="calendar-outline" size={16} color={COLORS.white} />
+                      <Text style={styles.cardDateText}>{ticket.date}</Text>
+                    </View>
+                    <View style={styles.statusBadge}>
+                      <Text style={styles.statusBadgeText}>
+                        {isExpired ? 'EXPIRÉ' : ticket.status.toUpperCase()}
+                      </Text>
+                    </View>
                   </View>
 
-                  <View style={styles.ticketCardRouteLine}>
-                    <View style={styles.ticketCardRouteDot} />
+                  {/* Effet de perforation */}
+                  <View style={styles.perforationRow}>
+                    <View style={styles.leftNotch} />
+                    <View style={styles.dashedLine} />
+                    <View style={styles.rightNotch} />
                   </View>
 
-                  <View style={[styles.ticketCardRouteItem, styles.ticketCardRouteItem_end]}>
-                    <Text style={styles.ticketCardRouteLabel}>Arrivée</Text>
-                    <Text style={styles.ticketCardRouteCity}>{ticket.to}</Text>
-                    <Text style={styles.ticketCardRouteTime}>{ticket.arrival}</Text>
+                  {/* Corps du ticket */}
+                  <View style={styles.cardBody}>
+                    <View style={styles.topInfo}>
+                      <View>
+                        <Text style={styles.label}>COMPAGNIE</Text>
+                        <Text style={styles.companyName}>{ticket.company}</Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.label}>PRIX</Text>
+                        <Text style={styles.priceText}>{formatCurrency(ticket.price)}</Text>
+                      </View>
+                    </View>
+
+                    {/* Trajet Visuel */}
+                    <View style={styles.routeContainer}>
+                      <View style={styles.routeItem}>
+                        <Text style={styles.timeText}>{ticket.departure.substring(0, 5)}</Text>
+                        <Text style={styles.cityText} numberOfLines={1}>{ticket.from}</Text>
+                      </View>
+
+                      <View style={styles.routeVisual}>
+                        <View style={styles.line} />
+                        <View style={styles.busIconCircle}>
+                          <Ionicons name="bus" size={14} color={COLORS.primary} />
+                        </View>
+                        <View style={styles.line} />
+                      </View>
+
+                      <View style={[styles.routeItem, { alignItems: 'flex-end' }]}>
+                        <Text style={styles.timeText}>{ticket.arrival.substring(0, 5)}</Text>
+                        <Text style={styles.cityText} numberOfLines={1}>{ticket.to}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.bottomInfo}>
+                       <View>
+                          <Text style={styles.label}>SIÈGE</Text>
+                          <Text style={styles.seatText}>{ticket.seat_number}</Text>
+                       </View>
+                       <View style={styles.qrPlaceholder}>
+                          <Ionicons name="qr-code-outline" size={36} color="#1E293B" />
+                       </View>
+                    </View>
+
+                    {/* Boutons d'actions */}
+                    <View style={styles.actionsRow}>
+                      <TouchableOpacity 
+                        style={styles.mainActionButton}
+                        onPress={() => navigation.navigate('Ticket' as any, { trip: ticket })}
+                      >
+                        <Ionicons name="ticket-outline" size={20} color={COLORS.white} />
+                        <Text style={styles.mainActionText}>Voir le billet</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity 
+                        style={styles.deleteIconButton}
+                        onPress={() => setHiddenTickets(prev => new Set(prev).add(ticket.id))}
+                      >
+                        <Ionicons name="trash-outline" size={20} color="#64748B" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
-
-                <View style={styles.ticketCardSeat}>
-                  <Text style={styles.ticketCardLabel}>Siège</Text>
-                  <Text style={styles.ticketCardValue}>{ticket.seat_number}</Text>
-                </View>
-
-                <View style={styles.ticketCardActions}>
-                  <Button
-                    title="Voir le billet"
-                    onPress={() => navigation.navigate('Ticket' as any, { trip: ticket })}
-                    icon={<Ionicons name="ticket-outline" size={20} color={COLORS.white} style={{ marginRight: 8 }} />}
-                    style={[styles.viewButton, { flex: 1 }]}
-                  />
-                  <TouchableOpacity
-                    onPress={() => handleDeleteTicket(ticket.id)}
-                    style={styles.deleteButton}
-                  >
-                    <Ionicons name="trash-outline" size={20} color={COLORS.textSecondary} />
-                  </TouchableOpacity>
                 </View>
               </View>
-            </View>
             );
-          })}
-        </ScrollView>
-      )}
+          })
+        )}
+      </ScrollView>
     </View>
   );
 }
@@ -283,257 +204,166 @@ export default function MyTicketsScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: '#F1F5F9',
   },
   header: {
     backgroundColor: COLORS.primary,
     paddingTop: 60,
-    paddingBottom: 24,
+    paddingBottom: 40,
     paddingHorizontal: 24,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+    borderBottomLeftRadius: 35,
+    borderBottomRightRadius: 35,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
   headerTitle: {
-    fontSize: FONT_SIZES['2xl'],
-    fontWeight: FONT_WEIGHTS.semibold,
+    fontSize: 28,
+    fontWeight: '800',
     color: COLORS.white,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 4,
   },
   content: {
     flex: 1,
+    marginTop: -25,
   },
   contentContainer: {
-    padding: 24,
+    padding: 20,
+    paddingTop: 30,
+    paddingBottom: 40,
   },
   sectionTitle: {
-    fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
-    marginBottom: 16,
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 1.5,
+    marginBottom: 15,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-  },
-  loadingText: {
-    fontSize: FONT_SIZES.base,
-    color: COLORS.textSecondary,
-    marginTop: 16,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-  },
-  emptyIcon: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: `${COLORS.gray}80`,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  emptyTitle: {
-    fontSize: FONT_SIZES.xl,
-    fontWeight: FONT_WEIGHTS.semibold,
-    color: COLORS.text,
-    marginBottom: 8,
-  },
-  emptyDescription: {
-    fontSize: FONT_SIZES.base,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 24,
-  },
-  emptyButton: {
-    height: 56,
-    paddingHorizontal: 32,
-    borderRadius: 16,
+  ticketWrapper: {
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
   },
   ticketCard: {
     backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 16,
+    borderRadius: 24,
     overflow: 'hidden',
-    marginBottom: 16,
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
   },
-  invalidBadge: {
-    backgroundColor: '#EF4444', // Rouge
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  invalidBadgeText: {
-    fontSize: FONT_SIZES.sm,
-    fontWeight: FONT_WEIGHTS.bold,
-    color: COLORS.white,
-    letterSpacing: 0.5,
-  },
-  invalidBadgeCompact: {
-    backgroundColor: 'rgba(255, 149, 0, 0.12)',
-    borderColor: 'rgba(255, 149, 0, 0.35)',
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    gap: 4,
-  },
-  invalidBadgeCompactText: {
-    fontSize: FONT_SIZES.xs || 12,
-    fontWeight: FONT_WEIGHTS.semibold,
-    color: COLORS.warning,
-  },
-  ticketCardHeader: {
-    backgroundColor: COLORS.primary,
+  expiredCard: { opacity: 0.8 },
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 12,
   },
-  ticketCardHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  ticketCardDate: {
-    fontSize: FONT_SIZES.sm,
-    color: COLORS.white,
-  },
-  ticketCardBadge: {
+  activeHeader: { backgroundColor: COLORS.primary },
+  expiredHeader: { backgroundColor: '#94A3B8' },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  cardDateText: { color: COLORS.white, fontWeight: '600', fontSize: 13 },
+  statusBadge: {
     backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  ticketCardBadgeText: {
-    fontSize: FONT_SIZES.xs,
-    fontWeight: FONT_WEIGHTS.semibold,
-    color: COLORS.white,
+  statusBadgeText: { color: COLORS.white, fontSize: 10, fontWeight: '800' },
+  perforationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 20,
+    backgroundColor: 'white',
   },
-  ticketCardBody: {
-    padding: 16,
+  leftNotch: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    marginLeft: -10,
   },
-  ticketCardInfo: {
+  rightNotch: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    marginRight: -10,
+  },
+  dashedLine: {
+    flex: 1,
+    height: 1,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    borderStyle: 'dashed',
+    marginHorizontal: 10,
+  },
+  cardBody: { padding: 20 },
+  topInfo: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
+  label: { fontSize: 10, fontWeight: '700', color: '#94A3B8', marginBottom: 2 },
+  companyName: { fontSize: 17, fontWeight: '700', color: '#1E293B' },
+  priceText: { fontSize: 17, fontWeight: '800', color: COLORS.primary },
+  routeContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  ticketCardLabel: {
-    fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
-    marginBottom: 4,
-  },
-  ticketCardValue: {
-    fontSize: FONT_SIZES.base,
-    fontWeight: FONT_WEIGHTS.semibold,
-    color: COLORS.text,
-  },
-  ticketCardInfoRight: {
-    alignItems: 'flex-end',
-  },
-  ticketCardPrice: {
-    fontSize: FONT_SIZES.base,
-    fontWeight: FONT_WEIGHTS.semibold,
-    color: COLORS.primary,
-  },
-  ticketCardRoute: {
-    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    borderRadius: 16,
+    marginBottom: 15,
   },
-  ticketCardRouteItem: {
-    flex: 1,
-  },
-  ticketCardRouteItem_end: {
-    alignItems: 'flex-end',
-  },
-  ticketCardRouteLabel: {
-    fontSize: FONT_SIZES.xs,
-    color: COLORS.textSecondary,
-    marginBottom: 2,
-  },
-  ticketCardRouteCity: {
-    fontSize: FONT_SIZES.base,
-    fontWeight: FONT_WEIGHTS.semibold,
-    color: COLORS.text,
-    marginBottom: 2,
-  },
-  ticketCardRouteTime: {
-    fontSize: FONT_SIZES.sm,
-    color: COLORS.primary,
-    fontWeight: FONT_WEIGHTS.medium,
-  },
-  ticketCardRouteLine: {
-    width: 40,
-    height: 2,
-    backgroundColor: COLORS.gray,
-    marginHorizontal: 12,
-    position: 'relative',
-  },
-  ticketCardRouteDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.primary,
-    position: 'absolute',
-    top: -3,
-    left: '50%',
-    marginLeft: -4,
-  },
-  ticketCardSeat: {
-    marginBottom: 16,
-  },
-  ticketCardActions: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-  },
-  viewButton: {
-    height: 48,
-    borderRadius: 12,
-  },
-  deleteButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: COLORS.grayLight,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  unhideButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+  routeItem: { flex: 2 },
+  timeText: { fontSize: 20, fontWeight: '900', color: '#1E293B' },
+  cityText: { fontSize: 11, fontWeight: '600', color: '#64748B' },
+  routeVisual: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  line: { flex: 1, height: 2, backgroundColor: '#E2E8F0' },
+  busIconCircle: {
+    padding: 4,
+    backgroundColor: COLORS.white,
     borderRadius: 8,
-    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  unhideButtonText: {
-    color: COLORS.white,
-    fontWeight: FONT_WEIGHTS.semibold,
-    fontSize: FONT_SIZES.base,
-    textAlign: 'center',
+  bottomInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
   },
+  seatText: { fontSize: 26, fontWeight: '900', color: '#1E293B' },
+  qrPlaceholder: { padding: 6, backgroundColor: '#F1F5F9', borderRadius: 10 },
+  actionsRow: { flexDirection: 'row', gap: 10 },
+  mainActionButton: {
+    flex: 1,
+    backgroundColor: '#1E293B',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 14,
+    gap: 8,
+  },
+  mainActionText: { color: COLORS.white, fontWeight: '700', fontSize: 15 },
+  deleteIconButton: {
+    backgroundColor: '#F1F5F9',
+    padding: 12,
+    borderRadius: 14,
+  },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  emptyCard: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 40,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#F1F5F9',
+    borderStyle: 'dashed',
+  },
+  emptyText: { color: '#94A3B8', marginTop: 10, fontWeight: '600' },
 });

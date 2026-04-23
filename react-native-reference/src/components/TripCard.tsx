@@ -1,38 +1,26 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Trip } from '../types';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
 
-// Helper functions
 const formatTime = (time?: string) => {
-  if (!time) return 'Heure inconnue';
+  if (!time) return '00:00';
   try {
     return new Date(`2000-01-01T${time}`).toLocaleTimeString('fr-FR', {
       hour: '2-digit',
       minute: '2-digit',
     });
   } catch {
-    return 'Heure invalide';
+    return '00:00';
   }
 };
 
-const formatPrice = (price?: number) => {
-  if (typeof price !== 'number' || isNaN(price) || price < 0) {
-    return 'Prix indisponible';
-  }
-  const num = new Intl.NumberFormat('fr-FR', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(price);
-  return `${num} F CFA`;
-};
-
-const formatDate = (dateStr?: string) => {
-  if (!dateStr) return 'Date inconnue';
+const formatDate = (date?: string) => {
+  if (!date) return 'Date inconnue';
   try {
-    return new Date(dateStr).toLocaleDateString('fr-FR', {
-      weekday: 'short',
+    return new Date(date).toLocaleDateString('fr-FR', {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -42,26 +30,12 @@ const formatDate = (dateStr?: string) => {
   }
 };
 
-const formatSeats = (seats?: number) => {
-  if (typeof seats !== 'number' || isNaN(seats) || seats < 0) return 'Places indisponibles';
-  return `${seats} place${seats > 1 ? 's' : ''}`;
-};
-
-const computeDuration = (dep?: string, arr?: string) => {
-  if (!dep || !arr) return 'Durée inconnue';
-  try {
-    const d = new Date(`2000-01-01T${dep}`);
-    let a = new Date(`2000-01-01T${arr}`);
-    if (a.getTime() < d.getTime()) {
-      a = new Date(`2000-01-02T${arr}`);
-    }
-    const diffMin = Math.round((a.getTime() - d.getTime()) / 60000);
-    const h = Math.floor(diffMin / 60);
-    const m = diffMin % 60;
-    return `${h} h ${m.toString().padStart(2, '0')}`;
-  } catch {
-    return 'Durée invalide';
-  }
+const formatPrice = (price: number) => {
+  if (typeof price !== 'number' || Number.isNaN(price)) return 'Prix indisponible';
+  return `${new Intl.NumberFormat('fr-FR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(price)} F CFA`;
 };
 
 interface TripCardProps {
@@ -73,84 +47,74 @@ export default function TripCard({ trip, onPress }: TripCardProps) {
   const companyName = trip.trip_info?.company_name || 'Compagnie inconnue';
   const departureCityName = trip.trip_info?.departure_city_name || 'Ville inconnue';
   const arrivalCityName = trip.trip_info?.arrival_city_name || 'Ville inconnue';
-  const departureTime = trip.trip_info?.departure_time || 'Heure inconnue';
-  const arrivalTime = trip.trip_info?.arrival_time || 'Heure inconnue';
-  const duration = trip.trip_info?.duration || 0;
+  const departureTime = trip.trip_info?.departure_time || '00:00';
+  const arrivalTime = trip.trip_info?.arrival_time || '00:00';
   const price = parseFloat(trip.trip_info?.price || '0') || 0;
   const availableSeats = trip.available_seats || 0;
-
-  const formattedDate = trip.date ? formatDate(trip.date) : 'Date inconnue';
-  const formattedDepartureTime = departureTime !== 'Heure inconnue' ? formatTime(departureTime) : 'Heure inconnue';
-  const formattedArrivalTime = arrivalTime !== 'Heure inconnue' ? formatTime(arrivalTime) : 'Heure inconnue';
-  const formattedPrice = price > 0 ? formatPrice(price) : 'Prix indisponible';
-  const formattedDuration = duration > 0 ? computeDuration(departureTime, arrivalTime) : 'Durée inconnue';
-  const formattedSeats = formatSeats(availableSeats);
-
-  const resolveCompanyName = () => {
-    return companyName;
-  };
-
-  const resolveCityName = (cityName: string) => {
-    return cityName;
-  };
 
   return (
     <TouchableOpacity
       style={styles.container}
       onPress={onPress}
-      activeOpacity={0.7}
+      activeOpacity={0.9}
     >
-      <View style={styles.header}>
+      {/* SECTION HAUTE : COMPAGNIE & PRIX */}
+      <View style={styles.topSection}>
         <View style={styles.companyRow}>
-          {/* {trip.company?.logo_url ? (
-            <Image
-              source={{ uri: trip.company.logo_url }}
-              style={styles.logo}
-            />
-          ) : null} */}
-          <View>
-            <Text style={styles.company}>{companyName}</Text>
-            <Text style={styles.date}>{formattedDate}</Text>
-          </View>
+          <Ionicons name="bus" size={20} color="#1E293B" />
+          <Text style={styles.companyName}>{companyName}</Text>
         </View>
-        <View style={styles.priceContainer}>
-          <Text style={styles.price}>{formattedPrice}</Text>
-          <Text style={styles.seats}>{formattedSeats}</Text>
+        <Text style={styles.priceText}>{formatPrice(price)}</Text>
+      </View>
+
+      {/* SECTION INFOS : DATE & PLACES */}
+      <View style={styles.infoRow}>
+        <View style={styles.dateBadge}>
+          <Ionicons name="calendar" size={14} color="#64748B" />
+          <Text style={styles.dateText}>{formatDate(trip.date)}</Text>
+        </View>
+        <Text style={styles.seatsText}>{availableSeats} places</Text>
+      </View>
+
+      {/* LIGNE DE SÉPARATION STYLE TICKET (PERFORATIONS) */}
+      <View style={styles.dividerContainer}>
+        <View style={styles.leftCutout} />
+        <View style={styles.dashedLine} />
+        <View style={styles.rightCutout} />
+      </View>
+
+      {/* SECTION TRAJET */}
+      <View style={styles.routeRow}>
+        <View style={styles.routePoint}>
+          <Text style={styles.cityLabel}>Départ</Text>
+          <Text style={styles.cityName}>{departureCityName}</Text>
+          <Text style={styles.timeText}>{formatTime(departureTime)}</Text>
+        </View>
+
+        <View style={styles.visualContainer}>
+          <View style={styles.line} />
+          <View style={styles.busCircle}>
+            <Ionicons name="bus" size={14} color={COLORS.primary} />
+          </View>
+          <View style={styles.line} />
+        </View>
+
+        <View style={[styles.routePoint, { alignItems: 'flex-end' }]}>
+          <Text style={styles.cityLabel}>Arrivée</Text>
+          <Text style={styles.cityName}>{arrivalCityName}</Text>
+          <Text style={styles.timeText}>{formatTime(arrivalTime)}</Text>
         </View>
       </View>
 
-      <View style={styles.routeContainer}>
-        <View style={styles.routeItem}>
-          <Text style={styles.routeLabel}>Départ</Text>
-          <Text style={styles.routeCity}>{departureCityName}</Text>
-          <Text style={styles.routeTime}>{formattedDepartureTime}</Text>
+      {/* FOOTER : TYPE & BOUTON */}
+      <View style={styles.footer}>
+        <View style={styles.typeTag}>
+          <Text style={styles.typeTagText}>{trip.trip_info?.bus_type || 'Standard'}</Text>
         </View>
-
-        <View style={styles.durationContainer}>
-          <Text style={styles.duration}>Durée {formattedDuration}</Text>
-          <View style={styles.routeLine}>
-            <View style={styles.routeDot} />
-          </View>
-        </View>
-
-        <View style={[styles.routeItem, styles.routeItem_end]}>
-          <Text style={styles.routeLabel}>Arrivée</Text>
-          <Text style={styles.routeCity}>{arrivalCityName}</Text>
-          <Text style={styles.routeTime}>{formattedArrivalTime}</Text>
-        </View>
+        <TouchableOpacity style={styles.bookButton} onPress={onPress}>
+          <Text style={styles.bookButtonText}>Réserver</Text>
+        </TouchableOpacity>
       </View>
-
-      {trip.trip_info?.stops && trip.trip_info.stops.length > 0 && (
-        <View style={styles.stopsIndicator}>
-          <Text style={styles.stopsText}>{trip.trip_info.stops.length} arrêt(s) intermédiaire(s)</Text>
-        </View>
-      )}
-
-      {trip.trip_info?.bus_type ? (
-        <View style={styles.busTypeBadge}>
-          <Text style={styles.busTypeText}>{trip.trip_info.bus_type}</Text>
-        </View>
-      ) : null}
     </TouchableOpacity>
   );
 }
@@ -158,135 +122,161 @@ export default function TripCard({ trip, onPress }: TripCardProps) {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 16,
+    // Ombre douce iOS
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 12,
+    elevation: 3,
+    overflow: 'visible',
   },
-  header: {
+  topSection: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
+    alignItems: 'center',
+    marginBottom: 8,
   },
   companyRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  logo: {
-    width: 32,
-    height: 32,
-    borderRadius: 4,
-    marginRight: 8,
+  companyName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1E293B',
   },
-  company: {
-    fontSize: FONT_SIZES.base,
-    fontWeight: FONT_WEIGHTS.semibold,
-    color: COLORS.text,
+  priceText: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: COLORS.primary, // #007AFF
   },
-  date: {
-    fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
-    marginTop: 2,
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
-  priceContainer: {
-    alignItems: 'flex-end',
-  },
-  price: {
-    fontSize: FONT_SIZES.xl,
-    fontWeight: FONT_WEIGHTS.bold,
-    color: COLORS.primary,
-  },
-  seats: {
-    fontSize: FONT_SIZES.xs,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  routeContainer: {
+  dateBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
   },
-  routeItem: {
+  dateText: {
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  seatsText: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  // Effet Ticket
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: -20, // Pour faire sortir les encoches
+    marginBottom: 20,
+    height: 20,
+  },
+  leftCutout: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC', // Couleur du fond de l'app
+    marginLeft: -10,
+  },
+  rightCutout: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    marginRight: -10,
+  },
+  dashedLine: {
+    flex: 1,
+    height: 1,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+    marginHorizontal: 10,
+  },
+  routeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  routePoint: {
     flex: 1,
   },
-  routeItem_end: {
-    alignItems: 'flex-end',
+  cityLabel: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  routeLabel: {
-    fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
-    marginBottom: 2,
+  cityName: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginVertical: 2,
   },
-  routeCity: {
-    fontSize: FONT_SIZES.base,
-    fontWeight: FONT_WEIGHTS.semibold,
-    color: COLORS.text,
-    marginBottom: 2,
-  },
-  routeTime: {
-    fontSize: FONT_SIZES.sm,
+  timeText: {
+    fontSize: 15,
+    fontWeight: '700',
     color: COLORS.primary,
-    fontWeight: FONT_WEIGHTS.medium,
   },
-  routeLine: {
-    width: 84,
-    height: 2,
-    backgroundColor: COLORS.gray,
-    marginHorizontal: 12,
-    position: 'relative',
-  },
-  routeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.primary,
-    position: 'absolute',
-    top: -3,
-    left: '50%',
-    marginLeft: -4,
-  },
-  duration: {
-    fontSize: FONT_SIZES.xs,
-    color: COLORS.textSecondary,
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  durationContainer: {
+  visualContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
+    width: 80,
     justifyContent: 'center',
   },
-  busTypeBadge: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: '#F3F4F6',
-    borderWidth: 1,
-    borderColor: COLORS.border,
+  line: {
+    flex: 1,
+    height: 2,
+    backgroundColor: '#F1F5F9',
   },
-  busTypeText: {
-    fontSize: FONT_SIZES.xs,
-    color: COLORS.textSecondary,
+  busCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 4,
   },
-  stopsIndicator: {
-    marginTop: 12,
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  typeTag: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: COLORS.lightGray,
     borderRadius: 8,
-    alignSelf: 'flex-start',
   },
-  stopsText: {
-    fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
-    fontWeight: FONT_WEIGHTS.medium,
+  typeTagText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '700',
+  },
+  bookButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 14,
+  },
+  bookButtonText: {
+    color: COLORS.white,
+    fontWeight: '800',
+    fontSize: 15,
   },
 });
