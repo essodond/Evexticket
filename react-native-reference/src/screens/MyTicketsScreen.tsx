@@ -10,17 +10,30 @@ import {
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { RootStackParamList, Trip } from '../types';
+import { RootStackParamList } from '../types';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
 import { formatCurrency } from '../utils/mockData';
 import { getMyBookings } from '../services/api';
+
+interface TicketItem {
+  id: number;
+  date: string;
+  company: string;
+  price: number;
+  from: string;
+  to: string;
+  departure: string;
+  arrival: string;
+  seat_number: string;
+  status: string;
+}
 import { useAuth } from '../contexts/AuthContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MainTabs'>;
 
 export default function MyTicketsScreen({ navigation }: Props) {
-  const [tickets, setTickets] = useState<Trip[]>([]);
+  const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [hiddenTickets, setHiddenTickets] = useState<Set<number>>(new Set());
   const { user } = useAuth();
@@ -107,6 +120,8 @@ export default function MyTicketsScreen({ navigation }: Props) {
             const isExpired = isTravelPassed(ticket.date);
             return (
               <View key={ticket.id} style={styles.ticketWrapper}>
+                <View style={styles.ticketNotchLeft} />
+                <View style={styles.ticketNotchRight} />
                 <View style={[styles.ticketCard, isExpired && styles.expiredCard]}>
                   
                   {/* Header du ticket (Date & Statut) */}
@@ -150,27 +165,30 @@ export default function MyTicketsScreen({ navigation }: Props) {
                       </View>
 
                       <View style={styles.routeVisual}>
-                        <View style={styles.line} />
-                        <View style={styles.busIconCircle}>
-                          <Ionicons name="bus" size={14} color={COLORS.primary} />
+                        <View style={styles.routeIconsRow}>
+                          <Ionicons name="location-outline" size={18} color={COLORS.primary} />
+                          <View style={styles.segmentLine} />
+                          <Ionicons name="bus" size={18} color={COLORS.primary} />
+                          <View style={styles.segmentLine} />
+                          <Ionicons name="flag-outline" size={18} color={COLORS.primary} />
                         </View>
-                        <View style={styles.line} />
+                        <Text style={styles.routeIconText}>Direct</Text>
                       </View>
 
-                      <View style={[styles.routeItem, { alignItems: 'flex-end' }]}>
+                      <View style={[styles.routeItem, { alignItems: 'flex-end' }]}> 
                         <Text style={styles.timeText}>{ticket.arrival.substring(0, 5)}</Text>
                         <Text style={styles.cityText} numberOfLines={1}>{ticket.to}</Text>
                       </View>
                     </View>
 
                     <View style={styles.bottomInfo}>
-                       <View>
-                          <Text style={styles.label}>SIÈGE</Text>
-                          <Text style={styles.seatText}>{ticket.seat_number}</Text>
-                       </View>
-                       <View style={styles.qrPlaceholder}>
-                          <Ionicons name="qr-code-outline" size={36} color="#1E293B" />
-                       </View>
+                      <View>
+                        <Text style={styles.label}>SIÈGE</Text>
+                        <Text style={styles.seatText}>{ticket.seat_number}</Text>
+                      </View>
+                      <View style={styles.qrPlaceholder}>
+                        <Ionicons name="qr-code-outline" size={36} color="#1E293B" />
+                      </View>
                     </View>
 
                     {/* Boutons d'actions */}
@@ -180,11 +198,11 @@ export default function MyTicketsScreen({ navigation }: Props) {
                         onPress={() => navigation.navigate('Ticket' as any, { trip: ticket })}
                       >
                         <Ionicons name="ticket-outline" size={20} color={COLORS.white} />
-                        <Text style={styles.mainActionText}>Voir le billet</Text>
+                        <Text style={[styles.mainActionText, { marginLeft: 10 }]}>Voir le billet</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity 
-                        style={styles.deleteIconButton}
+                        style={[styles.deleteIconButton, { marginLeft: 10 }]}
                         onPress={() => setHiddenTickets(prev => new Set(prev).add(ticket.id))}
                       >
                         <Ionicons name="trash-outline" size={20} color="#64748B" />
@@ -209,21 +227,23 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: COLORS.primary,
     paddingTop: 60,
-    paddingBottom: 40,
+    paddingBottom: 24,
     paddingHorizontal: 24,
-    borderBottomLeftRadius: 35,
-    borderBottomRightRadius: 35,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '800',
     color: COLORS.white,
   },
+  
+  
   headerSubtitle: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.7)',
@@ -231,11 +251,11 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    marginTop: -25,
+    marginTop: 8,
   },
   contentContainer: {
     padding: 20,
-    paddingTop: 30,
+    paddingTop: 18,
     paddingBottom: 40,
   },
   sectionTitle: {
@@ -248,10 +268,31 @@ const styles = StyleSheet.create({
   ticketWrapper: {
     marginBottom: 20,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 16,
+    elevation: 5,
+    overflow: 'visible',
+  },
+  ticketNotchLeft: {
+    position: 'absolute',
+    left: -18,
+    top: 56,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    zIndex: 1,
+  },
+  ticketNotchRight: {
+    position: 'absolute',
+    right: -18,
+    top: 56,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    zIndex: 1,
   },
   ticketCard: {
     backgroundColor: COLORS.white,
@@ -263,11 +304,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 14,
   },
   activeHeader: { backgroundColor: COLORS.primary },
   expiredHeader: { backgroundColor: '#94A3B8' },
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  headerRow: { flexDirection: 'row', alignItems: 'center' },
   cardDateText: { color: COLORS.white, fontWeight: '600', fontSize: 13 },
   statusBadge: {
     backgroundColor: 'rgba(255,255,255,0.2)',
@@ -314,21 +355,47 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
-    padding: 12,
-    borderRadius: 16,
+    padding: 14,
+    borderRadius: 18,
     marginBottom: 15,
   },
   routeItem: { flex: 2 },
   timeText: { fontSize: 20, fontWeight: '900', color: '#1E293B' },
   cityText: { fontSize: 11, fontWeight: '600', color: '#64748B' },
-  routeVisual: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  line: { flex: 1, height: 2, backgroundColor: '#E2E8F0' },
+  routeVisual: {
+    flex: 1,
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  line: { width: '100%', height: 2, backgroundColor: COLORS.primary, opacity: 0.3, marginVertical: 8 },
   busIconCircle: {
-    padding: 4,
-    backgroundColor: COLORS.white,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 2,
+  },
+  routeIconsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segmentLine: {
+    width: 18,
+    height: 2,
+    backgroundColor: COLORS.primary,
+    opacity: 0.4,
+    marginHorizontal: 6,
+  },
+  routeIconText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '700',
+    marginTop: 4,
   },
   bottomInfo: {
     flexDirection: 'row',
@@ -338,7 +405,7 @@ const styles = StyleSheet.create({
   },
   seatText: { fontSize: 26, fontWeight: '900', color: '#1E293B' },
   qrPlaceholder: { padding: 6, backgroundColor: '#F1F5F9', borderRadius: 10 },
-  actionsRow: { flexDirection: 'row', gap: 10 },
+  actionsRow: { flexDirection: 'row' },
   mainActionButton: {
     flex: 1,
     backgroundColor: '#1E293B',
@@ -347,7 +414,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 12,
     borderRadius: 14,
-    gap: 8,
+    paddingHorizontal: 16,
   },
   mainActionText: { color: COLORS.white, fontWeight: '700', fontSize: 15 },
   deleteIconButton: {

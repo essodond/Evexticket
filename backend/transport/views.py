@@ -7,8 +7,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from datetime import datetime, timedelta
 from django.utils import timezone
-from django.db.models import Sum, Q
-from rest_framework import generics, status, permissions, viewsets
+from django.db.models import Sum, Q, Count, ProtectedError
+from rest_framework import generics, status, permissions, viewsets, serializers
 from rest_framework.response import Response
 from django.contrib.auth.models import User
 from rest_framework.permissions import AllowAny
@@ -355,9 +355,58 @@ class DashboardStatsView(APIView):
             'total_users': total_users,
         }
         
+        # Monthly analytics for the last six months
+        stats['monthly_bookings'] = []
+        stats['monthly_revenue'] = []
+        stats['booking_status_counts'] = {
+            'confirmed': Booking.objects.filter(status='confirmed').count(),
+            'pending': Booking.objects.filter(status='pending').count(),
+            'cancelled': Booking.objects.filter(status='cancelled').count(),
+        }
+        stats['top_companies'] = []
+
+        # Build last 6 months summary
+        months = []
+        current = today.replace(day=1)
+        for _ in range(6):
+            months.insert(0, current)
+            year = current.year
+            month = current.month - 1
+            if month == 0:
+                month = 12
+                year -= 1
+            current = current.replace(year=year, month=month)
+
+        for month_date in months:
+            month_start = month_date
+            next_month = month_date.replace(day=28) + timedelta(days=4)
+            month_end = next_month - timedelta(days=next_month.day)
+            monthly_bookings = Booking.objects.filter(booking_date__gte=month_start, booking_date__lte=month_end).count()
+            monthly_revenue = Booking.objects.filter(booking_date__gte=month_start, booking_date__lte=month_end).aggregate(total=Sum('total_price'))['total'] or 0
+            stats['monthly_bookings'].append({
+                'month': month_date.strftime('%b'),
+                'total_bookings': monthly_bookings,
+            })
+            stats['monthly_revenue'].append({
+                'month': month_date.strftime('%b'),
+                'total_revenue': monthly_revenue,
+            })
+
+        # Top companies by revenue and trip count
+        company_performance = Company.objects.annotate(
+            trips_count=Count('trips', distinct=True),
+            revenue=Sum('trips__bookings__total_price')
+        ).order_by('-revenue')[:6]
+        for company in company_performance:
+            stats['top_companies'].append({
+                'company_name': company.name,
+                'trips': company.trips_count or 0,
+                'revenue': company.revenue or 0,
+            })
+
         serializer = DashboardStatsSerializer(stats)
         return Response(serializer.data)
-from django.db.models import Sum
+
 class CompanyStatsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -413,10 +462,19 @@ class CompanyViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            self.permission_classes = [permissions.IsAuthenticated]
+            self.permission_classes = [permissions.IsAdminUser]
         elif self.action == 'retrieve':
             self.permission_classes = [permissions.IsAuthenticated]
         return super().get_permissions()
+
+    def perform_destroy(self, instance):
+        try:
+            instance.delete()
+        except ProtectedError:
+            raise serializers.ValidationError(
+                "Cette compagnie ne peut pas être supprimée car elle contient des trajets ou réservations actives. "
+                "Veuillez d'abord supprimer les réservations associées ou désactiver la compagnie."
+            )
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()

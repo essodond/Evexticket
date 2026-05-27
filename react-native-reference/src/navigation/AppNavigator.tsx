@@ -35,20 +35,22 @@ function MainTabs() {
         tabBarInactiveTintColor: '#94A3B8',
         tabBarBackground: () => (
           <BlurView
-            tint="light"
-            intensity={80} // Réglage du flou (0 à 100)
+            tint="default" // Peut être 'light', 'dark' ou 'default'
+            intensity={100} // Réglage du flou (0 à 100)
             style={StyleSheet.absoluteFill}
           />
         ),
         tabBarStyle: {
           position: 'absolute',
+          
           bottom: 25,
           left: 20,
           right: 20,
-          height: 70,
+          height: 80,
           borderRadius: 35,
+          
           // On rend le background transparent pour laisser voir le BlurView
-          backgroundColor: 'transparent', 
+          backgroundColor: '', // Couleur de fond de la bulle
           borderTopWidth: 0,
           overflow: 'hidden', // Important pour que le flou respecte l'arrondi
           
@@ -57,12 +59,12 @@ function MainTabs() {
           shadowOffset: { width: 0, height: 10 },
           shadowOpacity: 0.1,
           shadowRadius: 15,
-          elevation: 5,
+          elevation: 7,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: '700',
-          marginBottom: 8,
+          
         },
         tabBarIcon: ({ focused, color }) => {
           let iconName: any;
@@ -73,7 +75,7 @@ function MainTabs() {
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           }
-          return <Ionicons name={iconName} size={24} color={color} />;
+          return <Ionicons name={iconName} size={30} color={color} />;
         },
       })}
     >

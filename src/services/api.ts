@@ -104,12 +104,23 @@ export interface Booking {
 }
 
 export interface DashboardStats {
-  total_users: number;
-  total_companies: number;
-  total_trips: number;
   total_bookings: number;
+  bookings_this_week: number;
+  bookings_this_month: number;
   total_revenue: number;
-  monthly_growth: number;
+  revenue_this_week: number;
+  revenue_this_month: number;
+  active_trips: number;
+  active_companies: number;
+  total_users: number;
+  monthly_bookings?: Array<{ month: string; total_bookings: number }>;
+  monthly_revenue?: Array<{ month: string; total_revenue: number }>;
+  booking_status_counts?: {
+    confirmed: number;
+    pending: number;
+    cancelled: number;
+  };
+  top_companies?: Array<{ company_name: string; trips: number; revenue: number }>;
 }
 
 export interface CompanyStats {

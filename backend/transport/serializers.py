@@ -775,6 +775,10 @@ class DashboardStatsSerializer(serializers.Serializer):
     active_trips = serializers.IntegerField()
     active_companies = serializers.IntegerField()
     total_users = serializers.IntegerField()
+    monthly_bookings = serializers.ListField(child=serializers.DictField(), required=False)
+    monthly_revenue = serializers.ListField(child=serializers.DictField(), required=False)
+    booking_status_counts = serializers.DictField(child=serializers.IntegerField(), required=False)
+    top_companies = serializers.ListField(child=serializers.DictField(), required=False)
 
 class TripSearchSerializer(serializers.Serializer):
     departure_city = serializers.CharField(required=True)
