@@ -12,7 +12,6 @@ router.register(r'scheduled_trips', views.ScheduledTripViewSet, basename='schedu
 router.register(r'users', views.UserViewSet, basename='user')
 
 urlpatterns = [
-    path('companies/<int:pk>/', views.CompanyDetailView.as_view(), name='company-detail'),
     path('companies/<int:company_id>/bookings/', views.CompanyBookingsView.as_view(), name='company-bookings'),
     path('dashboard/stats/', views.DashboardStatsView.as_view(), name='dashboard-stats'),
     path('companies/<int:company_id>/stats/', views.CompanyStatsView.as_view(), name='company-stats'),

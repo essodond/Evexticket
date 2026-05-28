@@ -51,10 +51,14 @@ export interface Company {
   website?: string;
   logo?: string;
   is_active: boolean;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
   created_at: string;
   updated_at: string;
   trips_count?: number;
 }
+
+export type CompanyFilter = 'active' | 'deleted' | 'all';
 
 export interface Trip {
   id: number;
@@ -84,6 +88,9 @@ export interface ScheduledTrip extends Trip {
   scheduled_trip_id?: number;
   seats?: any[];
   stops?: any[];
+  badge?: string | null;
+  badge_label?: string | null;
+  booking_closed?: boolean;
 }
 
 export interface Booking {
@@ -267,8 +274,8 @@ class ApiService {
   }
 
   // Compagnies
-  async getCompanies(): Promise<Company[]> {
-    return this.request<Company[]>('/companies/');
+  async getCompanies(filter: CompanyFilter = 'active'): Promise<Company[]> {
+    return this.request<Company[]>(`/companies/?filter=${encodeURIComponent(filter)}`);
   }
 
   async getCompany(id: number): Promise<Company> {
@@ -292,6 +299,19 @@ class ApiService {
   async deleteCompany(id: number): Promise<void> {
     return this.request<void>(`/companies/${id}/`, {
       method: 'DELETE',
+    });
+  }
+
+  async restoreCompany(id: number): Promise<Company> {
+    return this.request<Company>(`/companies/${id}/restore/`, {
+      method: 'POST',
+    });
+  }
+
+  async hardDeleteCompany(id: number, password: string): Promise<{ detail: string }> {
+    return this.request<{ detail: string }>(`/companies/${id}/hard-delete/`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
     });
   }
 
@@ -360,6 +380,9 @@ class ApiService {
           id: item.trip_info.id, // keep route/trip id as id
           date: item.date,
           available_seats: item.available_seats ?? item.trip_info.available_seats,
+          badge: item.badge ?? item.trip_info.badge ?? null,
+          badge_label: item.badge_label ?? item.trip_info.badge_label ?? null,
+          booking_closed: item.booking_closed ?? item.trip_info.booking_closed ?? false,
           seats: item.seats,
           stops: item.stops,
           departure_city_display: item.departure_city_display || item.trip_info.departure_city_name,

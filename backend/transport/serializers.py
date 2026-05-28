@@ -7,9 +7,11 @@ from rest_framework.authtoken.models import Token
 
 from rest_framework import serializers
 from django.contrib.auth.models import User
+from django.utils import timezone
 from .models import Company, City, Trip, TripStop, Booking, Payment, Review, Notification, ScheduledTrip, BoardingZone
 import unicodedata
 import re
+from datetime import datetime, timedelta
 
 
 def _normalize_string_for_matching(s: str) -> str:
@@ -548,12 +550,38 @@ class ScheduledTripSerializer(serializers.ModelSerializer):
     stops = serializers.SerializerMethodField()
     available_seats = serializers.SerializerMethodField()
     seats = serializers.SerializerMethodField()
+    badge = serializers.SerializerMethodField()
+    booking_closed = serializers.SerializerMethodField()
+    badge_label = serializers.SerializerMethodField()
 
     class Meta:
         model = ScheduledTrip
         fields = [
-            'id', 'trip', 'trip_info', 'date', 'departure_city_display', 'arrival_city_display', 'stops', 'available_seats', 'seats'
+            'id', 'trip', 'trip_info', 'date', 'departure_city_display', 'arrival_city_display', 'stops', 'available_seats', 'seats',
+            'badge', 'booking_closed', 'badge_label'
         ]
+
+    def _get_departure_datetime(self, obj):
+        departure_datetime = datetime.combine(obj.date, obj.trip.departure_time)
+        if timezone.is_naive(departure_datetime):
+            departure_datetime = timezone.make_aware(
+                departure_datetime,
+                timezone.get_current_timezone()
+            )
+        return departure_datetime
+
+    def _get_badge_value(self, obj):
+        available_seats = self.get_available_seats(obj)
+        now = timezone.now()
+        departure_datetime = self._get_departure_datetime(obj)
+
+        if available_seats == 0:
+            return 'full'
+        if now + timedelta(hours=1) < departure_datetime < now + timedelta(hours=3):
+            return 'departure_imminent'
+        if 0 < available_seats <= 3:
+            return 'last_seats'
+        return None
 
     def get_departure_city_display(self, obj):
         request = self.context.get('request')
@@ -661,6 +689,22 @@ class ScheduledTripSerializer(serializers.ModelSerializer):
             })
 
         return seats
+
+    def get_badge(self, obj):
+        return self._get_badge_value(obj)
+
+    def get_booking_closed(self, obj):
+        departure_datetime = self._get_departure_datetime(obj)
+        return departure_datetime < timezone.now() + timedelta(hours=1)
+
+    def get_badge_label(self, obj):
+        badge = self._get_badge_value(obj)
+        labels = {
+            'departure_imminent': 'Départ imminent',
+            'last_seats': 'Dernières places',
+            'full': 'Complet',
+        }
+        return labels.get(badge)
 
 
 class BookingCreateSerializer(serializers.ModelSerializer):

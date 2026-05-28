@@ -486,7 +486,7 @@ def update_scheduled_trip_seats_on_booking(sender, instance, **kwargs):
 class UserProfile(models.Model):
     """Profil utilisateur étendu pour stocker des infos supplémentaires comme le téléphone."""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile', verbose_name='Utilisateur')
-    phone_number = models.CharField(max_length=30, blank=True, null=True, verbose_name='Numéro de téléphone')
+    phone = models.CharField(max_length=30, blank=True, null=True, verbose_name='Numéro de téléphone')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Date de création')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Date de mise à jour')
 

@@ -49,7 +49,7 @@ export default function MyTicketsPage() {
     if (!window.confirm('Êtes-vous sûr de vouloir annuler cette réservation ?')) return;
     try {
       await apiService.cancelBooking(bookingId);
-      setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'cancelled' } : b));
+      setBookings(prev => prev.filter(b => b.id !== bookingId));
     } catch (err: any) {
       alert('Erreur lors de l\'annulation: ' + (err.message || 'Impossible d\'annuler'));
     }

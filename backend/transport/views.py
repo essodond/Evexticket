@@ -1,3 +1,4 @@
+import json
 import logging
 from rest_framework.decorators import action
 from rest_framework.decorators import api_view
@@ -7,7 +8,10 @@ from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from datetime import datetime, timedelta
 from django.utils import timezone
+from django.db import transaction
 from django.db.models import Sum, Q, Count, ProtectedError
+from django.core.serializers.json import DjangoJSONEncoder
+from django.forms.models import model_to_dict
 from rest_framework import generics, status, permissions, viewsets, serializers
 from rest_framework.response import Response
 from django.contrib.auth.models import User
@@ -19,7 +23,44 @@ from .serializers import ScheduledTripSerializer
 from .serializers import RegisterSerializer, UserSerializer, CompanySerializer, TripSerializer, BookingSerializer, PaymentSerializer, ReviewSerializer, NotificationSerializer, ScheduledTripSerializer, CompanyStatsSerializer, TripStopSerializer, BoardingZoneSerializer, CitySerializer, TripSearchSerializer, BookingCreateSerializer, DashboardStatsSerializer
 from django.http import Http404
 from .models import Company, City, Trip, Booking, Payment, Review, Notification, ScheduledTrip, UserProfile, TripStop, BoardingZone
+from .models.audit import log_action
 from django.contrib.auth import authenticate
+
+
+def get_client_ip(request):
+    x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+    return x_forwarded.split(',')[0] if x_forwarded else request.META.get('REMOTE_ADDR')
+
+
+def make_json_safe(data):
+    return json.loads(json.dumps(data, cls=DjangoJSONEncoder))
+
+
+def build_company_delete_snapshot(company):
+    trip_ids = list(Trip.all_objects.filter(company=company).values_list('id', flat=True))
+    booking_ids = list(Booking.all_objects.filter(trip_id__in=trip_ids).values_list('id', flat=True))
+    scheduled_trip_ids = list(ScheduledTrip.objects.filter(trip_id__in=trip_ids).values_list('id', flat=True))
+    trip_stop_ids = list(TripStop.objects.filter(trip_id__in=trip_ids).values_list('id', flat=True))
+    payment_ids = list(Payment.objects.filter(booking_id__in=booking_ids).values_list('id', flat=True))
+    review_ids = list(Review.objects.filter(booking_id__in=booking_ids).values_list('id', flat=True))
+
+    return make_json_safe({
+        'company': model_to_dict(company),
+        'trip_ids': trip_ids,
+        'booking_ids': booking_ids,
+        'scheduled_trip_ids': scheduled_trip_ids,
+        'trip_stop_ids': trip_stop_ids,
+        'payment_ids': payment_ids,
+        'review_ids': review_ids,
+        'counts': {
+            'trips': len(trip_ids),
+            'bookings': len(booking_ids),
+            'scheduled_trips': len(scheduled_trip_ids),
+            'trip_stops': len(trip_stop_ids),
+            'payments': len(payment_ids),
+            'reviews': len(review_ids),
+        },
+    })
 
 
 def get_occupied_seats(scheduled_trip, origin_stop=None, destination_stop=None):
@@ -461,20 +502,116 @@ class CompanyViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'hard_delete', 'restore_company']:
             self.permission_classes = [permissions.IsAdminUser]
         elif self.action == 'retrieve':
             self.permission_classes = [permissions.IsAuthenticated]
         return super().get_permissions()
 
+    def get_queryset(self):
+        filter_value = self.request.query_params.get('filter', 'active')
+
+        if self.action in ['hard_delete', 'restore_company']:
+            base_queryset = Company.all_objects.all()
+        elif filter_value == 'active':
+            base_queryset = Company.objects.all()
+        elif filter_value in ['deleted', 'all']:
+            if not self.request.user.is_staff:
+                return Company.objects.all()
+            base_queryset = Company.all_objects.all() if filter_value == 'all' else Company.all_objects.filter(is_deleted=True)
+        else:
+            base_queryset = Company.objects.all()
+
+        return base_queryset.order_by('name')
+
     def perform_destroy(self, instance):
-        try:
-            instance.delete()
-        except ProtectedError:
-            raise serializers.ValidationError(
-                "Cette compagnie ne peut pas être supprimée car elle contient des trajets ou réservations actives. "
-                "Veuillez d'abord supprimer les réservations associées ou désactiver la compagnie."
+        old_values = build_company_delete_snapshot(instance)
+        instance.soft_delete(user=self.request.user)
+        log_action(
+            user=self.request.user,
+            action='DELETE',
+            instance=instance,
+            old_values=old_values,
+            new_values=make_json_safe({
+                'is_deleted': instance.is_deleted,
+                'deleted_at': instance.deleted_at,
+                'deleted_by': instance.deleted_by_id,
+            }),
+            ip_address=get_client_ip(self.request),
+        )
+
+    @action(detail=True, methods=['post'])
+    def hard_delete(self, request, pk=None):
+        if not request.user.is_superuser:
+            return Response(
+                {'detail': 'Vous n’avez pas la permission d’effectuer cette suppression définitive.'},
+                status=status.HTTP_403_FORBIDDEN
             )
+
+        admin_password = request.data.get('password', '')
+        if not admin_password:
+            return Response(
+                {'detail': 'Le champ password est requis.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not request.user.check_password(admin_password):
+            return Response(
+                {'detail': 'Mot de passe administrateur incorrect.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        company = self.get_object()
+        old_values = build_company_delete_snapshot(company)
+
+        with transaction.atomic():
+            Booking.all_objects.filter(trip__company=company).delete()
+            ScheduledTrip.objects.filter(trip__company=company).delete()
+            TripStop.objects.filter(trip__company=company).delete()
+            Trip.all_objects.filter(company=company).delete()
+            BoardingZone.objects.filter(company=company).delete()
+            company.hard_delete()
+
+        log_action(
+            user=request.user,
+            action='HARD_DELETE',
+            instance=company,
+            old_values=old_values,
+            new_values=make_json_safe({'hard_deleted': True}),
+            ip_address=get_client_ip(request),
+        )
+
+        return Response(
+            {'detail': 'Compagnie supprimée définitivement avec succès.'},
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=True, methods=['post'])
+    def restore_company(self, request, pk=None):
+        if not request.user.is_staff:
+            return Response(
+                {'detail': 'Vous n’avez pas la permission de restaurer cette compagnie.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        company = self.get_object()
+        old_values = build_company_delete_snapshot(company)
+        company.restore()
+        log_action(
+            user=request.user,
+            action='RESTORE',
+            instance=company,
+            old_values=old_values,
+            new_values=make_json_safe({
+                'is_deleted': company.is_deleted,
+                'deleted_at': company.deleted_at,
+                'deleted_by': company.deleted_by_id,
+            }),
+            ip_address=get_client_ip(request),
+        )
+
+        serializer = self.get_serializer(company)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -516,11 +653,15 @@ class TripViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.AllowAny]
 
     def get_queryset(self):
-        # Allow staff to see all trips, company admins to see their company's trips
-        if self.request.user.is_staff:
+        # Allow staff to see all trips, authenticated company admins to see their company trips,
+        # and anonymous users to get active public trips.
+        user = self.request.user
+        if user.is_staff:
             return Trip.objects.all()
+        if not user.is_authenticated:
+            return Trip.objects.filter(is_active=True)
         # Filter trips by companies the user administers
-        return Trip.objects.filter(company__admins=self.request.user).distinct()
+        return Trip.objects.filter(company__admins=user).distinct()
 
     def perform_create(self, serializer):
         # Ensure the user creating the trip is an admin of the associated company
@@ -651,6 +792,19 @@ class BookingViewSet(viewsets.ModelViewSet):
         # Ajouter le user à la requête data si non fourni
         if 'user' not in request.data:
             request.data['user'] = request.user.id
+
+        scheduled_trip_id = request.data.get('scheduled_trip')
+        scheduled_trip = ScheduledTrip.objects.get(pk=scheduled_trip_id)
+        departure_datetime = timezone.make_aware(
+            datetime.combine(scheduled_trip.date, scheduled_trip.trip.departure_time)
+        )
+        if departure_datetime <= timezone.now() + timedelta(hours=1):
+            return Response(
+                {
+                    'detail': 'Les réservations sont fermées pour ce trajet car le départ est imminent.'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         # Appeler la méthode parent pour la création
         response = super().create(request, *args, **kwargs)
@@ -659,6 +813,50 @@ class BookingViewSet(viewsets.ModelViewSet):
         logger.info(f"Booking created successfully: {response.data}")
         
         return response
+
+    def perform_destroy(self, instance):
+        # Soft-delete the booking so it disappears from the user's tickets list
+        if instance.user != self.request.user and not self.request.user.is_staff:
+            raise permissions.PermissionDenied("Vous ne pouvez pas supprimer cette réservation.")
+
+        instance.status = 'cancelled'
+        instance.is_deleted = True
+        instance.deleted_at = timezone.now()
+        instance.deleted_by = self.request.user
+        instance.save(update_fields=['status', 'is_deleted', 'deleted_at', 'deleted_by'])
+
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        instance = self.get_object()
+        if instance.user != request.user and not request.user.is_staff:
+            raise permissions.PermissionDenied("Vous ne pouvez pas annuler cette réservation.")
+
+        if instance.is_deleted or instance.status == 'cancelled':
+            return Response({'detail': 'Cette réservation est déjà annulée.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        instance.status = 'cancelled'
+        instance.is_deleted = True
+        instance.deleted_at = timezone.now()
+        instance.deleted_by = request.user
+        instance.save(update_fields=['status', 'is_deleted', 'deleted_at', 'deleted_by'])
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def confirm(self, request, pk=None):
+        instance = self.get_object()
+        if instance.user != request.user and not request.user.is_staff:
+            raise permissions.PermissionDenied("Vous ne pouvez pas confirmer cette réservation.")
+
+        if instance.is_deleted:
+            return Response({'detail': 'Impossible de confirmer une réservation annulée.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        instance.status = 'confirmed'
+        instance.save(update_fields=['status'])
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
 def scheduled_trips_list(request):

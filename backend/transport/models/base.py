@@ -5,6 +5,7 @@ from django.utils import timezone
 from datetime import timedelta
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from .mixins import SoftDeleteModel
 
 # Signal pour initialiser le nombre de places disponibles lors de la création d'un ScheduledTrip
 @receiver(post_save, sender='transport.ScheduledTrip')
@@ -13,7 +14,7 @@ def set_initial_available_seats(sender, instance, created, **kwargs):
         instance.available_seats = instance.trip.capacity
         instance.save()
 
-class Company(models.Model):
+class Company(SoftDeleteModel):
     """Modèle pour les compagnies de transport"""
     name = models.CharField(max_length=200, verbose_name="Nom de la compagnie")
     description = models.TextField(verbose_name="Description")
@@ -69,7 +70,7 @@ class City(models.Model):
         return f"{self.name} ({self.region})"
 
 
-class Trip(models.Model):
+class Trip(SoftDeleteModel):
     """Modèle pour les trajets de transport"""
     BUS_TYPES = [
         ('Standard', 'Standard'),
@@ -173,7 +174,7 @@ class BoardingZone(models.Model):
         return f"{self.name} ({self.city.name} - {self.trip_stop.trip.id})"
 
 
-class Booking(models.Model):
+class Booking(SoftDeleteModel):
     """Modèle pour les réservations"""
     STATUS_CHOICES = [
         ('pending', 'En attente'),
