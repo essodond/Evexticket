@@ -9,7 +9,8 @@ from .mixins import SoftDeleteModel
 import uuid
 
 
-def reservation_expires_at():
+def get_reservation_expiry():
+    """Calcul de la date d'expiration de la réservation (5 minutes)"""
     return timezone.now() + timedelta(minutes=5)
 
 # Signal pour initialiser le nombre de places disponibles lors de la création d'un ScheduledTrip
@@ -507,7 +508,7 @@ class Reservation(models.Model):
     reversement_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     paid_at = models.DateTimeField(null=True, blank=True)
-    expires_at = models.DateTimeField(default=reservation_expires_at)
+    expires_at = models.DateTimeField(default=get_reservation_expiry)
 
     class Meta:
         ordering = ['-created_at']
