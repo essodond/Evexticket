@@ -205,3 +205,12 @@ TIME_ZONE = 'Africa/Lome'
 USE_I18N = True
 USE_TZ = True
 
+# QOS / Qosic
+QOS_API_KEY = os.environ.get('QOS_API_KEY', '')
+QOS_SECRET_KEY = os.environ.get('QOS_SECRET_KEY', '')
+QOS_BASE_URL = os.environ.get('QOS_BASE_URL', 'https://api.qosic.net')
+QOS_CALLBACK_URL = os.environ.get('QOS_CALLBACK_URL', '')
+
+# Reservation temporaire des sieges
+SIEGE_EXPIRY_MINUTES = int(os.environ.get('SIEGE_EXPIRY_MINUTES', '5'))
+

@@ -6,6 +6,11 @@ from datetime import timedelta
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from .mixins import SoftDeleteModel
+import uuid
+
+
+def reservation_expires_at():
+    return timezone.now() + timedelta(minutes=5)
 
 # Signal pour initialiser le nombre de places disponibles lors de la création d'un ScheduledTrip
 @receiver(post_save, sender='transport.ScheduledTrip')
@@ -406,6 +411,166 @@ class TripStop(models.Model):
 
     def __str__(self):
         return f"{self.trip} - {self.city.name} (#{self.sequence})"
+
+
+class Siege(models.Model):
+    STATUT_LIBRE = 'libre'
+    STATUT_RESERVE_TEMP = 'reserve_temp'
+    STATUT_OCCUPE = 'occupe'
+
+    STATUT_CHOICES = [
+        (STATUT_LIBRE, 'Libre'),
+        (STATUT_RESERVE_TEMP, 'Reserve temporairement'),
+        (STATUT_OCCUPE, 'Occupe'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    voyage = models.ForeignKey(
+        ScheduledTrip,
+        on_delete=models.CASCADE,
+        related_name='sieges',
+        verbose_name='Voyage',
+    )
+    numero = models.IntegerField(verbose_name='Numero de siege')
+    statut = models.CharField(
+        max_length=20,
+        choices=STATUT_CHOICES,
+        default=STATUT_LIBRE,
+        verbose_name='Statut',
+    )
+    reserve_at = models.DateTimeField(null=True, blank=True, verbose_name='Reserve le')
+
+    class Meta:
+        unique_together = ('voyage', 'numero')
+        ordering = ['voyage', 'numero']
+        verbose_name = 'Siege'
+        verbose_name_plural = 'Sieges'
+
+    def __str__(self):
+        return f"{self.voyage} - siege {self.numero}"
+
+
+class Reservation(models.Model):
+    OPERATEUR_FLOOZ = 'FLOOZ'
+    OPERATEUR_TMONEY = 'TMONEY'
+
+    OPERATEUR_CHOICES = [
+        (OPERATEUR_FLOOZ, 'Flooz'),
+        (OPERATEUR_TMONEY, 'T-Money'),
+    ]
+
+    STATUT_EN_ATTENTE = 'en_attente'
+    STATUT_PAYE = 'paye'
+    STATUT_ECHOUE = 'echoue'
+    STATUT_EXPIRE = 'expire'
+    STATUT_REMBOURSE = 'rembourse'
+
+    STATUT_PAIEMENT_CHOICES = [
+        (STATUT_EN_ATTENTE, 'En attente'),
+        (STATUT_PAYE, 'Paye'),
+        (STATUT_ECHOUE, 'Echoue'),
+        (STATUT_EXPIRE, 'Expire'),
+        (STATUT_REMBOURSE, 'Rembourse'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    voyage = models.ForeignKey(
+        ScheduledTrip,
+        on_delete=models.PROTECT,
+        related_name='reservations_evex',
+        verbose_name='Voyage',
+    )
+    siege = models.ForeignKey(
+        Siege,
+        on_delete=models.PROTECT,
+        related_name='reservations',
+        verbose_name='Siege',
+    )
+    client_nom = models.CharField(max_length=200, verbose_name='Nom du client')
+    client_telephone = models.CharField(max_length=30, verbose_name='Telephone du client')
+    montant_billet = models.IntegerField(verbose_name='Montant billet')
+    frais_evex = models.IntegerField(default=300, verbose_name='Frais EVEX')
+    montant_total = models.IntegerField(verbose_name='Montant total')
+    frais_qos = models.IntegerField(verbose_name='Frais QOS')
+    revenu_net_evex = models.IntegerField(verbose_name='Revenu net EVEX')
+    montant_reverse_compagnie = models.IntegerField(verbose_name='Montant reverse compagnie')
+    operateur = models.CharField(max_length=10, choices=OPERATEUR_CHOICES)
+    reference_evex = models.CharField(max_length=32, unique=True)
+    reference_qos = models.CharField(max_length=100, null=True, blank=True)
+    transaction_id_qos = models.CharField(max_length=100, null=True, blank=True)
+    statut_paiement = models.CharField(
+        max_length=20,
+        choices=STATUT_PAIEMENT_CHOICES,
+        default=STATUT_EN_ATTENTE,
+    )
+    reversement_effectue = models.BooleanField(default=False)
+    reversement_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(default=reservation_expires_at)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Reservation EVEX'
+        verbose_name_plural = 'Reservations EVEX'
+
+    def __str__(self):
+        return f"{self.reference_evex} - {self.client_nom}"
+
+
+class CompteCagnotte(models.Model):
+    compagnie = models.OneToOneField(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='cagnotte',
+        verbose_name='Compagnie',
+    )
+    solde_a_reverser = models.IntegerField(default=0)
+    total_reverse = models.IntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Compte cagnotte'
+        verbose_name_plural = 'Comptes cagnotte'
+
+    def __str__(self):
+        return f"Cagnotte {self.compagnie} - {self.solde_a_reverser} FCFA"
+
+
+class HistoriqueReversement(models.Model):
+    STATUT_EN_ATTENTE = 'en_attente'
+    STATUT_EFFECTUE = 'effectue'
+    STATUT_ECHOUE = 'echoue'
+
+    STATUT_CHOICES = [
+        (STATUT_EN_ATTENTE, 'En attente'),
+        (STATUT_EFFECTUE, 'Effectue'),
+        (STATUT_ECHOUE, 'Echoue'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    compagnie = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='historiques_reversement',
+    )
+    reservation = models.ForeignKey(
+        Reservation,
+        on_delete=models.CASCADE,
+        related_name='historiques_reversement',
+    )
+    montant = models.IntegerField()
+    reference_qos_reversement = models.CharField(max_length=100, null=True, blank=True)
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default=STATUT_EN_ATTENTE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Historique reversement'
+        verbose_name_plural = 'Historiques reversement'
+
+    def __str__(self):
+        return f"{self.reservation.reference_evex} - {self.montant} FCFA ({self.statut})"
 
 
 # ──────────────────────────────────────────────────────────────

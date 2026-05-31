@@ -342,6 +342,41 @@ export interface BookingData {
   price?: number;
 }
 
+export type QosOperator = 'flooz' | 'tmoney';
+
+export interface InitiateQosPaymentPayload {
+  voyage_id: number | string;
+  numero_siege: number | string;
+  client_nom: string;
+  client_telephone: string;
+  montant_billet: number | string;
+  operateur: QosOperator;
+  ville_depart?: string;
+  ville_arrivee?: string;
+}
+
+export interface InitiateQosPaymentResponse {
+  reference_evex: string;
+  transaction_id: string;
+  montant_billet: number;
+  frais_evex: number;
+  montant_total: number;
+  operateur: QosOperator;
+  siege: string;
+  expires_dans: string;
+}
+
+export interface VerifyQosPaymentResponse {
+  reference: string;
+  statut: 'en_attente' | 'paye' | 'echoue' | 'expire' | 'rembourse';
+  montant_total: number;
+  frais_evex: number;
+  montant_billet: number;
+  siege: string;
+  paye: boolean;
+  message: string;
+}
+
 export async function createBooking(data: BookingData): Promise<any> {
   try {
     const response = await request<any>('/bookings/', {
@@ -351,6 +386,27 @@ export async function createBooking(data: BookingData): Promise<any> {
     return response;
   } catch (error) {
     console.error('Erreur lors de la création de la réservation:', error);
+    throw error;
+  }
+}
+
+export async function initiateQosPayment(data: InitiateQosPaymentPayload): Promise<InitiateQosPaymentResponse> {
+  try {
+    return await request<InitiateQosPaymentResponse>('/payment/initier/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  } catch (error) {
+    console.error('Erreur lors de l initialisation du paiement QOS:', error);
+    throw error;
+  }
+}
+
+export async function verifyQosPayment(reference: string): Promise<VerifyQosPaymentResponse> {
+  try {
+    return await request<VerifyQosPaymentResponse>(`/payment/verifier/${encodeURIComponent(reference)}/`);
+  } catch (error) {
+    console.error('Erreur lors de la verification du paiement QOS:', error);
     throw error;
   }
 }

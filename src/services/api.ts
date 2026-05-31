@@ -110,6 +110,41 @@ export interface Booking {
   user?: number;
 }
 
+export type QosOperator = 'flooz' | 'tmoney';
+
+export interface InitiateQosPaymentPayload {
+  voyage_id: number | string;
+  numero_siege: number | string;
+  client_nom: string;
+  client_telephone: string;
+  montant_billet: number | string;
+  operateur: QosOperator;
+  ville_depart?: string;
+  ville_arrivee?: string;
+}
+
+export interface InitiateQosPaymentResponse {
+  reference_evex: string;
+  transaction_id: string;
+  montant_billet: number;
+  frais_evex: number;
+  montant_total: number;
+  operateur: QosOperator;
+  siege: string;
+  expires_dans: string;
+}
+
+export interface VerifyQosPaymentResponse {
+  reference: string;
+  statut: 'en_attente' | 'paye' | 'echoue' | 'expire' | 'rembourse';
+  montant_total: number;
+  frais_evex: number;
+  montant_billet: number;
+  siege: string;
+  paye: boolean;
+  message: string;
+}
+
 export interface DashboardStats {
   total_bookings: number;
   bookings_this_week: number;
@@ -474,6 +509,17 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify(booking),
     });
+  }
+
+  async initiateQosPayment(payload: InitiateQosPaymentPayload): Promise<InitiateQosPaymentResponse> {
+    return this.request<InitiateQosPaymentResponse>('/payment/initier/', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async verifyQosPayment(reference: string): Promise<VerifyQosPaymentResponse> {
+    return this.request<VerifyQosPaymentResponse>(`/payment/verifier/${encodeURIComponent(reference)}/`);
   }
 
   async updateBooking(id: number, booking: Partial<Booking>): Promise<Booking> {

@@ -17,7 +17,7 @@ export interface User {
   phone: string;
 }
 
-export type PaymentMethod = 'flooz' | 'tmoney' | 'card';
+export type PaymentMethod = 'flooz' | 'tmoney';
 
 export type RootStackParamList = {
   Splash: undefined;
@@ -26,7 +26,7 @@ export type RootStackParamList = {
   Auth: undefined;
   MainTabs: undefined;
   TripDetails: { trip: Trip };
-  Payment: { trip: Trip };
+  Payment: { trip: Trip; selectedSeat?: string | null };
   Ticket: { trip: Trip };
 };
 

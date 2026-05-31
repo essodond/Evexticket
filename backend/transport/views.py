@@ -26,6 +26,8 @@ from .models import Company, City, Trip, Booking, Payment, Review, Notification,
 from .models.audit import log_action
 from django.contrib.auth import authenticate
 
+logger = logging.getLogger(__name__)
+
 
 def get_client_ip(request):
     x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
@@ -1099,3 +1101,173 @@ def availability_view(request):
         'available_seats': available,
         'capacity': capacity,
     })
+
+
+class InitierPaiementView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        from .models import Reservation
+        from .services import qos_service, reservation_service
+
+        required = [
+            'voyage_id',
+            'numero_siege',
+            'client_nom',
+            'client_telephone',
+            'montant_billet',
+            'operateur',
+        ]
+        missing = [field for field in required if request.data.get(field) in [None, '']]
+        if missing:
+            return Response({'erreur': 'CHAMPS_REQUIS', 'champs': missing}, status=status.HTTP_400_BAD_REQUEST)
+
+        voyage_id = request.data.get('voyage_id')
+        numero_siege = request.data.get('numero_siege')
+        siege_id = reservation_service.reserver_siege_temporaire(voyage_id, numero_siege)
+        if not siege_id:
+            return Response({'erreur': 'SIEGE_INDISPONIBLE'}, status=status.HTTP_409_CONFLICT)
+
+        try:
+            reservation = reservation_service.creer_reservation(
+                voyage_id=voyage_id,
+                siege_id=siege_id,
+                client_nom=request.data.get('client_nom'),
+                client_telephone=request.data.get('client_telephone'),
+                montant_billet=request.data.get('montant_billet'),
+                operateur=request.data.get('operateur'),
+            )
+
+            description = (
+                f"Billet EVEX {request.data.get('ville_depart', '')} "
+                f"- {request.data.get('ville_arrivee', '')}"
+            ).strip()
+            paiement = qos_service.initier_paiement(
+                reservation.client_telephone,
+                reservation.montant_total,
+                reservation.reference_evex,
+                reservation.operateur,
+                description,
+            )
+            if not paiement.get('succes'):
+                reservation_service.liberer_siege(siege_id)
+                reservation.statut_paiement = Reservation.STATUT_ECHOUE
+                reservation.save(update_fields=['statut_paiement'])
+                return Response(
+                    {'erreur': 'QOS_INIT_ECHOUE', 'detail': paiement.get('erreur')},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+
+            reservation.transaction_id_qos = paiement.get('transaction_id')
+            reservation.reference_qos = paiement.get('reference_qos')
+            reservation.save(update_fields=['transaction_id_qos', 'reference_qos'])
+            return Response({
+                'reference_evex': reservation.reference_evex,
+                'transaction_id': reservation.transaction_id_qos,
+                'montant_billet': reservation.montant_billet,
+                'frais_evex': reservation.frais_evex,
+                'montant_total': reservation.montant_total,
+                'operateur': reservation.operateur,
+                'siege': numero_siege,
+                'expires_dans': '5 minutes',
+            })
+        except Exception as exc:
+            logger.exception("Payment init endpoint failed")
+            reservation_service.liberer_siege(siege_id)
+            return Response({'erreur': 'ERREUR_INTERNE', 'detail': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class WebhookQOSView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request, *args, **kwargs):
+        from .models import Reservation
+        from .services import qos_service, reservation_service
+
+        signature = request.headers.get('X-QOS-Signature')
+        if not qos_service.valider_signature_webhook(request.body, signature):
+            logger.warning("Invalid QOS webhook signature")
+            return Response({'erreur': 'SIGNATURE_INVALIDE'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        payload = request.data
+        reference = payload.get('reference')
+        qos_status = str(payload.get('status') or '').upper()
+        transaction_id = payload.get('transactionId') or payload.get('transaction_id')
+
+        try:
+            reservation = Reservation.objects.get(reference_evex=reference)
+        except Reservation.DoesNotExist:
+            return Response({'erreur': 'RESERVATION_INTROUVABLE'}, status=status.HTTP_404_NOT_FOUND)
+
+        if qos_status == 'SUCCESS':
+            reservation_service.confirmer_paiement(reference, transaction_id)
+        elif qos_status in ['FAILED', 'CANCELLED', 'EXPIRED']:
+            reservation_service.liberer_siege(reservation.siege_id)
+            reservation.statut_paiement = Reservation.STATUT_ECHOUE
+            reservation.save(update_fields=['statut_paiement'])
+
+        return Response({'received': True})
+
+
+class VerifierPaiementView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, ref, *args, **kwargs):
+        from .models import Reservation
+        from .services import qos_service, reservation_service
+
+        try:
+            reservation = Reservation.objects.select_related('siege').get(reference_evex=ref)
+        except Reservation.DoesNotExist:
+            return Response({'erreur': 'RESERVATION_INTROUVABLE'}, status=status.HTTP_404_NOT_FOUND)
+
+        if reservation.statut_paiement == Reservation.STATUT_EN_ATTENTE and reservation.transaction_id_qos:
+            verification = qos_service.verifier_paiement(reservation.transaction_id_qos)
+            nouveau_statut = verification.get('statut')
+            if nouveau_statut == Reservation.STATUT_PAYE:
+                reservation = reservation_service.confirmer_paiement(
+                    reservation.reference_evex,
+                    reservation.transaction_id_qos,
+                )
+            elif nouveau_statut in [Reservation.STATUT_ECHOUE, Reservation.STATUT_EXPIRE]:
+                reservation_service.liberer_siege(reservation.siege_id)
+                reservation.statut_paiement = nouveau_statut
+                reservation.save(update_fields=['statut_paiement'])
+
+        reservation.refresh_from_db()
+        return Response({
+            'reference': reservation.reference_evex,
+            'statut': reservation.statut_paiement,
+            'montant_total': reservation.montant_total,
+            'frais_evex': reservation.frais_evex,
+            'montant_billet': reservation.montant_billet,
+            'siege': reservation.siege.numero,
+            'paye': reservation.statut_paiement == Reservation.STATUT_PAYE,
+            'message': 'Paiement confirme' if reservation.statut_paiement == Reservation.STATUT_PAYE else 'Paiement en attente',
+        })
+
+
+class SiegesView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, voyage_id, *args, **kwargs):
+        from .models import Siege
+        from .services import reservation_service
+
+        reservation_service.liberer_sieges_expires()
+        sieges = list(Siege.objects.filter(voyage_id=voyage_id).order_by('numero'))
+        resume = {
+            'total': len(sieges),
+            'libres': sum(1 for siege in sieges if siege.statut == Siege.STATUT_LIBRE),
+            'occupes': sum(1 for siege in sieges if siege.statut == Siege.STATUT_OCCUPE),
+            'temporaires': sum(1 for siege in sieges if siege.statut == Siege.STATUT_RESERVE_TEMP),
+        }
+        return Response({
+            'voyage_id': str(voyage_id),
+            'sieges': [
+                {'id': str(siege.id), 'numero': siege.numero, 'statut': siege.statut}
+                for siege in sieges
+            ],
+            'resume': resume,
+        })

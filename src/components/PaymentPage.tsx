@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import apiService from '../services/api';
+import type { QosOperator } from '../services/api';
 import type { BookingData, PaymentData } from '../types';
 
 interface PaymentPageProps {
@@ -9,9 +10,10 @@ interface PaymentPageProps {
 }
 
 const PaymentPage: React.FC<PaymentPageProps> = ({ bookingData, onBack, onPaymentSuccess }) => {
-  const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'bank_card'>('mobile_money');
+  const [paymentMethod, setPaymentMethod] = useState<QosOperator>('flooz');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
 
   const { trip, selectedSeat, passengerInfo, searchData } = bookingData || {};
@@ -42,69 +44,86 @@ const PaymentPage: React.FC<PaymentPageProps> = ({ bookingData, onBack, onPaymen
     return m > 0 ? `${h} h ${m} min` : `${h} h`;
   };
 
-  const formatDate = (d: any) => {
-    if (!d) return new Date().toISOString().slice(0, 10);
-    if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
-    const dateObj = new Date(d);
-    if (!isNaN(dateObj.getTime())) return dateObj.toISOString().slice(0, 10);
-    return new Date().toISOString().slice(0, 10);
-  };
-
   const priceNum = useMemo(() => {
     const p = trip?.price;
     return typeof p === 'number' ? p : parseFloat(String(p));
   }, [trip]);
 
-  const displayDeparture = trip?.departure_city_name || trip?.departure || (searchData?.departure || '-');
-  const displayArrival = trip?.arrival_city_name || trip?.arrival || (searchData?.arrival || '-');
+  const displayDeparture = trip?.departure_city_name || trip?.departure || searchData?.departure || '-';
+  const displayArrival = trip?.arrival_city_name || trip?.arrival || searchData?.arrival || '-';
   const displayCompany = trip?.company_name || (trip?.company !== undefined ? String(trip.company) : '-');
   const displayDateStr = searchData?.date || searchData?.travel_date;
   const displayDate = displayDateStr ? new Date(displayDateStr).toLocaleDateString('fr-FR') : '-';
 
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const waitForPaymentConfirmation = async (reference: string) => {
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      const verification = await apiService.verifyQosPayment(reference);
+      if (verification.paye || verification.statut === 'paye') return verification;
+      if (verification.statut === 'echoue' || verification.statut === 'expire') {
+        throw new Error(verification.message || 'Le paiement a echoue ou a expire.');
+      }
+      setStatusMessage('Paiement en attente de confirmation sur votre telephone...');
+      await wait(5000);
+    }
+    throw new Error('Paiement initie, mais la confirmation QOS prend trop de temps. Verifiez le statut dans quelques instants.');
+  };
+
   const handlePayment = async () => {
     if (!bookingData || !trip || !selectedSeat || !passengerInfo) return;
-    if (paymentMethod === 'mobile_money' && !phoneNumber) {
-      setApiError('Veuillez saisir le numéro de téléphone pour Mobile Money.');
+    if (!phoneNumber) {
+      setApiError('Veuillez saisir le numero de telephone Mobile Money.');
       return;
     }
     setLoading(true);
+    setStatusMessage('Initialisation du paiement QOS...');
     setApiError(null);
 
     try {
       const scheduledTripId = Number(trip?.scheduled_trip_id ?? trip?.id ?? trip?.trip_id ?? trip);
-      const travelDate = searchData?.travel_date || searchData?.date || new Date().toISOString().split('T')[0];
-      const payload: any = {
-        scheduled_trip: scheduledTripId,
-        passenger_name: `${passengerInfo.firstName || ''} ${passengerInfo.lastName || ''}`.trim(),
-        passenger_email: passengerInfo.email || undefined,
-        passenger_phone: passengerInfo.phone,
-        seat_number: String(selectedSeat),
-        payment_method: paymentMethod,
-        travel_date: travelDate,
-        notes: `Payment via ${paymentMethod}${phoneNumber ? ' - ' + phoneNumber : ''}`,
-      };
+      if (!scheduledTripId || Number.isNaN(scheduledTripId)) {
+        throw new Error('Impossible d identifier le voyage a payer.');
+      }
 
-      const created = await apiService.createBooking(payload);
+      const passengerName = `${passengerInfo.firstName || ''} ${passengerInfo.lastName || ''}`.trim();
+      const initiated = await apiService.initiateQosPayment({
+        voyage_id: scheduledTripId,
+        numero_siege: selectedSeat,
+        client_nom: passengerName,
+        client_telephone: phoneNumber || passengerInfo.phone,
+        montant_billet: Math.round(priceNum),
+        operateur: paymentMethod,
+        ville_depart: displayDeparture,
+        ville_arrivee: displayArrival,
+      });
 
-      const transactionId = `TXN-${Date.now()}`;
-      const paymentId = `PMT-${Math.floor(Math.random() * 1e6).toString().padStart(6, '0')}`;
+      setStatusMessage('Paiement lance. Confirmez la demande sur votre telephone.');
+      const confirmed = await waitForPaymentConfirmation(initiated.reference_evex);
 
       onPaymentSuccess({
-        transactionId,
-        paymentId,
+        transactionId: initiated.transaction_id,
+        paymentId: initiated.reference_evex,
         paymentMethod,
         phoneNumber,
         selectedSeat,
         trip,
         searchData,
         passengerInfo,
-        booking: created,
+        qosReference: initiated.reference_evex,
+        paymentStatus: confirmed.statut,
+        amountTotal: confirmed.montant_total,
+        booking: {
+          id: initiated.reference_evex,
+          status: confirmed.statut,
+        },
       });
     } catch (error: any) {
-      const errMsg = error?.response?.data ? JSON.stringify(error.response.data) : (error?.message || 'Une erreur est survenue lors de la création de la réservation.');
+      const errMsg = error?.response?.data ? JSON.stringify(error.response.data) : (error?.message || 'Une erreur est survenue lors du paiement.');
       setApiError(errMsg);
     } finally {
       setLoading(false);
+      setStatusMessage(null);
     }
   };
 
@@ -114,7 +133,7 @@ const PaymentPage: React.FC<PaymentPageProps> = ({ bookingData, onBack, onPaymen
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <button onClick={onBack} className="flex items-center text-gray-600 hover:text-blue-600 transition-colors">
-              <span className="mr-2">←</span>
+              <span className="mr-2">&larr;</span>
               Retour
             </button>
             <div className="flex items-center space-x-2">
@@ -131,7 +150,7 @@ const PaymentPage: React.FC<PaymentPageProps> = ({ bookingData, onBack, onPaymen
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div className="space-y-6">
             <div className="bg-white rounded-xl shadow-md border p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Récapitulatif du trajet</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Recapitulatif du trajet</h2>
               <div className="space-y-4">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Compagnie</span>
@@ -139,7 +158,7 @@ const PaymentPage: React.FC<PaymentPageProps> = ({ bookingData, onBack, onPaymen
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Trajet</span>
-                  <span className="font-medium">{displayDeparture} → {displayArrival}</span>
+                  <span className="font-medium">{displayDeparture} - {displayArrival}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Date</span>
@@ -150,7 +169,7 @@ const PaymentPage: React.FC<PaymentPageProps> = ({ bookingData, onBack, onPaymen
                   <span className="font-medium">{formatTime(trip?.departure_time)} - {formatTime(trip?.arrival_time)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Durée</span>
+                  <span className="text-gray-600">Duree</span>
                   <span className="font-medium">{formatDuration(trip?.duration)}</span>
                 </div>
                 <div className="border-t pt-4">
@@ -163,24 +182,26 @@ const PaymentPage: React.FC<PaymentPageProps> = ({ bookingData, onBack, onPaymen
             </div>
 
             <div className="bg-white rounded-xl shadow-md border p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Méthode de paiement</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Methode de paiement</h2>
               <div className="space-y-4">
                 <div className="flex items-center space-x-4">
                   <label className="flex items-center space-x-2 cursor-pointer">
-                    <input type="radio" name="payment" value="mobile_money" checked={paymentMethod === 'mobile_money'} onChange={() => setPaymentMethod('mobile_money')} />
-                    <span>Mobile Money</span>
+                    <input type="radio" name="payment" value="flooz" checked={paymentMethod === 'flooz'} onChange={() => setPaymentMethod('flooz')} />
+                    <span>Flooz</span>
                   </label>
                   <label className="flex items-center space-x-2 cursor-pointer">
-                    <input type="radio" name="payment" value="bank_card" checked={paymentMethod === 'bank_card'} onChange={() => setPaymentMethod('bank_card')} />
-                    <span>Carte bancaire</span>
+                    <input type="radio" name="payment" value="tmoney" checked={paymentMethod === 'tmoney'} onChange={() => setPaymentMethod('tmoney')} />
+                    <span>Mixx by Yas</span>
                   </label>
                 </div>
 
-                {paymentMethod === 'mobile_money' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Numéro Mobile Money *</label>
-                    <input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="+228 XX XX XX XX" />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Numero Mobile Money *</label>
+                  <input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="+228 XX XX XX XX" />
+                </div>
+
+                {statusMessage && (
+                  <div className="mt-3 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg p-3">{statusMessage}</div>
                 )}
 
                 {apiError && (
@@ -189,24 +210,24 @@ const PaymentPage: React.FC<PaymentPageProps> = ({ bookingData, onBack, onPaymen
 
                 <button
                   onClick={handlePayment}
-                  disabled={loading || (paymentMethod === 'mobile_money' && !phoneNumber)}
+                  disabled={loading || !phoneNumber}
                   className="w-full mt-4 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                 >
-                  {loading ? 'Traitement...' : 'Payer et réserver'}
+                  {loading ? 'Traitement QOS...' : 'Payer avec QOS'}
                 </button>
               </div>
             </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-md border p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Détails du passager</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Details du passager</h2>
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="text-gray-600">Nom</span>
                 <span className="font-medium">{`${passengerInfo?.firstName || ''} ${passengerInfo?.lastName || ''}`.trim() || '-'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Téléphone</span>
+                <span className="text-gray-600">Telephone</span>
                 <span className="font-medium">{passengerInfo?.phone || '-'}</span>
               </div>
               <div className="flex justify-between">
@@ -214,7 +235,7 @@ const PaymentPage: React.FC<PaymentPageProps> = ({ bookingData, onBack, onPaymen
                 <span className="font-medium">{passengerInfo?.email || '-'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Siège</span>
+                <span className="text-gray-600">Siege</span>
                 <span className="font-medium">{selectedSeat || '-'}</span>
               </div>
             </div>

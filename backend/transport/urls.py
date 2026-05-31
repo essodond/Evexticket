@@ -26,6 +26,10 @@ urlpatterns = [
     path('availability/', views.availability_view, name='availability'),
     path('cities/', views.cities_list, name='cities-list'),
     path('my-bookings/', views.MyBookingsView.as_view(), name='my-bookings'),
+    path('payment/initier/', views.InitierPaiementView.as_view(), name='payment-initier'),
+    path('payment/webhook/', views.WebhookQOSView.as_view(), name='payment-webhook'),
+    path('payment/verifier/<str:ref>/', views.VerifierPaiementView.as_view(), name='payment-verifier'),
+    path('sieges/<str:voyage_id>/', views.SiegesView.as_view(), name='sieges-voyage'),
     # Inclure les routes du routeur
     path('', include(router.urls)),
 ]

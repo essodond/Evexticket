@@ -1,6 +1,19 @@
 from django.contrib import admin
 from django.contrib import messages
-from .models import Company, City, Trip, Booking, Payment, Review, Notification, TripStop
+from .models import (
+    Company,
+    City,
+    Trip,
+    Booking,
+    Payment,
+    Review,
+    Notification,
+    TripStop,
+    Siege,
+    Reservation,
+    CompteCagnotte,
+    HistoriqueReversement,
+)
 
 
 class TripStopInline(admin.TabularInline):
@@ -66,3 +79,32 @@ class NotificationAdmin(admin.ModelAdmin):
     list_display = ['user', 'title', 'type', 'is_read', 'created_at']
     list_filter = ['type', 'is_read', 'created_at']
     search_fields = ['user__username', 'title', 'message']
+
+
+@admin.register(Siege)
+class SiegeAdmin(admin.ModelAdmin):
+    list_display = ['voyage', 'numero', 'statut', 'reserve_at']
+    list_filter = ['statut']
+    search_fields = ['numero']
+
+
+@admin.register(Reservation)
+class ReservationAdmin(admin.ModelAdmin):
+    list_display = ['reference_evex', 'client_nom', 'montant_total', 'statut_paiement', 'reversement_effectue']
+    list_filter = ['statut_paiement', 'operateur', 'reversement_effectue']
+    search_fields = ['reference_evex', 'client_nom', 'client_telephone', 'transaction_id_qos']
+    readonly_fields = ['created_at', 'paid_at', 'reversement_at']
+
+
+@admin.register(CompteCagnotte)
+class CompteCagnotteAdmin(admin.ModelAdmin):
+    list_display = ['compagnie', 'solde_a_reverser', 'total_reverse', 'updated_at']
+    search_fields = ['compagnie__name']
+    readonly_fields = ['updated_at']
+
+
+@admin.register(HistoriqueReversement)
+class HistoriqueReversementAdmin(admin.ModelAdmin):
+    list_display = ['compagnie', 'reservation', 'montant', 'statut', 'created_at']
+    list_filter = ['statut', 'created_at']
+    search_fields = ['reservation__reference_evex', 'reference_qos_reversement']

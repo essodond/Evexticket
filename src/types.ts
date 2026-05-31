@@ -127,9 +127,16 @@ export interface BookingData {
 
 export interface PaymentData {
   transactionId: string;
+  paymentId?: string;
   selectedSeat: number;
   passengerInfo: PassengerInfo;
   paymentMethod: string;
+  phoneNumber?: string;
+  trip?: Trip;
+  searchData?: SearchData | null;
+  qosReference?: string;
+  paymentStatus?: string;
+  amountTotal?: number;
   booking: { id: number | string; status?: string };
 }
 

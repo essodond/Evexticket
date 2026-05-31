@@ -29,11 +29,16 @@ export interface Seat {
 }
 
 export interface Trip {
-  id: number;
+  id: number | string;
   available_seats: number;
   date: string;
   trip: number;
+  seat_number?: string;
+  payment_status?: string;
+  transaction_id?: string;
   trip_info: {
+    departure_city?: City | number | string;
+    arrival_city?: City | number | string;
     arrival_city_name: string;
     arrival_time: string;
     available_seats: number;
@@ -50,6 +55,8 @@ export interface Trip {
   };
   seats: Seat[];
 }
+
+export type PaymentMethod = 'flooz' | 'tmoney';
 
 export interface TripStop {
   id: number;
@@ -69,12 +76,22 @@ export interface BoardingZone {
 }
 
 export type RootStackParamList = {
+  Splash: undefined;
+  Onboarding: undefined;
+  PublicHome: undefined;
   Auth: undefined;
   MainTabs: undefined;
   TripDetails: { trip: Trip };
-  Payment: { trip: Trip };
+  Payment: { trip: Trip; selectedSeat?: string | null };
+  Ticket: { trip: Trip };
   PaymentSuccess: undefined;
   PaymentFailed: undefined;
+};
+
+export type MainTabParamList = {
+  Home: undefined;
+  MyTickets: undefined;
+  Profile: undefined;
 };
 
 export type RootStackScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<
