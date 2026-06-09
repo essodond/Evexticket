@@ -13,9 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import os
 import dj_database_url
-from dotenv import load_dotenv
-
-load_dotenv()
+from decouple import Csv, config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,12 +23,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-k+qv%zb*h@6^htx=s291hq*ra8!2)9pym7mvpbda@jnt&-l$5@')
+SECRET_KEY = config('SECRET_KEY', default='django-insecure-k+qv%zb*h@6^htx=s291hq*ra8!2)9pym7mvpbda@jnt&-l$5@')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
+DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*', cast=Csv())
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATIC_URL = '/static/'
@@ -43,7 +41,7 @@ STORAGES = {
 }
 
 # Render deploy detection
-RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+RENDER_EXTERNAL_HOSTNAME = config('RENDER_EXTERNAL_HOSTNAME', default='')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
@@ -61,6 +59,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'corsheaders',
     'transport',
+    'payments',
 ]
 
 MIDDLEWARE = [
@@ -100,7 +99,7 @@ WSGI_APPLICATION = 'togotrans_api.wsgi.application'
 
 DATABASES = {
     'default': dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        default=config('DATABASE_URL', default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
         conn_max_age=600,
         conn_health_checks=True,
     )
@@ -192,12 +191,12 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 # Add dynamic origins from environment if needed
-_extra_cors = os.environ.get('CORS_EXTRA_ORIGINS', '')
+_extra_cors = config('CORS_EXTRA_ORIGINS', default='')
 if _extra_cors:
     CORS_ALLOWED_ORIGINS += [o.strip() for o in _extra_cors.split(',') if o.strip()]
 
 # Allow all for local development (restrict in production)
-CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL', 'False').lower() == 'true'
+CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL', default=False, cast=bool)
 CORS_ALLOW_CREDENTIALS = True
 # Configuration de la langue et du fuseau horaire
 LANGUAGE_CODE = 'fr-fr'
@@ -206,11 +205,18 @@ USE_I18N = True
 USE_TZ = True
 
 # QOS / Qosic
-QOS_API_KEY = os.environ.get('QOS_API_KEY', '')
-QOS_SECRET_KEY = os.environ.get('QOS_SECRET_KEY', '')
-QOS_BASE_URL = os.environ.get('QOS_BASE_URL', 'https://api.qosic.net')
-QOS_CALLBACK_URL = os.environ.get('QOS_CALLBACK_URL', '')
+QOS_API_KEY = config('QOS_API_KEY', default='')
+QOS_SECRET_KEY = config('QOS_SECRET_KEY', default='')
+QOS_BASE_URL = config('QOS_BASE_URL', default='https://api.qosic.net')
+QOS_CALLBACK_URL = config('QOS_CALLBACK_URL', default='')
+
+# QosPay staging (QosicBridge)
+QOSPAY_BASE_URL = config('QOSPAY_BASE_URL', default='http://staging.qosic.net:9010')
+QOSPAY_CLIENT_ID = config('QOSPAY_CLIENT_ID', default='QCBJ001')
+QOSPAY_USERNAME = config('QOSPAY_USERNAME', default='')
+QOSPAY_PASSWORD = config('QOSPAY_PASSWORD', default='')
+QOSPAY_CALLBACK_URL = config('QOSPAY_CALLBACK_URL', default='')
 
 # Reservation temporaire des sieges
-SIEGE_EXPIRY_MINUTES = int(os.environ.get('SIEGE_EXPIRY_MINUTES', '5'))
+SIEGE_EXPIRY_MINUTES = config('SIEGE_EXPIRY_MINUTES', default=5, cast=int)
 

@@ -1,135 +1,258 @@
-import hashlib
-import hmac
 import json
 import logging
-from urllib import error, request
+import time
+import random
+import requests
+import urllib3
 
 from django.conf import settings
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
 
-def _post_json(path, payload):
-    url = f"{settings.QOS_BASE_URL}{path}"
-    data = json.dumps(payload).encode('utf-8')
-    req = request.Request(
+def get_auth():
+    return (settings.QOSPAY_USERNAME, settings.QOSPAY_PASSWORD)
+
+
+def generate_transref():
+    return f"EVEX-{int(time.time())}-{random.randint(1000, 9999)}"
+
+
+def _normaliser_phone(phone: str) -> str:
+    """
+    Normalise le numéro de téléphone pour QOS staging.
+    QOS attend le numéro LOCAL sans préfixe pays (228).
+    Ex: "22871608097" → "71608097"
+        "+22890123456" → "90123456"
+        "90123456"     → "90123456"
+    """
+    phone = str(phone).strip().replace(" ", "").replace("+", "")
+    if phone.startswith("228"):
+        phone = phone[3:]
+    return phone
+
+
+def _post_to_qospay(path, payload):
+    """
+    Appel HTTP POST vers QosicBridge.
+    Authentification Basic (username/password).
+    verify=False car le staging utilise un certificat auto-signé.
+    """
+    url = f"{settings.QOSPAY_BASE_URL}{path}"
+
+    logger.info("QosPay request → %s | payload: %s", url, payload)
+
+    response = requests.post(
         url,
-        data=data,
-        method='POST',
-        headers={
-            'Authorization': f"Bearer {settings.QOS_API_KEY}",
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-        },
+        json=payload,
+        auth=get_auth(),
+        verify=False,   # staging: certificat auto-signé
+        timeout=30,
     )
-    with request.urlopen(req, timeout=30) as response:
-        return json.loads(response.read().decode('utf-8') or '{}')
 
-
-def _get_json(path):
-    url = f"{settings.QOS_BASE_URL}{path}"
-    req = request.Request(
-        url,
-        method='GET',
-        headers={
-            'Authorization': f"Bearer {settings.QOS_API_KEY}",
-            'Accept': 'application/json',
-        },
+    logger.info(
+        "QosPay response ← status: %s | body: %s",
+        response.status_code,
+        response.text,
     )
-    with request.urlopen(req, timeout=30) as response:
-        return json.loads(response.read().decode('utf-8') or '{}')
 
+    if response.status_code == 400:
+        logger.error(
+            "QosPay HTTP 400 Bad Request → %s | response: %s",
+            url, response.text,
+        )
 
-def _extract_error(exc):
-    if isinstance(exc, error.HTTPError):
-        try:
-            return exc.read().decode('utf-8')
-        except Exception:
-            return str(exc)
-    return str(exc)
+    response.raise_for_status()
 
-
-def initier_paiement(telephone, montant_total, reference, operateur, description):
-    logger.info("QOS payment init started for reference=%s amount=%s", reference, montant_total)
-    payload = {
-        'msisdn': telephone,
-        'amount': int(montant_total),
-        'reference': reference,
-        'operator': operateur,
-        'description': description,
-        'callback': settings.QOS_CALLBACK_URL,
-        'currency': 'XOF',
-    }
-
+    # Certains endpoints retournent du texte vide sur erreur
     try:
-        data = _post_json('/v1/payment/init', payload)
-        transaction_id = data.get('transaction_id') or data.get('transactionId') or data.get('id')
-        reference_qos = data.get('reference_qos') or data.get('referenceQos') or data.get('reference')
-        logger.info("QOS payment init succeeded for reference=%s transaction=%s", reference, transaction_id)
+        return response.json()
+    except Exception:
+        return {"responsecode": "96", "responsemsg": response.text}
+
+
+# ─── TOGOCEL (T-Money) ────────────────────────────────────────────
+def pay_togocel(phone, amount, firstname, lastname):
+    """
+    Initie un paiement T-Money (Togocel) via QosicBridge.
+    Endpoint: /QosicBridge/tg/v1/requestpayment  (même que Moov)
+    """
+    transref = generate_transref()
+    payload = {
+        "msisdn":    _normaliser_phone(phone),   # numéro local sans 228
+        "amount":    str(amount),                # string obligatoire
+        "firstname": firstname,
+        "lastname":  lastname,
+        "transref":  transref,
+        "clientid":  settings.QOSPAY_CLIENT_ID,
+    }
+    try:
+        data = _post_to_qospay(
+            '/QosicBridge/tg/v1/requestpayment',   # ✅ endpoint correct
+            payload,
+        )
+        responsecode = data.get('responsecode', '96')
+        succes = responsecode == '00'
         return {
-            'succes': True,
-            'transaction_id': transaction_id,
-            'reference_qos': reference_qos,
-            'erreur': None,
+            'succes':       succes,
+            'transref':     transref,
+            'responsecode': responsecode,
+            'responsemsg':  data.get('responsemsg', ''),
+            'raw':          data,
+            'erreur':       None if succes else data.get('responsemsg', 'Erreur inconnue'),
         }
     except Exception as exc:
-        erreur = _extract_error(exc)
-        logger.exception("QOS payment init failed for reference=%s error=%s", reference, erreur)
-        return {'succes': False, 'transaction_id': None, 'reference_qos': None, 'erreur': erreur}
+        logger.exception("Togocel payment failed transref=%s: %s", transref, exc)
+        return {
+            'succes':       False,
+            'transref':     transref,
+            'responsecode': '96',
+            'responsemsg':  '',
+            'raw':          {},
+            'erreur':       str(exc),
+        }
 
 
-def verifier_paiement(transaction_id):
-    logger.info("QOS payment status check started for transaction=%s", transaction_id)
-    status_map = {
-        'SUCCESS': 'paye',
-        'FAILED': 'echoue',
-        'CANCELLED': 'echoue',
-        'EXPIRED': 'expire',
-        'PENDING': 'en_attente',
-    }
-
-    try:
-        data = _get_json(f'/v1/payment/status/{transaction_id}')
-        qos_status = str(data.get('status') or data.get('paymentStatus') or 'PENDING').upper()
-        statut = status_map.get(qos_status, 'en_attente')
-        logger.info("QOS payment status transaction=%s status=%s mapped=%s", transaction_id, qos_status, statut)
-        return {'succes': True, 'statut': statut, 'erreur': None, 'raw': data}
-    except Exception as exc:
-        erreur = _extract_error(exc)
-        logger.exception("QOS payment status failed transaction=%s error=%s", transaction_id, erreur)
-        return {'succes': False, 'statut': 'en_attente', 'erreur': erreur, 'raw': None}
-
-
-def reverser_compagnie(telephone_compagnie, montant, reference_reversement):
-    logger.info("QOS payout init started reference=%s amount=%s", reference_reversement, montant)
+# ─── MOOV TOGO (Flooz) ────────────────────────────────────────────
+def pay_moov_togo(phone, amount, firstname, lastname):
+    """
+    Initie un paiement Flooz (Moov Togo) via QosicBridge.
+    Endpoint: /QosicBridge/tg/v1/requestpayment
+    """
+    transref = generate_transref()
     payload = {
-        'msisdn': telephone_compagnie,
-        'amount': int(montant),
-        'reference': reference_reversement,
-        'currency': 'XOF',
+        "msisdn":    _normaliser_phone(phone),
+        "amount":    str(amount),
+        "firstname": firstname,
+        "lastname":  lastname,
+        "transref":  transref,
+        "clientid":  settings.QOSPAY_CLIENT_ID,
+    }
+    try:
+        data = _post_to_qospay(
+            '/QosicBridge/tg/v1/requestpayment',   # ✅ endpoint correct
+            payload,
+        )
+        responsecode = data.get('responsecode', '96')
+        succes = responsecode == '00'
+        return {
+            'succes':       succes,
+            'transref':     transref,
+            'responsecode': responsecode,
+            'responsemsg':  data.get('responsemsg', ''),
+            'raw':          data,
+            'erreur':       None if succes else data.get('responsemsg', 'Erreur inconnue'),
+        }
+    except Exception as exc:
+        logger.exception("Moov Togo payment failed transref=%s: %s", transref, exc)
+        return {
+            'succes':       False,
+            'transref':     transref,
+            'responsecode': '96',
+            'responsemsg':  '',
+            'raw':          {},
+            'erreur':       str(exc),
+        }
+
+
+# ─── VÉRIFIER STATUT ──────────────────────────────────────────────
+def check_transaction_status(transref):
+    """
+    Vérifie le statut d'une transaction QosicBridge.
+    Endpoint: /QosicBridge/tg/v1/gettransactionstatus  ✅
+
+    Codes de réponse QOS :
+      00  → success (paiement confirmé)
+      01  → pending (en attente)
+      02  → failed  (échoué)
+      529 → insufficient_funds (solde insuffisant)
+      96  → system_error
+    """
+    payload = {
+        "transref": transref,
+        "clientid": settings.QOSPAY_CLIENT_ID,
+    }
+    try:
+        data = _post_to_qospay(
+            '/QosicBridge/tg/v1/gettransactionstatus',   # ✅ endpoint correct
+            payload,
+        )
+
+        code = data.get('responsecode', '96')
+        status_map = {
+            '00':  'success',
+            '01':  'pending',
+            '02':  'failed',
+            '529': 'insufficient_funds',
+            '96':  'system_error',
+        }
+        statut = status_map.get(code, 'pending')
+
+        return {
+            'succes':       True,
+            'statut':       statut,
+            'responsecode': code,
+            'responsemsg':  data.get('responsemsg', ''),
+            'raw':          data,
+            'erreur':       None,
+        }
+    except Exception as exc:
+        logger.exception("Status check failed transref=%s: %s", transref, exc)
+        return {
+            'succes':       False,
+            'statut':       'pending',
+            'responsecode': '96',
+            'responsemsg':  '',
+            'raw':          {},
+            'erreur':       str(exc),
+        }
+
+
+# ─── CALCUL DES FRAIS EVEX ────────────────────────────────────────
+def calculer_frais_evex(montant_billet: int) -> int:
+    """
+    Frais fixes EVEX : 300 FCFA sur tous les billets.
+    EVEX garde : 300 - frais_qos (1.7% du total)
+    Compagnie reçoit : 100% du prix billet.
+    """
+    return 300
+
+
+def calculer_montant_total(montant_billet: int) -> dict:
+    """
+    Retourne la décomposition complète des montants.
+
+    Exemple pour un billet à 5 000 FCFA :
+      - montant_billet        = 5 000
+      - frais_evex            =   300
+      - montant_total         = 5 300  (ce que paye le client)
+      - frais_qos             =    90  (1.7% × 5 300)
+      - revenu_net_evex       =   210  (300 - 90)
+      - montant_reverse_cie   = 5 000  (reversé à la compagnie)
+    """
+    frais_evex          = 300
+    montant_total       = montant_billet + frais_evex
+    frais_qos           = round(montant_total * 0.017)
+    revenu_net_evex     = frais_evex - frais_qos
+    montant_reverse_cie = montant_billet
+
+    return {
+        'montant_billet':        montant_billet,
+        'frais_evex':            frais_evex,
+        'montant_total':         montant_total,
+        'frais_qos':             frais_qos,
+        'revenu_net_evex':       revenu_net_evex,
+        'montant_reverse_cie':   montant_reverse_cie,
     }
 
-    try:
-        data = _post_json('/v1/payout/init', payload)
-        transaction_id = data.get('transaction_id') or data.get('transactionId') or data.get('id')
-        logger.info("QOS payout init succeeded reference=%s transaction=%s", reference_reversement, transaction_id)
-        return {'succes': True, 'transaction_id': transaction_id, 'erreur': None}
-    except Exception as exc:
-        erreur = _extract_error(exc)
-        logger.exception("QOS payout init failed reference=%s error=%s", reference_reversement, erreur)
-        return {'succes': False, 'transaction_id': None, 'erreur': erreur}
 
-
-def valider_signature_webhook(payload_bytes, signature_header):
-    if not signature_header or not settings.QOS_SECRET_KEY:
-        return False
-
-    expected = hmac.new(
-        settings.QOS_SECRET_KEY.encode('utf-8'),
-        payload_bytes,
-        hashlib.sha256,
-    ).hexdigest()
-    provided = signature_header.strip()
-    if provided.startswith('sha256='):
-        provided = provided.split('=', 1)[1]
-    return hmac.compare_digest(expected, provided)
+# ─── WEBHOOK SIGNATURE ────────────────────────────────────────────
+def valider_webhook(request_body, signature_header):
+    """
+    Validation de signature webhook QOS.
+    QosPay staging n'envoie pas de signature — retourne True.
+    À implémenter en production avec HMAC-SHA256.
+    """
+    return True

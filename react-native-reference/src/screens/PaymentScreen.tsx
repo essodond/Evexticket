@@ -45,7 +45,7 @@ export default function PaymentScreen({ navigation, route }: Props) {
   const departureTimeLabel = formatTime(trip.trip_info.departure_time || '');
   const dateLabel = trip.date || '';
   const companyName = trip.trip_info.company_name || 'Compagnie inconnue';
-  const commission = 100;
+  const commission = 300;
 
   const bookingPrice = useMemo(() => {
     const value = parseFloat(trip.trip_info.price || '0');

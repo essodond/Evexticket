@@ -32,7 +32,7 @@ interface SearchTripsParams {
   departure_date?: string;
 }
 
-const API_BASE_URL = 'http://192.168.1.65:8000/api';
+const API_BASE_URL = 'http://192.168.1.67:8000/api';
 console.log('API_BASE_URL utilisée:', API_BASE_URL);
 const TIMEOUT = 20000; // 20s pour éviter des attentes prolongées
 
@@ -392,10 +392,28 @@ export async function createBooking(data: BookingData): Promise<any> {
 
 export async function initiateQosPayment(data: InitiateQosPaymentPayload): Promise<InitiateQosPaymentResponse> {
   try {
-    return await request<InitiateQosPaymentResponse>('/payment/initier/', {
+    const [firstname = '', ...lastnameParts] = String(data.client_nom || '').trim().split(' ');
+    const response = await request<any>('/payments/pay/', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        method: data.operateur === 'tmoney' ? 'moov' : 'togocel',
+        phone: data.client_telephone,
+        amount: data.montant_billet,
+        firstname: firstname || data.client_nom || 'Client',
+        lastname: lastnameParts.join(' ') || 'EvexTicket',
+      }),
     });
+    const transaction = response.transaction || {};
+    return {
+      reference_evex: transaction.transref,
+      transaction_id: transaction.transref,
+      montant_billet: transaction.amount,
+      frais_evex: 0,
+      montant_total: transaction.amount,
+      operateur: data.operateur,
+      siege: String(data.numero_siege),
+      expires_dans: '5 minutes',
+    };
   } catch (error) {
     console.error('Erreur lors de l initialisation du paiement QOS:', error);
     throw error;
@@ -404,7 +422,22 @@ export async function initiateQosPayment(data: InitiateQosPaymentPayload): Promi
 
 export async function verifyQosPayment(reference: string): Promise<VerifyQosPaymentResponse> {
   try {
-    return await request<VerifyQosPaymentResponse>(`/payment/verifier/${encodeURIComponent(reference)}/`);
+    const response = await request<any>('/payments/status/', {
+      method: 'POST',
+      body: JSON.stringify({ transref: reference }),
+    });
+    const transaction = response.transaction || {};
+    const isPaid = transaction.status === 'success';
+    return {
+      reference,
+      statut: isPaid ? 'paye' : transaction.status === 'pending' ? 'en_attente' : 'echoue',
+      montant_total: transaction.amount,
+      frais_evex: 0,
+      montant_billet: transaction.amount,
+      siege: '',
+      paye: isPaid,
+      message: isPaid ? 'Paiement confirme' : 'Paiement en attente',
+    };
   } catch (error) {
     console.error('Erreur lors de la verification du paiement QOS:', error);
     throw error;

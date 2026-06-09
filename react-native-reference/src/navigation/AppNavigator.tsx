@@ -23,8 +23,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-import { BlurView } from 'expo-blur'; // Import important
-import { Platform, StyleSheet } from 'react-native';
+import { Platform } from 'react-native';
 
 function MainTabs() {
   return (
@@ -33,38 +32,23 @@ function MainTabs() {
         headerShown: false,
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: '#94A3B8',
-        tabBarBackground: () => (
-          <BlurView
-            tint="default" // Peut être 'light', 'dark' ou 'default'
-            intensity={100} // Réglage du flou (0 à 100)
-            style={StyleSheet.absoluteFill}
-          />
-        ),
         tabBarStyle: {
-          position: 'absolute',
-          
-          bottom: 25,
-          left: 20,
-          right: 20,
-          height: 80,
-          borderRadius: 35,
-          
-          // On rend le background transparent pour laisser voir le BlurView
-          backgroundColor: '', // Couleur de fond de la bulle
-          borderTopWidth: 0,
-          overflow: 'hidden', // Important pour que le flou respecte l'arrondi
-          
-          // Ombre pour décoller la bulle du fond
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 10 },
-          shadowOpacity: 0.1,
-          shadowRadius: 15,
-          elevation: 7,
+          backgroundColor: '#ffffff',
+          borderTopColor: '#E5E7EB',
+          borderTopWidth: 1,
+          height: Platform.OS === 'ios' ? 80 : 70,
+          paddingTop: 8,
+          paddingBottom: Platform.OS === 'ios' ? 18 : 10,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -1 },
+          shadowOpacity: 0.06,
+          shadowRadius: 6,
+          elevation: 10,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: '700',
-          
+          marginTop: 0,
         },
         tabBarIcon: ({ focused, color }) => {
           let iconName: any;
@@ -75,7 +59,7 @@ function MainTabs() {
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           }
-          return <Ionicons name={iconName} size={30} color={color} />;
+          return <Ionicons name={iconName} size={24} color={color} />;
         },
       })}
     >
