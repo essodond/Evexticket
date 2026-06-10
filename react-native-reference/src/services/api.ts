@@ -42,7 +42,7 @@ const API_BASE_URL = (() => {
   return 'http://192.168.1.67:8000/api';
 })();
 console.log('API_BASE_URL utilisée:', API_BASE_URL);
-const TIMEOUT = 20000; // 20s pour éviter des attentes prolongées
+const TIMEOUT = 60000; // 60s pour gérer les cold starts Render (30s+ de démarrage)
 
 async function handleResponse(response: Response) {
   const contentType = response.headers.get('content-type');

@@ -182,7 +182,7 @@ export interface TripSearchParams {
 }
 
 /** Default request timeout — avoids indefinite hangs on Render.com free-tier cold starts */
-const REQUEST_TIMEOUT_MS = 12_000;
+const REQUEST_TIMEOUT_MS = 60_000; // 60s pour gérer les cold starts (Render prend 30s+ à redémarrer)
 
 // Classe de service API
 class ApiService {
