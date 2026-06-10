@@ -137,6 +137,12 @@ Chaque `git push` sur la branche `main` déclenche automatiquement un nouveau d�
 - Le premier appel après une période d'inactivité prend **~30 secondes** (cold start)
 - Pour éviter cela, tu peux upgrader vers le plan **Starter ($7/mois)**
 
+### Garder le service actif
+- Sur le plan Free, Render met en veille l'app après inactivité.
+- Tu peux utiliser un service externe comme **UptimeRobot**, **cron-job.org** ou un autre monitor HTTP.
+- Pingue l'URL publique toutes les 5 à 10 minutes pour réduire les cold starts.
+- Exemple de cible : `https://evexticket-api.onrender.com/`
+
 ### Base de données Free
 - **256 MB** de stockage
 - La base est **supprimée après 90 jours** sur le plan free
