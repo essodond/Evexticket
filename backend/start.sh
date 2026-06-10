@@ -8,6 +8,11 @@ echo "=== STARTING SERVER ==="
 echo "Running migrations..."
 python manage.py migrate
 
+
+# Créer le superuser automatiquement s'il n'existe pas
+echo "Creating superuser..."
+python manage.py createsuperuser --no-input || echo "Superuser already exists or creation failed."
+
 # 2. Lancer le serveur Django avec Gunicorn
 # Remplace "nom_de_ton_projet" par le nom du dossier qui contient ton fichier wsgi.py
 echo "Starting Gunicorn..."
