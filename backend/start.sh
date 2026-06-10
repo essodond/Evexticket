@@ -9,6 +9,13 @@ echo "Running migrations..."
 python manage.py migrate
 
 
+
+#creation des villes
+echo "Creating cities..."
+
+python manage.py create_togo_cities
+
+
 # Créer le superuser automatiquement s'il n'existe pas
 echo "Creating superuser..."
 python manage.py createsuperuser --no-input || echo "Superuser already exists or creation failed."
