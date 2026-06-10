@@ -10,30 +10,7 @@
 // - La méthode request utilise `credentials: 'include'` pour supporter la SessionAuthentication
 //   si le backend utilise des cookies.
 
-function resolveApiBaseUrl(): string {
-  // 1) Priorité à l'override via environnement (Vite)
-  const envOrigin = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
-  if (envOrigin && envOrigin.trim().length > 0) {
-    const clean = envOrigin.replace(/\/$/, '');
-    return clean.endsWith('/api') ? clean : `${clean}/api`;
-  }
-
-  // 2) Déduire à partir de l'hôte courant SEULEMENT si c'est une IP locale (dev en LAN)
-  try {
-    const host = typeof window !== 'undefined' ? window.location.hostname : undefined;
-    const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
-    // Seulement déduire si c'est une IP locale (192.168.x.x, 10.x.x.x, etc) pas un domaine custom
-    const isLocalIp = host && /^(192\.168\.|10\.|172\.|127\.)/.test(host);
-    if (isLocalIp) {
-      return `${protocol}//${host}:8000/api`;
-    }
-  } catch (_) { }
-
-  // 3) Repli par défaut en développement local
-  return 'http://127.0.0.1:8000/api';
-}
-
-const API_BASE_URL = resolveApiBaseUrl();
+const API_BASE_URL = 'https://api.evex-tg.com/api';
 
 // Types pour les données
 export interface City {
