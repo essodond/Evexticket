@@ -18,12 +18,13 @@ function resolveApiBaseUrl(): string {
     return clean.endsWith('/api') ? clean : `${clean}/api`;
   }
 
-  // 2) Déduire à partir de l'hôte courant (utile en LAN depuis un téléphone)
+  // 2) Déduire à partir de l'hôte courant SEULEMENT si c'est une IP locale (dev en LAN)
   try {
     const host = typeof window !== 'undefined' ? window.location.hostname : undefined;
     const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
-    if (host && host !== 'localhost' && host !== '127.0.0.1') {
-      // Utiliser le même protocole que la page (HTTPS si page en HTTPS)
+    // Seulement déduire si c'est une IP locale (192.168.x.x, 10.x.x.x, etc) pas un domaine custom
+    const isLocalIp = host && /^(192\.168\.|10\.|172\.|127\.)/.test(host);
+    if (isLocalIp) {
       return `${protocol}//${host}:8000/api`;
     }
   } catch (_) { }
