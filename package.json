@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:prod": "set VITE_API_BASE_URL=https://api.evex-tg.com/api && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "prepare": "husky install",

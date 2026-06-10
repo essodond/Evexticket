@@ -21,8 +21,10 @@ function resolveApiBaseUrl(): string {
   // 2) Déduire à partir de l'hôte courant (utile en LAN depuis un téléphone)
   try {
     const host = typeof window !== 'undefined' ? window.location.hostname : undefined;
+    const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
     if (host && host !== 'localhost' && host !== '127.0.0.1') {
-      return `http://${host}:8000/api`;
+      // Utiliser le même protocole que la page (HTTPS si page en HTTPS)
+      return `${protocol}//${host}:8000/api`;
     }
   } catch (_) { }
 
