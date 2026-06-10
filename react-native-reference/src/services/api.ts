@@ -32,7 +32,15 @@ interface SearchTripsParams {
   departure_date?: string;
 }
 
-const API_BASE_URL = 'http://192.168.1.67:8000/api';
+const rawApiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || process.env.API_BASE_URL;
+const API_BASE_URL = (() => {
+  const candidate = rawApiBaseUrl?.trim();
+  if (candidate && candidate.length > 0) {
+    const clean = candidate.replace(/\/$/, '');
+    return clean.endsWith('/api') ? clean : `${clean}/api`;
+  }
+  return 'http://192.168.1.67:8000/api';
+})();
 console.log('API_BASE_URL utilisée:', API_BASE_URL);
 const TIMEOUT = 20000; // 20s pour éviter des attentes prolongées
 
