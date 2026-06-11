@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
+import { Video } from 'expo-av';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -12,16 +13,16 @@ import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
 
 export default function SplashScreen() {
-  const logoScale = useSharedValue(0.3);
-  const logoOpacity = useSharedValue(0);
-  const logoRotate = useSharedValue(-10);
+  const videoScale = useSharedValue(0.8);
+  const videoOpacity = useSharedValue(0);
+  const logoRotate = useSharedValue(-8);
   const textOpacity = useSharedValue(0);
   const textTranslateY = useSharedValue(20);
 
   useEffect(() => {
-    // Logo : fade in + scale spring + légère rotation
-    logoOpacity.value = withTiming(1, { duration: 600 });
-    logoScale.value = withSpring(1, {
+    // Vidéo : apparition douce + légère entrée
+    videoOpacity.value = withTiming(1, { duration: 600 });
+    videoScale.value = withSpring(1, {
       damping: 12,
       stiffness: 90,
     });
@@ -30,25 +31,25 @@ export default function SplashScreen() {
       stiffness: 90,
     });
 
-    // Pulsation douce du logo après l'entrée
-    setTimeout(() => {
-      logoScale.value = withSequence(
-        withTiming(1.08, { duration: 400 }),
-        withTiming(1, { duration: 400 })
-      );
-    }, 900);
-
     // Texte : apparition avec slide up
-    textOpacity.value = withDelay(500, withTiming(1, { duration: 600 }));
-    textTranslateY.value = withDelay(500, withSpring(0, { damping: 14, stiffness: 80 }));
+    textOpacity.value = withDelay(800, withTiming(1, { duration: 600 }));
+    textTranslateY.value = withDelay(800, withSpring(0, { damping: 14, stiffness: 80 }));
+
+    // Ajout d'une petite pulsation après l'entrée
+    setTimeout(() => {
+      videoScale.value = withSequence(
+        withTiming(1.06, { duration: 300 }),
+        withTiming(1, { duration: 300 })
+      );
+    }, 1100);
   }, []);
 
-  const logoAnimatedStyle = useAnimatedStyle(() => ({
+  const videoAnimatedStyle = useAnimatedStyle(() => ({
     transform: [
-      { scale: logoScale.value },
+      { scale: videoScale.value },
       { rotate: `${logoRotate.value}deg` },
     ],
-    opacity: logoOpacity.value,
+    opacity: videoOpacity.value,
   }));
 
   const textAnimatedStyle = useAnimatedStyle(() => ({
@@ -58,14 +59,17 @@ export default function SplashScreen() {
 
   return (
     <View style={styles.container}>
-      <Animated.View style={[styles.logoContainer, logoAnimatedStyle]}>
-        <View style={styles.logoShadow}>
-          <Image
-            source={require('../../assets/logo.png')}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
-        </View>
+      <Animated.View style={[styles.videoContainer, videoAnimatedStyle]}>
+        <Video
+          source={require('../../assets/splash-animation.mp4')}
+          style={styles.video}
+          resizeMode={Video.RESIZE_MODE_COVER}
+          shouldPlay
+          isLooping={false}
+          useNativeControls={false}
+          isMuted={false}
+          volume={1.0}
+        />
       </Animated.View>
 
       <Animated.View style={[styles.textContainer, textAnimatedStyle]}>
@@ -79,25 +83,24 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logoContainer: {
-    marginBottom: 32,
+  videoContainer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: COLORS.backgroundSecondary,
+    overflow: 'hidden',
   },
-  logoShadow: {
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  logoImage: {
-    width: 150,
-    height: 150,
+  video: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: COLORS.backgroundSecondary,
   },
   textContainer: {
+    position: 'absolute',
+    bottom: 80,
+    left: 0,
+    right: 0,
     alignItems: 'center',
   },
   appName: {

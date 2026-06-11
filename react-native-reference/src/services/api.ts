@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import { User, Trip, TripStop, BoardingZone } from '../types';
 import { Platform, NativeModules } from 'react-native';
 
@@ -32,14 +33,18 @@ interface SearchTripsParams {
   departure_date?: string;
 }
 
-const rawApiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || process.env.API_BASE_URL;
+const expoApiBaseUrl =
+  Constants.expoConfig?.extra?.EXPO_PUBLIC_API_BASE_URL ||
+  Constants.manifest?.extra?.EXPO_PUBLIC_API_BASE_URL;
+const rawApiBaseUrl =
+  expoApiBaseUrl || process.env.EXPO_PUBLIC_API_BASE_URL || process.env.API_BASE_URL;
 const API_BASE_URL = (() => {
   const candidate = rawApiBaseUrl?.trim();
   if (candidate && candidate.length > 0) {
     const clean = candidate.replace(/\/$/, '');
     return clean.endsWith('/api') ? clean : `${clean}/api`;
   }
-  return 'http://192.168.1.67:8000/api';
+  return 'https://api.evex-tg.com/api';
 })();
 console.log('API_BASE_URL utilisée:', API_BASE_URL);
 const TIMEOUT = 60000; // 60s pour gérer les cold starts Render (30s+ de démarrage)

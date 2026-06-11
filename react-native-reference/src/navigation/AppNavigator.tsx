@@ -81,10 +81,10 @@ export default function AppNavigator() {
         const hasLaunched = await AsyncStorage.getItem('hasLaunched');
         setIsFirstLaunch(hasLaunched === null);
         
-        // Splash screen minimum 2s
+        // Splash screen minimum 3s pour laisser l'animation se jouer
         setTimeout(() => {
           setIsLoading(false);
-        }, 2000);
+        }, 3000);
       } catch (error) {
         console.error('Error checking first launch:', error);
         setIsLoading(false);
