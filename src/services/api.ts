@@ -10,7 +10,9 @@
 // - La méthode request utilise `credentials: 'include'` pour supporter la SessionAuthentication
 //   si le backend utilise des cookies.
 
-const API_BASE_URL = 'https://api.evex-tg.com/api';
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL || 'https://api.evex-tg.com/api'
+).replace(/\/$/, '');
 
 // Types pour les données
 export interface City {
@@ -98,6 +100,7 @@ export interface InitiateQosPaymentPayload {
   client_nom: string;
   client_telephone: string;
   montant_billet: number | string;
+  montant_total?: number | string;
   operateur: QosOperator;
   ville_depart?: string;
   ville_arrivee?: string;
@@ -492,14 +495,58 @@ class ApiService {
   }
 
   async initiateQosPayment(payload: InitiateQosPaymentPayload): Promise<InitiateQosPaymentResponse> {
-    return this.request<InitiateQosPaymentResponse>('/payment/initier/', {
+    const [firstname = '', ...lastnameParts] = String(payload.client_nom || '').trim().split(' ');
+    const amount = Number(payload.montant_total ?? payload.montant_billet);
+    const ticketAmount = Number(payload.montant_billet);
+    const operator = payload.operateur === 'flooz' ? 'MOOV' : 'TOGOCEL';
+    const method = payload.operateur === 'flooz' ? 'moov' : 'togocel';
+
+    const response = await this.request<any>('/payments/pay/', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        operator,
+        phone_number: payload.client_telephone,
+        method,
+        phone: payload.client_telephone,
+        amount,
+        firstname: firstname || payload.client_nom || 'Client',
+        lastname: lastnameParts.join(' ') || 'EvexTicket',
+      }),
     });
+    const transaction = response.transaction || {};
+    const paidAmount = Number(transaction.amount || amount);
+
+    return {
+      reference_evex: transaction.transref,
+      transaction_id: transaction.transref,
+      montant_billet: ticketAmount,
+      frais_evex: Math.max(paidAmount - ticketAmount, 0),
+      montant_total: paidAmount,
+      operateur: payload.operateur,
+      siege: String(payload.numero_siege),
+      expires_dans: '5 minutes',
+    };
   }
 
   async verifyQosPayment(reference: string): Promise<VerifyQosPaymentResponse> {
-    return this.request<VerifyQosPaymentResponse>(`/payment/verifier/${encodeURIComponent(reference)}/`);
+    const response = await this.request<any>('/payments/status/', {
+      method: 'POST',
+      body: JSON.stringify({ transref: reference }),
+    });
+    const transaction = response.transaction || {};
+    const amount = Number(transaction.amount || 0);
+    const isPaid = transaction.status === 'success';
+
+    return {
+      reference,
+      statut: isPaid ? 'paye' : transaction.status === 'pending' ? 'en_attente' : 'echoue',
+      montant_total: amount,
+      frais_evex: 0,
+      montant_billet: amount,
+      siege: '',
+      paye: isPaid,
+      message: isPaid ? 'Paiement confirme' : 'Paiement en attente',
+    };
   }
 
   async updateBooking(id: number, booking: Partial<Booking>): Promise<Booking> {

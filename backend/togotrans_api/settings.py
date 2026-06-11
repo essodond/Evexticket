@@ -210,12 +210,31 @@ QOS_SECRET_KEY = config('QOS_SECRET_KEY', default='')
 QOS_BASE_URL = config('QOS_BASE_URL', default='https://api.qosic.net')
 QOS_CALLBACK_URL = config('QOS_CALLBACK_URL', default='')
 
-# QosPay staging (QosicBridge)
-QOSPAY_BASE_URL = config('QOSPAY_BASE_URL', default='http://staging.qosic.net:9010')
-QOSPAY_CLIENT_ID = config('QOSPAY_CLIENT_ID', default='QCBJ001')
-QOSPAY_USERNAME = config('QOSPAY_USERNAME', default='')
-QOSPAY_PASSWORD = config('QOSPAY_PASSWORD', default='')
+# QosPay (QosicBridge) - integration des operateurs mobile money
+QOSPAY_BASE_URL = config('QOSPAY_BASE_URL', default='https://api.qosic.net')
+QOSPAY_API_USERNAME = config('QOSPAY_API_USERNAME', default='')
+QOSPAY_API_PASSWORD_TOGOCEL = config('QOSPAY_API_PASSWORD_TOGOCEL', default='')
+QOSPAY_API_PASSWORD_MOOV = config('QOSPAY_API_PASSWORD_MOOV', default='')
+QOSPAY_CLIENT_ID_TOGOCEL = config('QOSPAY_CLIENT_ID_TOGOCEL', default='')
+QOSPAY_CLIENT_ID_MOOV = config('QOSPAY_CLIENT_ID_MOOV', default='')
+QOSPAY_REQUEST_URL_TOGOCEL = config('QOSPAY_REQUEST_URL_TOGOCEL', default='')
+QOSPAY_REQUEST_URL_MOOV = config('QOSPAY_REQUEST_URL_MOOV', default='')
+QOSPAY_STATUS_URL_TOGOCEL = config('QOSPAY_STATUS_URL_TOGOCEL', default='')
+QOSPAY_STATUS_URL_MOOV = config('QOSPAY_STATUS_URL_MOOV', default='')
 QOSPAY_CALLBACK_URL = config('QOSPAY_CALLBACK_URL', default='')
+QOSPAY_TIMEOUT = config('QOSPAY_TIMEOUT', default=30, cast=int)
+QOSPAY_VERIFY_SSL = config('QOSPAY_VERIFY_SSL', default=True, cast=bool)
+
+# Compatibilite avec les anciens noms encore presents dans certains modules.
+QOSPAY_USERNAME = QOSPAY_API_USERNAME
+QOSPAY_PASSWORD = config(
+    'QOSPAY_API_PASSWORD',
+    default=QOSPAY_API_PASSWORD_MOOV or QOSPAY_API_PASSWORD_TOGOCEL,
+)
+QOSPAY_CLIENT_ID = config(
+    'QOSPAY_CLIENT_ID',
+    default=QOSPAY_CLIENT_ID_MOOV or QOSPAY_CLIENT_ID_TOGOCEL,
+)
 
 # Reservation temporaire des sieges
 SIEGE_EXPIRY_MINUTES = config('SIEGE_EXPIRY_MINUTES', default=5, cast=int)

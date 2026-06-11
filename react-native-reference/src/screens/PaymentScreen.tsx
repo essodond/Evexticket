@@ -26,7 +26,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Payment'>;
 
 const paymentMethods = [
   { id: 'flooz' as PaymentMethod, name: 'Flooz', icon: 'wallet-outline', color: COLORS.flooz, image: 'https://th.bing.com/th/id/OIP._7XYS8QkoiudNZBiWMGWvwAAAA?w=184&h=180&c=7&r=0&o=7&cb=ucfimg2&dpr=1.5&pid=1.7&rm=3&ucfimg=1' },
-  { id: 'tmoney' as PaymentMethod, name: 'Mixx by yas', icon: 'wallet-outline', color: COLORS.tmoney, image: 'https://togoscoop.tg/wp-content/uploads/2024/11/YAS-511x430.jpg' },
+  { id: 'tmoney' as PaymentMethod, name: 'TMoney', icon: 'wallet-outline', color: COLORS.tmoney, image: 'https://togoscoop.tg/wp-content/uploads/2024/11/YAS-511x430.jpg' },
 ];
 
 export default function PaymentScreen({ navigation, route }: Props) {
@@ -94,6 +94,7 @@ export default function PaymentScreen({ navigation, route }: Props) {
         client_nom: passengerName,
         client_telephone: phoneNumber || passengerPhone,
         montant_billet: Math.round(bookingPrice),
+        montant_total: Math.round(totalAmount),
         operateur: selectedMethod,
         ville_depart: fromCity,
         ville_arrivee: toCity,
@@ -139,7 +140,10 @@ export default function PaymentScreen({ navigation, route }: Props) {
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Paiement QOS</Text>
+        <View style={styles.headerTitles}>
+          <Text style={styles.headerTitle}>Paiement QosPay</Text>
+          <Text style={styles.headerSubtitle}>Sécurisé via QosPay, Flooz ou TMoney</Text>
+        </View>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={styles.contentContainer}>
@@ -187,10 +191,11 @@ export default function PaymentScreen({ navigation, route }: Props) {
 
         <View style={styles.paymentSection}>
           <Text style={styles.sectionTitle}>Mode de paiement</Text>
+          <Text style={styles.paymentHint}>Choisissez votre opérateur mobile. QosPay traitera la transaction en toute sécurité.</Text>
           <View style={styles.paymentMethods}>
             {paymentMethods.map((method) => (
               <TouchableOpacity key={method.id} style={[styles.paymentMethod, selectedMethod === method.id && styles.paymentMethod_selected]} onPress={() => setSelectedMethod(method.id)}>
-                <View style={styles.paymentIcon}>
+                <View style={[styles.paymentIcon, { backgroundColor: `${method.color}14` }]}>
                   {method.image ? <Image source={{ uri: method.image }} style={styles.paymentImage} /> : <Ionicons name={method.icon as any} size={24} color={method.color} />}
                 </View>
                 <Text style={styles.paymentMethodName}>{method.name}</Text>
@@ -245,6 +250,8 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: FONT_SIZES['2xl'], fontWeight: FONT_WEIGHTS.semibold, color: COLORS.white },
   content: { flex: 1 },
   contentContainer: { padding: 24, paddingBottom: 120 },
+  headerTitles: { flex: 1 },
+  headerSubtitle: { fontSize: FONT_SIZES.sm, color: 'rgba(255,255,255,0.85)', marginTop: 4 },
   summary: { backgroundColor: `${COLORS.gray}4D`, borderRadius: 16, padding: 20, marginBottom: 24 },
   summaryTitle: { fontSize: FONT_SIZES.base, fontWeight: FONT_WEIGHTS.semibold, color: COLORS.text, marginBottom: 16 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, gap: 12 },
@@ -256,6 +263,7 @@ const styles = StyleSheet.create({
   passengerSection: { marginBottom: 24 },
   paymentSection: { marginBottom: 24 },
   sectionTitle: { fontSize: FONT_SIZES.base, fontWeight: FONT_WEIGHTS.semibold, color: COLORS.text, marginBottom: 16 },
+  paymentHint: { fontSize: FONT_SIZES.sm, color: COLORS.textSecondary, marginBottom: 12 },
   paymentMethods: { gap: 12 },
   paymentMethod: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderWidth: 2, borderColor: COLORS.border, borderRadius: 12, padding: 16 },
   paymentMethod_selected: { borderColor: COLORS.primary, backgroundColor: `${COLORS.primary}0D` },

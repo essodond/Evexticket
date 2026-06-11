@@ -6,6 +6,16 @@ const expoApiBaseUrl =
 const API_BASE_URL =
   expoApiBaseUrl || process.env.EXPO_PUBLIC_API_BASE_URL || process.env.API_BASE_URL || 'https://api.evex-tg.com/api';
 
+function normalizeOperator(method) {
+  const value = String(method || '').trim().toLowerCase();
+  if (value === 'flooz' || value === 'moov') return 'MOOV';
+  return 'TOGOCEL';
+}
+
+function normalizeMethod(method) {
+  return normalizeOperator(method) === 'MOOV' ? 'moov' : 'togocel';
+}
+
 async function handleResponse(response) {
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
@@ -26,7 +36,9 @@ export async function initiatePayment({ method, phone, amount, firstname, lastna
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      method,
+      operator: normalizeOperator(method),
+      phone_number: phone,
+      method: normalizeMethod(method),
       phone,
       amount,
       firstname,

@@ -1,9 +1,12 @@
-import base64
 import logging
 import uuid
+from typing import Any
+from urllib.parse import urljoin
 
 import requests
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
+from requests.auth import HTTPBasicAuth
 
 from .models import Transaction
 
@@ -18,59 +21,186 @@ CODE_STATUS_MAP = {
     '96': Transaction.STATUS_SYSTEM_ERROR,
 }
 
-# ─── Endpoints QOS par opérateur ─────────────────────────────────
-ENDPOINTS = {
-    Transaction.METHOD_TOGOCEL: {
-        'requestpayment':      '/QosicBridge/tm/v1/requestpayment',
-        'gettransactionstate': '/QosicBridge/tm/v1/gettransactionstate',
-        'deposit':             '/QosicBridge/tm/v1/deposit',
-    },
-    Transaction.METHOD_MOOV: {
-        'requestpayment':      '/QosicBridge/tg/v1/requestpayment',
-        'gettransactionstate': '/QosicBridge/tg/v1/gettransactionstate',
-        'deposit':             '/QosicBridge/tg/v1/deposit',
-    },
-}
+
+class QosPayService:
+    """Service d'integration QosPay pour TOGOCEL et MOOV MONEY."""
+
+    OPERATOR_ALIASES = {
+        'TOGOCEL': 'TOGOCEL',
+        'TMONEY': 'TOGOCEL',
+        'T-MONEY': 'TOGOCEL',
+        Transaction.METHOD_TOGOCEL.upper(): 'TOGOCEL',
+        'MOOV': 'MOOV',
+        'MOOV MONEY': 'MOOV',
+        'FLOOZ': 'MOOV',
+        Transaction.METHOD_MOOV.upper(): 'MOOV',
+    }
+
+    OPERATOR_CONFIG = {
+        'TOGOCEL': {
+            'client_id_setting': 'QOSPAY_CLIENT_ID_TOGOCEL',
+            'password_setting': 'QOSPAY_API_PASSWORD_TOGOCEL',
+            'request_url_setting': 'QOSPAY_REQUEST_URL_TOGOCEL',
+            'status_url_setting': 'QOSPAY_STATUS_URL_TOGOCEL',
+            'method': Transaction.METHOD_TOGOCEL,
+        },
+        'MOOV': {
+            'client_id_setting': 'QOSPAY_CLIENT_ID_MOOV',
+            'password_setting': 'QOSPAY_API_PASSWORD_MOOV',
+            'request_url_setting': 'QOSPAY_REQUEST_URL_MOOV',
+            'status_url_setting': 'QOSPAY_STATUS_URL_MOOV',
+            'method': Transaction.METHOD_MOOV,
+        },
+    }
+
+    def __init__(self) -> None:
+        self.username = settings.QOSPAY_API_USERNAME
+        self.callback_url = settings.QOSPAY_CALLBACK_URL
+        self.verify_ssl = settings.QOSPAY_VERIFY_SSL
+        self.timeout = settings.QOSPAY_TIMEOUT
+
+    def initiate_payment(
+        self,
+        amount: int,
+        phone_number: str,
+        operator: str,
+    ) -> dict[str, Any]:
+        """Initie un paiement QosPay et retourne la reponse JSON."""
+        operator_config = self.get_operator_config(operator)
+        transref = self.generate_transref()
+        payload = {
+            'clientid': operator_config['client_id'],
+            'transref': transref,
+            'msisdn': self.normalize_phone(phone_number),
+            'amount': str(int(amount)),
+        }
+
+        if self.callback_url:
+            payload['callbackurl'] = self.callback_url
+
+        response_data = self._post(
+            url=operator_config['request_url'],
+            payload=payload,
+            password=operator_config['password'],
+        )
+        response_data.setdefault('transref', transref)
+        return response_data
+
+    def get_transaction_status(
+        self,
+        transref: str,
+        operator: str,
+    ) -> dict[str, Any]:
+        """Interroge QosPay pour connaitre le statut d'une transaction."""
+        operator_config = self.get_operator_config(operator)
+        payload = {
+            'clientid': operator_config['client_id'],
+            'transref': transref,
+        }
+        return self._post(
+            url=operator_config['status_url'],
+            payload=payload,
+            password=operator_config['password'],
+        )
+
+    def get_operator_config(self, operator: str) -> dict[str, str]:
+        """Charge les identifiants et URLs correspondant a l'operateur."""
+        operator_key = self.normalize_operator(operator)
+        config = self.OPERATOR_CONFIG[operator_key]
+
+        client_id = self._required_setting(config['client_id_setting'])
+        password = self._required_setting(config['password_setting'])
+        request_url = self._required_setting(config['request_url_setting'])
+        status_url = self._required_setting(config['status_url_setting'])
+
+        return {
+            'operator': operator_key,
+            'method': config['method'],
+            'client_id': client_id,
+            'password': password,
+            'request_url': self._absolute_url(request_url),
+            'status_url': self._absolute_url(status_url),
+        }
+
+    def normalize_operator(self, operator: str) -> str:
+        """Accepte MOOV/TOGOCEL et quelques alias utilises par le mobile."""
+        operator_key = str(operator).strip().upper()
+        normalized = self.OPERATOR_ALIASES.get(operator_key)
+        if not normalized:
+            raise ValueError(
+                "Operateur non supporte. Valeurs attendues: MOOV ou TOGOCEL."
+            )
+        return normalized
+
+    @staticmethod
+    def normalize_phone(phone_number: str) -> str:
+        """Retourne un MSISDN local, sans +228, attendu par QosPay."""
+        phone = str(phone_number).strip().replace(' ', '').replace('-', '')
+        phone = phone.replace('(', '').replace(')', '').replace('+', '')
+        if phone.startswith('228'):
+            return phone[3:]
+        if phone.startswith('0'):
+            return phone[1:]
+        return phone
+
+    @staticmethod
+    def generate_transref() -> str:
+        """Genere une reference unique pour tracer la transaction."""
+        return f'EVEX-{uuid.uuid4().hex[:20].upper()}'
+
+    def _post(
+        self,
+        url: str,
+        payload: dict[str, Any],
+        password: str,
+    ) -> dict[str, Any]:
+        logger.info('Appel QosPay vers %s, transref=%s', url, payload['transref'])
+        response = requests.post(
+            url,
+            json=payload,
+            auth=HTTPBasicAuth(self.username, password),
+            headers={
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+            timeout=self.timeout,
+            verify=self.verify_ssl,
+        )
+        response.raise_for_status()
+
+        if not response.content:
+            return {}
+
+        try:
+            data = response.json()
+        except ValueError:
+            data = {'raw_response': response.text}
+
+        if not isinstance(data, dict):
+            return {'raw_response': data}
+        return data
+
+    @staticmethod
+    def _required_setting(name: str) -> str:
+        value = getattr(settings, name, '')
+        if value in (None, ''):
+            raise ImproperlyConfigured(f'Le parametre {name} est obligatoire.')
+        return str(value)
+
+    @staticmethod
+    def _absolute_url(value: str) -> str:
+        if value.startswith(('http://', 'https://')):
+            return value
+        return urljoin(f'{settings.QOSPAY_BASE_URL.rstrip("/")}/', value.lstrip('/'))
 
 
-def _build_basic_auth_header():
-    """Construit l'en-tete Basic Auth attendu par QosPay."""
-    credentials = f'{settings.QOSPAY_USERNAME}:{settings.QOSPAY_PASSWORD}'
-    encoded = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
-    return f'Basic {encoded}'
-
-
-def _generate_transref():
-    """Genere une reference unique pour suivre la transaction chez EvexTicket."""
-    return f'EVEX-{uuid.uuid4().hex[:20].upper()}'
-
-
-def _normalize_phone(phone):
-    """
-    Retourne un msisdn au format 228XXXXXXXXX attendu par QosPay.
-    Ex: "71608097"     → "22871608097"
-        "22871608097"  → "22871608097"  (déjà correct)
-        "+22871608097" → "22871608097"
-    """
-    phone_str = str(phone).strip().replace(' ', '')
-    if phone_str.startswith('+'):
-        phone_str = phone_str[1:]
-    if phone_str.startswith('228'):
-        return phone_str
-    if phone_str.startswith('0'):
-        return f'228{phone_str[1:]}'
-    return f'228{phone_str}'
-
-
-def _status_from_qospay_code(code):
-    """Convertit les codes QosPay en statuts internes lisibles."""
+def status_from_qospay_code(code: str) -> str:
+    """Convertit un code QosPay en statut interne."""
     return CODE_STATUS_MAP.get(str(code), Transaction.STATUS_UNKNOWN)
 
 
-def _extract_response_code(data):
-    """Recupere le code de reponse quelle que soit la casse renvoyee par QosPay."""
-    if not isinstance(data, dict):
-        return ''
+def extract_response_code(data: dict[str, Any]) -> str:
+    """Recupere le code reponse, quelle que soit la casse retournee."""
     return str(
         data.get('responsecode')
         or data.get('responseCode')
@@ -80,10 +210,8 @@ def _extract_response_code(data):
     )
 
 
-def _extract_message(data):
-    """Recupere un message humain depuis la reponse QosPay."""
-    if not isinstance(data, dict):
-        return ''
+def extract_message(data: dict[str, Any]) -> str:
+    """Recupere un message lisible depuis la reponse QosPay."""
     return str(
         data.get('responsemsg')
         or data.get('responseMessage')
@@ -93,198 +221,84 @@ def _extract_message(data):
     )
 
 
-def _post_to_qospay(path, payload):
-    """
-    Envoie une requete POST JSON vers QosPay avec Basic Auth.
-    verify=False car le certificat est auto-signé sur staging et production.
-    """
-    url = f"{settings.QOSPAY_BASE_URL.rstrip('/')}{path}"
-    headers = {
-        'Authorization': _build_basic_auth_header(),
-        'Content-Type':  'application/json',
-        'Accept':        'application/json',
-    }
-
-    logger.info("QosPay request → %s | payload: %s", url, payload)
-
-    response = requests.post(
-        url,
-        json=payload,
-        headers=headers,
-        timeout=30,
-        verify=False,
+def check_transaction_status(transref: str) -> tuple[Transaction, dict[str, Any]]:
+    """Verifie le statut chez QosPay et met a jour la transaction locale."""
+    transaction = Transaction.objects.get(transref=transref)
+    service = QosPayService()
+    qos_response = service.get_transaction_status(
+        transref=transref,
+        operator=transaction.method,
     )
 
-    logger.info(
-        "QosPay response ← status: %s | body: %s",
-        response.status_code,
-        response.text,
+    response_code = extract_response_code(qos_response)
+    transaction.status = status_from_qospay_code(response_code)
+    transaction.qos_response_code = response_code
+    transaction.qos_response_message = extract_message(qos_response)
+    transaction.qos_raw_response = qos_response
+    transaction.save(update_fields=[
+        'status',
+        'qos_response_code',
+        'qos_response_message',
+        'qos_raw_response',
+        'updated_at',
+    ])
+    return transaction, qos_response
+
+
+def _request_payment(
+    method: str,
+    phone: str,
+    amount: int,
+) -> tuple[Transaction, dict[str, Any]]:
+    service = QosPayService()
+    qos_response = service.initiate_payment(
+        amount=amount,
+        phone_number=phone,
+        operator=method,
     )
-
-    try:
-        response.raise_for_status()
-    except requests.HTTPError as exc:
-        logger.error(
-            "QosPay HTTP error %s %s response=%s",
-            response.status_code,
-            url,
-            response.text,
-        )
-        raise
-
-    if not response.content:
-        return {}
-
-    try:
-        return response.json()
-    except ValueError:
-        return {'raw_text': response.text}
-
-
-def _request_payment(method, phone, amount, firstname, lastname):
-    """Cree une transaction locale puis demande le paiement a QosPay."""
-    transref = _generate_transref()
+    transref = qos_response['transref']
+    response_code = extract_response_code(qos_response)
+    transaction_status = (
+        status_from_qospay_code(response_code)
+        if response_code
+        else Transaction.STATUS_PENDING
+    )
     transaction = Transaction.objects.create(
         transref=transref,
-        method=method,
+        method=service.get_operator_config(method)['method'],
         phone=phone,
         amount=int(amount),
-        firstname=firstname,
-        lastname=lastname,
-        status=Transaction.STATUS_PENDING,
+        firstname='',
+        lastname='',
+        status=transaction_status,
+        qos_response_code=response_code,
+        qos_response_message=extract_message(qos_response),
+        qos_raw_response=qos_response,
     )
-
-    # Endpoint correct selon l'opérateur
-    path = ENDPOINTS[method]['requestpayment']
-
-    payload = {
-        'clientid':    settings.QOSPAY_CLIENT_ID,
-        'transref':    transref,
-        'msisdn':      _normalize_phone(phone),
-        'amount':      str(int(amount)),
-        'firstname':   str(firstname),
-        'lastname':    str(lastname),
-        'callbackurl': settings.QOSPAY_CALLBACK_URL,
-    }
-
-    try:
-        data = _post_to_qospay(path, payload)
-        response_code = _extract_response_code(data)
-        transaction.status = _status_from_qospay_code(response_code)
-        transaction.qos_response_code = response_code
-        transaction.qos_response_message = _extract_message(data)
-        transaction.qos_raw_response = data if isinstance(data, dict) else {'raw': data}
-        transaction.save(update_fields=[
-            'status', 'qos_response_code',
-            'qos_response_message', 'qos_raw_response', 'updated_at',
-        ])
-        return transaction, data
-    except requests.RequestException as exc:
-        logger.exception("Erreur HTTP QosPay transref=%s", transref)
-        transaction.status = Transaction.STATUS_SYSTEM_ERROR
-        transaction.qos_response_code = '96'
-        transaction.qos_response_message = str(exc)
-        transaction.qos_raw_response = {'error': str(exc)}
-        transaction.save(update_fields=[
-            'status', 'qos_response_code',
-            'qos_response_message', 'qos_raw_response', 'updated_at',
-        ])
-        return transaction, {'error': str(exc), 'responsecode': '96'}
-    except Exception as exc:
-        logger.exception("Erreur interne paiement QosPay transref=%s", transref)
-        transaction.status = Transaction.STATUS_SYSTEM_ERROR
-        transaction.qos_response_code = '96'
-        transaction.qos_response_message = str(exc)
-        transaction.qos_raw_response = {'error': str(exc)}
-        transaction.save(update_fields=[
-            'status', 'qos_response_code',
-            'qos_response_message', 'qos_raw_response', 'updated_at',
-        ])
-        return transaction, {'error': str(exc), 'responsecode': '96'}
+    return transaction, qos_response
 
 
-def pay_togocel(phone, amount, firstname, lastname):
-    """Declenche un paiement Togocel (T-Money) via QosPay."""
-    return _request_payment(
-        Transaction.METHOD_TOGOCEL,
-        phone, amount, firstname, lastname,
-    )
+def pay_togocel(phone, amount, firstname='', lastname=''):
+    """Declenche un paiement Togocel via QosPay."""
+    return _request_payment(Transaction.METHOD_TOGOCEL, phone, amount)
 
 
-def pay_moov_togo(phone, amount, firstname, lastname):
-    """Declenche un paiement Moov Togo (Flooz) via QosPay."""
-    return _request_payment(
-        Transaction.METHOD_MOOV,
-        phone, amount, firstname, lastname,
-    )
+def pay_moov_togo(phone, amount, firstname='', lastname=''):
+    """Declenche un paiement Moov Money via QosPay."""
+    return _request_payment(Transaction.METHOD_MOOV, phone, amount)
 
 
-def check_transaction_status(transref):
-    """
-    Interroge QosPay et met a jour le statut local de la transaction.
-    Utilise le bon endpoint selon l'opérateur de la transaction :
-      Togocel → /QosicBridge/tm/v1/gettransactionstate
-      Moov    → /QosicBridge/tg/v1/gettransactionstate
-    """
-    transaction = Transaction.objects.get(transref=transref)
-
-    # Choisir l'endpoint selon l'opérateur de la transaction
-    path = ENDPOINTS.get(
-        transaction.method,
-        ENDPOINTS[Transaction.METHOD_MOOV]  # fallback Moov
-    )['gettransactionstate']
-
-    payload = {
-        'clientid': settings.QOSPAY_CLIENT_ID,
-        'transref': transref,
-    }
-
-    try:
-        data = _post_to_qospay(path, payload)
-        response_code = _extract_response_code(data)
-        transaction.status = _status_from_qospay_code(response_code)
-        transaction.qos_response_code = response_code
-        transaction.qos_response_message = _extract_message(data)
-        transaction.qos_raw_response = data if isinstance(data, dict) else {'raw': data}
-        transaction.save(update_fields=[
-            'status', 'qos_response_code',
-            'qos_response_message', 'qos_raw_response', 'updated_at',
-        ])
-        return transaction, data
-    except requests.RequestException as exc:
-        logger.exception("Erreur verification QosPay transref=%s", transref)
-        return transaction, {'error': str(exc), 'responsecode': '96'}
-
-
-# ─── CALCUL DES FRAIS EVEX ────────────────────────────────────────
-def calculer_montant_total(montant_billet: int) -> dict:
-    """
-    Décomposition complète des montants EVEX.
-
-    Règle :
-      - Frais EVEX fixes  = 300 FCFA (sur tous les billets)
-      - Client paie       = montant_billet + 300
-      - Frais QOS (1.7%)  = calculés sur le montant total
-      - Revenu net EVEX   = 300 - frais_qos
-      - Compagnie reçoit  = 100% du montant_billet
-
-    Exemple billet 5 000 FCFA :
-      montant_total       = 5 300
-      frais_qos           =    90  (1.7% × 5 300)
-      revenu_net_evex     =   210  (300 - 90)
-      montant_reverse_cie = 5 000
-    """
-    frais_evex          = 300
-    montant_total       = montant_billet + frais_evex
-    frais_qos           = round(montant_total * 0.017)
-    revenu_net_evex     = frais_evex - frais_qos
-    montant_reverse_cie = montant_billet
+def calculer_montant_total(montant_billet: int) -> dict[str, int]:
+    """Retourne la decomposition des montants EVEX."""
+    frais_evex = 300
+    montant_total = montant_billet + frais_evex
+    frais_qos = round(montant_total * 0.017)
 
     return {
-        'montant_billet':      montant_billet,
-        'frais_evex':          frais_evex,
-        'montant_total':       montant_total,
-        'frais_qos':           frais_qos,
-        'revenu_net_evex':     revenu_net_evex,
-        'montant_reverse_cie': montant_reverse_cie,
+        'montant_billet': montant_billet,
+        'frais_evex': frais_evex,
+        'montant_total': montant_total,
+        'frais_qos': frais_qos,
+        'revenu_net_evex': frais_evex - frais_qos,
+        'montant_reverse_cie': montant_billet,
     }

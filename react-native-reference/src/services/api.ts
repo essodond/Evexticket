@@ -32,10 +32,10 @@ interface SearchTripsParams {
   arrival_city?: string;
   departure_date?: string;
 }
-
+/*
 const expoApiBaseUrl =
-  Constants.expoConfig?.extra?.EXPO_PUBLIC_API_BASE_URL ||
-  Constants.manifest?.extra?.EXPO_PUBLIC_API_BASE_URL;
+  (Constants.expoConfig?.extra as any)?.EXPO_PUBLIC_API_BASE_URL ||
+  (Constants.manifest as any)?.extra?.EXPO_PUBLIC_API_BASE_URL;
 const rawApiBaseUrl =
   expoApiBaseUrl || process.env.EXPO_PUBLIC_API_BASE_URL || process.env.API_BASE_URL;
 const API_BASE_URL = (() => {
@@ -46,6 +46,8 @@ const API_BASE_URL = (() => {
   }
   return 'https://api.evex-tg.com/api';
 })();
+*/
+const API_BASE_URL = 'https://api.evex-tg.com/api';
 console.log('API_BASE_URL utilisée:', API_BASE_URL);
 const TIMEOUT = 60000; // 60s pour gérer les cold starts Render (30s+ de démarrage)
 
@@ -363,6 +365,7 @@ export interface InitiateQosPaymentPayload {
   client_nom: string;
   client_telephone: string;
   montant_billet: number | string;
+  montant_total?: number | string;
   operateur: QosOperator;
   ville_depart?: string;
   ville_arrivee?: string;
@@ -406,23 +409,30 @@ export async function createBooking(data: BookingData): Promise<any> {
 export async function initiateQosPayment(data: InitiateQosPaymentPayload): Promise<InitiateQosPaymentResponse> {
   try {
     const [firstname = '', ...lastnameParts] = String(data.client_nom || '').trim().split(' ');
+    const amount = Number(data.montant_total ?? data.montant_billet);
+    const ticketAmount = Number(data.montant_billet);
+    const operator = data.operateur === 'flooz' ? 'MOOV' : 'TOGOCEL';
+    const method = data.operateur === 'flooz' ? 'moov' : 'togocel';
     const response = await request<any>('/payments/pay/', {
       method: 'POST',
       body: JSON.stringify({
-        method: data.operateur === 'tmoney' ? 'moov' : 'togocel',
+        operator,
+        phone_number: data.client_telephone,
+        method,
         phone: data.client_telephone,
-        amount: data.montant_billet,
+        amount,
         firstname: firstname || data.client_nom || 'Client',
         lastname: lastnameParts.join(' ') || 'EvexTicket',
       }),
     });
     const transaction = response.transaction || {};
+    const paidAmount = Number(transaction.amount || amount);
     return {
       reference_evex: transaction.transref,
       transaction_id: transaction.transref,
-      montant_billet: transaction.amount,
-      frais_evex: 0,
-      montant_total: transaction.amount,
+      montant_billet: ticketAmount,
+      frais_evex: Math.max(paidAmount - ticketAmount, 0),
+      montant_total: paidAmount,
       operateur: data.operateur,
       siege: String(data.numero_siege),
       expires_dans: '5 minutes',
@@ -441,12 +451,13 @@ export async function verifyQosPayment(reference: string): Promise<VerifyQosPaym
     });
     const transaction = response.transaction || {};
     const isPaid = transaction.status === 'success';
+    const amount = Number(transaction.amount || 0);
     return {
       reference,
       statut: isPaid ? 'paye' : transaction.status === 'pending' ? 'en_attente' : 'echoue',
-      montant_total: transaction.amount,
+      montant_total: amount,
       frais_evex: 0,
-      montant_billet: transaction.amount,
+      montant_billet: amount,
       siege: '',
       paye: isPaid,
       message: isPaid ? 'Paiement confirme' : 'Paiement en attente',
