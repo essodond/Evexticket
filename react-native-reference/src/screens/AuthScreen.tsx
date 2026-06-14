@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  StatusBar,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -96,22 +97,11 @@ export default function AuthScreen({ navigation }: Props) {
   const getTitle = () => {
     switch (mode) {
       case 'login':
-        return 'Connexion';
+        return 'Sign In';
       case 'register':
-        return 'Créer un compte';
+        return 'Create an Account';
       case 'forgot':
-        return 'Mot de passe oublié';
-    }
-  };
-
-  const getDescription = () => {
-    switch (mode) {
-      case 'login':
-        return 'Connectez-vous pour réserver vos billets';
-      case 'register':
-        return 'Rejoignez EVEX et voyagez en toute simplicité';
-      case 'forgot':
-        return 'Entrez votre email pour réinitialiser votre mot de passe';
+        return 'Forgot Password';
     }
   };
 
@@ -120,130 +110,135 @@ export default function AuthScreen({ navigation }: Props) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-        </TouchableOpacity>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary || '#0066FF'} />
+      
+      {/* 1. Header Bleu (Top Hero Section) */}
+      <View style={styles.blueHeader}>
+        <View style={styles.headerTopBar}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="chevron-back" size={24} color="#FFF" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.brandingContainer}>
+          {/* Logo Minimaliste (style double cercle infini de l'image) */}
+          <View style={styles.logoContainer}>
+            <Ionicons name="infinite-outline" size={36} color="#FFF" />
+          </View>
+          <Text style={styles.mainTitle}>{getTitle()}</Text>
+        </View>
       </View>
 
-      <ScrollView
-        style={styles.content}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.titleContainer}>
-          <Text style={styles.title}>{getTitle()}</Text>
-          <Text style={styles.description}>{getDescription()}</Text>
-        </View>
+      {/* 2. Carte Blanche du Formulaire */}
+      <View style={styles.formCardContainer}>
+        <ScrollView
+          style={styles.cardScrollView}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.scrollContent}
+        >
+          <View style={styles.form}>
+            {mode === 'register' && (
+              <Input
+                label="Full Name"
+                placeholder="Cameron Clerk"
+                value={formData.name}
+                onChangeText={(text) => setFormData({ ...formData, name: text })}
+              />
+            )}
 
-        <View style={styles.form}>
-          {mode === 'register' && (
+            {mode === 'register' && (
+              <Input
+                label="Phone Number"
+                placeholder="+228 XX XX XX XX"
+                value={formData.phone}
+                onChangeText={(text) => setFormData({ ...formData, phone: text })}
+                keyboardType="phone-pad"
+              />
+            )}
+
             <Input
-              label="Nom complet"
-              placeholder="Jean Dupont"
-              value={formData.name}
-              onChangeText={(text) => setFormData({ ...formData, name: text })}
-              leftIcon={<Ionicons name="person-outline" size={20} color={COLORS.textSecondary} />}
+              label={mode === 'login' ? 'Email or Phone Number' : 'Email'}
+              placeholder={mode === 'login' ? 'cameronclerk01@gmail.com' : 'exemple@email.com'}
+              value={formData.email}
+              onChangeText={(text) => setFormData({ ...formData, email: text })}
+              keyboardType={mode === 'login' ? 'default' : 'email-address'}
+              autoCapitalize="none"
             />
-          )}
 
-          {mode === 'register' && (
-            <Input
-              label="Numéro de téléphone"
-              placeholder="+228 XX XX XX XX"
-              value={formData.phone}
-              onChangeText={(text) => setFormData({ ...formData, phone: text })}
-              keyboardType="phone-pad"
-              leftIcon={<Ionicons name="call-outline" size={20} color={COLORS.textSecondary} />}
-            />
-          )}
+            {mode !== 'forgot' && (
+              <Input
+                label="Password"
+                placeholder="••••••••"
+                value={formData.password}
+                onChangeText={(text) => setFormData({ ...formData, password: text })}
+                secureTextEntry
+              />
+            )}
 
-          <Input
-            label={mode === 'login' ? 'Email ou numéro de téléphone' : 'Email'}
-            placeholder={mode === 'login' ? 'email@exemple.com ou +228 XX XX XX XX' : 'exemple@email.com'}
-            value={formData.email}
-            onChangeText={(text) => setFormData({ ...formData, email: text })}
-            keyboardType={mode === 'login' ? 'default' : 'email-address'}
-            autoCapitalize="none"
-            leftIcon={<Ionicons name="mail-outline" size={20} color={COLORS.textSecondary} />}
-          />
-
-          {mode !== 'forgot' && (
-            <Input
-              label="Mot de passe"
-              placeholder="••••••••"
-              value={formData.password}
-              onChangeText={(text) => setFormData({ ...formData, password: text })}
-              secureTextEntry
-              leftIcon={<Ionicons name="lock-closed-outline" size={20} color={COLORS.textSecondary} />}
-            />
-          )}
-
-          {mode === 'login' && (
-            <TouchableOpacity
-              onPress={() => setMode('forgot')}
-              style={styles.forgotLink}
-            >
-              <Text style={styles.forgotLinkText}>Mot de passe oublié ?</Text>
-            </TouchableOpacity>
-          )}
-
-          <Button
-            title={
-              mode === 'login'
-                ? 'Se connecter'
-                : mode === 'register'
-                ? 'Créer mon compte'
-                : 'Réinitialiser'
-            }
-            onPress={handleSubmit}
-            style={styles.submitButton}
-            loading={isLoading}
-          />
-        </View>
-
-        <View style={styles.switchModeContainer}>
-          {mode === 'login' ? (
-            <Text style={styles.switchModeText}>
-              Pas encore de compte ?{' '}
-              <Text
-                style={styles.switchModeLink}
-                onPress={() => setMode('register')}
+            {mode === 'login' && (
+              <TouchableOpacity
+                onPress={() => setMode('forgot')}
+                style={styles.forgotLink}
               >
-                S'inscrire
-              </Text>
-            </Text>
-          ) : (
-            <Text style={styles.switchModeText}>
-              Déjà inscrit ?{' '}
-              <Text
-                style={styles.switchModeLink}
-                onPress={() => setMode('login')}
-              >
-                Se connecter
-              </Text>
-            </Text>
-          )}
+                <Text style={styles.forgotLinkText}>Forgot Password?</Text>
+              </TouchableOpacity>
+            )}
 
-          {/* Social login buttons */}
-          <View style={styles.socialContainer}>
-            <Text style={styles.socialText}>Ou continuer avec</Text>
-            <View style={styles.socialButtons}>
-              <TouchableOpacity style={styles.socialButton} onPress={() => console.log('Google login')}>
-                
-                <Ionicons name="logo-google" size={24} color="#DB4437" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.socialButton} onPress={() => console.log('Apple login')}>
-                <Ionicons name="logo-apple" size={24} color="#000" />
-              </TouchableOpacity>
-            </View>
+            <Button
+              title={
+                mode === 'login'
+                  ? 'Sign In'
+                  : mode === 'register'
+                  ? 'Create Account'
+                  : 'Reset Password'
+              }
+              onPress={handleSubmit}
+              style={styles.submitButton}
+              loading={isLoading}
+            />
             
+            <View style={styles.dividerContainer}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>Or</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Boutons Sociaux Style Large & Épuré */}
+            <TouchableOpacity style={styles.socialButtonLarge} onPress={() => console.log('Google login')}>
+              <Ionicons name="logo-google" size={20} color="#EA4335" style={{ marginRight: 10 }} />
+              <Text style={styles.socialButtonText}>Continue with Google</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.socialButtonLarge} onPress={() => console.log('Apple login')}>
+              <Ionicons name="logo-apple" size={20} color="#000" style={{ marginRight: 10 }} />
+              <Text style={styles.socialButtonText}>Continue with Apple</Text>
+            </TouchableOpacity>
+
+            {/* Switch Mode en bas de carte */}
+            <View style={styles.switchModeContainer}>
+              {mode === 'login' ? (
+                <Text style={styles.switchModeText}>
+                  Don't have an account?{' '}
+                  <Text style={styles.switchModeLink} onPress={() => setMode('register')}>
+                    Sign Up
+                  </Text>
+                </Text>
+              ) : (
+                <Text style={styles.switchModeText}>
+                  Already have an account?{' '}
+                  <Text style={styles.switchModeLink} onPress={() => setMode('login')}>
+                    Log In
+                  </Text>
+                </Text>
+              )}
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -251,88 +246,122 @@ export default function AuthScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: '#F4F6F9', // Fond gris très clair comme sur la maquette
   },
-  header: {
+  // Style du bloc supérieur bleu
+  blueHeader: {
+    backgroundColor: COLORS.primary || '#0066FF',
+    paddingBottom: 40,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  headerTopBar: {
     paddingHorizontal: 24,
-    paddingTop: 60,
-    paddingBottom: 16,
+    paddingTop: Platform.OS === 'ios' ? 54 : 24,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: `${COLORS.gray}80`,
     justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  brandingContainer: {
     alignItems: 'center',
+    marginTop: 10,
   },
-  content: {
+  logoContainer: {
+    marginBottom: 12,
+  },
+  mainTitle: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  // Conteneur qui fait remonter la carte blanche
+  formCardContainer: {
     flex: 1,
+    marginTop: -24, // Crée l'effet de chevauchement sur le fond bleu
+    backgroundColor: COLORS.white || '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
+  },
+  cardScrollView: {
+    flex: 1,
+  },
+  scrollContent: {
     paddingHorizontal: 24,
-  },
-  titleContainer: {
-    marginBottom: 32,
-  },
-  title: {
-    fontSize: FONT_SIZES['3xl'],
-    fontWeight: FONT_WEIGHTS.semibold,
-    color: COLORS.text,
-    marginBottom: 8,
-  },
-  description: {
-    fontSize: FONT_SIZES.base,
-    color: COLORS.textSecondary,
-    lineHeight: 24,
+    paddingTop: 32,
+    paddingBottom: 40,
   },
   form: {
-    marginBottom: 24,
+    width: '100%',
   },
   forgotLink: {
     alignSelf: 'flex-end',
     marginBottom: 24,
+    marginTop: -8,
   },
   forgotLinkText: {
-    fontSize: FONT_SIZES.base,
-    color: COLORS.primary,
+    fontSize: FONT_SIZES.base || 14,
+    color: COLORS.primary || '#0066FF',
+    fontWeight: '500',
   },
   submitButton: {
-    height: 56,
-    borderRadius: 16,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary || '#0066FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  // Séparateur "Or"
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    verticalAlign: 'middle',
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#EAEAEA',
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    color: '#999999',
+    fontSize: 13,
+  },
+  // Boutons sociaux en largeur complète
+  socialButtonLarge: {
+    flexDirection: 'row',
+    height: 52,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#EAEAEA',
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  socialButtonText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#333333',
   },
   switchModeContainer: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginTop: 20,
   },
   switchModeText: {
-    fontSize: FONT_SIZES.base,
-    color: COLORS.textSecondary,
+    fontSize: 14,
+    color: '#666666',
   },
   switchModeLink: {
-    color: COLORS.primary,
-    fontWeight: FONT_WEIGHTS.semibold,
-  },
-  socialContainer: {
-    marginTop: 24,
-    alignItems: 'center',
-  },
-  socialText: {
-    fontSize: FONT_SIZES.base,
-    color: COLORS.textSecondary,
-    marginBottom: 12,
-  },
-  socialButtons: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 16,
-  },
-  socialButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.gray,
-    justifyContent: 'center',
-    alignItems: 'center',
+    color: COLORS.primary || '#0066FF',
+    fontWeight: '600',
   },
 });
