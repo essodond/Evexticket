@@ -25,6 +25,7 @@ from django.http import Http404
 from .models import Company, City, Trip, Booking, Payment, Review, Notification, ScheduledTrip, UserProfile, TripStop, BoardingZone
 from .models.audit import log_action
 from django.contrib.auth import authenticate
+from django.contrib.auth.hashers import check_password, make_password
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,18 @@ def get_client_ip(request):
 
 def make_json_safe(data):
     return json.loads(json.dumps(data, cls=DjangoJSONEncoder))
+
+
+def normalize_phone(value):
+    """Normalize phone to canonical '228' + 8 digits, or return None if invalid/empty."""
+    if not value:
+        return None
+    digits = ''.join([c for c in str(value) if c.isdigit()])
+    if digits.startswith('228') and len(digits) == 11:
+        return digits
+    if len(digits) == 8:
+        return '228' + digits
+    return None
 
 
 def build_company_delete_snapshot(company):
@@ -121,12 +134,14 @@ class EmailAuthToken(APIView):
     def post(self, request, *args, **kwargs):
         email = request.data.get('email')
         # Le frontend peut envoyer 'phone' ou 'phone_number'
-        phone = request.data.get('phone') or request.data.get('phone_number')
+        raw_phone = request.data.get('phone') or request.data.get('phone_number')
+        phone = normalize_phone(raw_phone) if raw_phone else None
         username = request.data.get('username')
-        password = request.data.get('password')
+        # Accept either 'password' (legacy) or 'pin' (new mobile flow)
+        password = request.data.get('password') or request.data.get('pin')
         
         if not password:
-            return Response({'detail': 'Le champ password est requis.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'Le champ password ou pin est requis.'}, status=status.HTTP_400_BAD_REQUEST)
         
         if not email and not phone and not username:
             return Response({'detail': 'Vous devez fournir un email, un numéro de téléphone ou un username.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -143,11 +158,28 @@ class EmailAuthToken(APIView):
                 user = authenticate(request, username=email, password=password)
 
         if not user and phone:
-            # Connexion avec numéro de téléphone
+            # Connexion avec numéro de téléphone — vérifier PIN côté profil
             try:
-                user_profile = UserProfile.objects.get(phone=phone)
-                user = authenticate(request, username=user_profile.user.username, password=password)
-            except UserProfile.DoesNotExist:
+                profiles = UserProfile.objects.filter(phone=phone)
+                if not profiles.exists():
+                    user = None
+                else:
+                    provided_pin = password
+                    # find profiles where PIN matches
+                    matched = []
+                    for p in profiles:
+                        if p.pin and check_password(provided_pin, p.pin):
+                            matched.append(p)
+
+                    if len(matched) == 1:
+                        user = matched[0].user
+                    elif len(matched) > 1:
+                        # Ambiguous: multiple accounts with same phone and same PIN -> deny login and ask support
+                        return Response({'detail': 'Plusieurs comptes sont associés à ce numéro. Contactez le support pour résoudre le conflit.'}, status=status.HTTP_400_BAD_REQUEST)
+                    else:
+                        # No matching PIN among profiles
+                        user = None
+            except Exception:
                 user = None
         
         if not user and username:
@@ -163,6 +195,157 @@ class EmailAuthToken(APIView):
             })
         else:
             return Response({'detail': 'Identifiants invalides.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+def build_auth_response(user):
+    token, created = Token.objects.get_or_create(user=user)
+    user_serializer = UserSerializer(user)
+    return Response({
+        'token': token.key,
+        'user': user_serializer.data
+    })
+
+
+def user_is_client(user):
+    return (
+        user
+        and user.is_active
+        and not user.is_staff
+        and not user.is_superuser
+        and not user.admin_companies.exists()
+    )
+
+
+def user_is_company_admin(user):
+    return (
+        user
+        and user.is_active
+        and not user.is_staff
+        and not user.is_superuser
+        and user.admin_companies.exists()
+    )
+
+
+def user_is_super_admin(user):
+    return user and user.is_active and user.is_superuser
+
+
+class ClientAuthToken(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        raw_phone = request.data.get('phone') or request.data.get('phone_number')
+        phone = normalize_phone(raw_phone) if raw_phone else None
+        pin = request.data.get('pin')
+
+        if not phone:
+            return Response({'detail': 'Le numéro de téléphone est requis.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not pin:
+            return Response({'detail': 'Le code PIN est requis.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        profiles = UserProfile.objects.select_related('user').filter(phone=phone)
+        matched_users = [
+            profile.user
+            for profile in profiles
+            if profile.pin and check_password(str(pin), profile.pin)
+        ]
+
+        if len(matched_users) != 1:
+            return Response({'detail': 'Identifiants invalides.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        user = matched_users[0]
+        if not user_is_client(user):
+            return Response({'detail': 'Accès non autorisé pour ce portail.'}, status=status.HTTP_403_FORBIDDEN)
+
+        return build_auth_response(user)
+
+
+class CompanyAuthToken(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        password = request.data.get('password')
+
+        if not email:
+            return Response({'detail': "L'email professionnel est requis."}, status=status.HTTP_400_BAD_REQUEST)
+        if not password:
+            return Response({'detail': 'Le mot de passe est requis.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user_obj = User.objects.get(email=email)
+            user = authenticate(request, username=user_obj.username, password=password)
+        except User.DoesNotExist:
+            user = authenticate(request, username=email, password=password)
+
+        if not user:
+            return Response({'detail': 'Identifiants invalides.'}, status=status.HTTP_401_UNAUTHORIZED)
+        if not user_is_company_admin(user):
+            return Response({'detail': 'Accès non autorisé pour ce portail.'}, status=status.HTTP_403_FORBIDDEN)
+
+        return build_auth_response(user)
+
+
+class SuperAdminAuthToken(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        password = request.data.get('password')
+
+        if not email:
+            return Response({'detail': "L'email administrateur est requis."}, status=status.HTTP_400_BAD_REQUEST)
+        if not password:
+            return Response({'detail': 'Le mot de passe est requis.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user_obj = User.objects.get(email=email)
+            user = authenticate(request, username=user_obj.username, password=password)
+        except User.DoesNotExist:
+            user = authenticate(request, username=email, password=password)
+
+        if not user:
+            return Response({'detail': 'Identifiants invalides.'}, status=status.HTTP_401_UNAUTHORIZED)
+        if not user_is_super_admin(user):
+            return Response({'detail': 'Accès non autorisé pour ce portail.'}, status=status.HTTP_403_FORBIDDEN)
+
+        return build_auth_response(user)
+
+
+class ChangePinView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def put(self, request, *args, **kwargs):
+        """Change le PIN de l'utilisateur authentifié.
+
+        body: { old_pin: str, new_pin: str }
+        """
+        user = request.user
+        old_pin = request.data.get('old_pin')
+        new_pin = request.data.get('new_pin')
+
+        if not new_pin or len(new_pin) != 4 or not str(new_pin).isdigit():
+            return Response({'detail': 'Le nouveau PIN doit être exactement 4 chiffres.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        profile = getattr(user, 'profile', None)
+        if not profile:
+            return Response({'detail': 'Profil utilisateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # If there is an existing pin, verify old_pin
+        if profile.pin:
+            if not old_pin:
+                return Response({'detail': 'L\'ancien PIN est requis.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not check_password(old_pin, profile.pin):
+                return Response({'detail': 'Ancien PIN incorrect.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Save new hashed pin
+        try:
+            profile.pin = make_password(new_pin)
+            profile.save()
+            return Response({'detail': 'PIN mis à jour avec succès.'})
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class TokenRefreshView(APIView):
     """Refresh authentication token endpoint.

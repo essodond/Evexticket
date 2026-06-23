@@ -78,14 +78,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     restoreSession();
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (phoneOrEmail: string, pin: string) => {
     try {
       setIsLoading(true);
-      const response = await api.login({
-        username: email,
-        password: password,
-      });
-      
+      // Support legacy email/password by falling back if '@' is present
+      let response;
+      if (phoneOrEmail.includes('@')) {
+        response = await api.login({ username: phoneOrEmail, password: pin });
+      } else {
+        // New phone+pin flow
+        response = await api.login({ username: phoneOrEmail, password: pin });
+      }
+
       if (!response.user || !response.token) {
         throw new Error('Réponse de connexion invalide');
       }
@@ -97,7 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       Notifications.scheduleNotificationAsync({
         content: {
           title: "Connexion réussie ! 👋",
-          body: `Bienvenue ${response.user.first_name} ${response.user.last_name} sur Evexticket !`,
+          body: `Bienvenue ${response.user.first_name || ''} ${response.user.last_name || ''} sur Evexticket !`,
           sound: 'default',
         },
         trigger: null,
@@ -115,17 +119,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (userData: api.RegisterData) => {
+  const register = async (userData: any) => {
     try {
       setIsLoading(true);
-      const response = await api.register(userData);
+      // Expecting: { first_name, last_name, phone, pin, email? }
+      const payload = {
+        first_name: userData.first_name,
+        last_name: userData.last_name,
+        phone: userData.phone,
+        pin: userData.pin || userData.password || '',
+        email: userData.email || null,
+      };
+
+      const response = await api.register(payload);
       console.log('Register API Response:', JSON.stringify(response, null, 2));
 
       if (!response.token) {
         throw new Error('Réponse d\'inscription invalide');
       }
 
-      // Le user peut venir de response.user (normalisé dans api.ts)
       const newUser = response.user;
 
       setUser(newUser);

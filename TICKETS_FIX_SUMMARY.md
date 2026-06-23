@@ -61,7 +61,7 @@ date: booking.scheduled_trip_date || 'Date non disponible'  // ← CORRECTION
 
 3. **Vérifier l'API**
    ```bash
-   curl -H "Authorization: Token YOUR_TOKEN" http://192.168.1.64:8000/api/bookings/
+   curl -H "Authorization: Token YOUR_TOKEN" http://192.168.1.65:8000/api/bookings/
    # Doit retourner la réservation
    ```
 

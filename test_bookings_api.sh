@@ -6,7 +6,7 @@ echo ""
 
 # Remplacez YOUR_TOKEN par votre vrai token
 TOKEN="YOUR_TOKEN_HERE"
-API_URL="http://192.168.1.64:8000/api"
+API_URL="http://192.168.1.65:8000/api"
 
 echo "📡 GET /api/bookings/"
 curl -H "Authorization: Token $TOKEN" \

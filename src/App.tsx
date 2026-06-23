@@ -19,8 +19,17 @@ import MyTicketsPage from './components/MyTicketsPage';
 import ProfilePage from './components/ProfilePage';
 import CompanyDashboard from './components/CompanyDashboard';
 import AdminDashboard from './components/AdminDashboard';
+import type { AuthPortal } from './contexts/AuthContext';
 
 type AuthMode = 'login' | 'register';
+
+const getPortalFromHostname = (): AuthPortal => {
+  if (typeof window === 'undefined') return 'client';
+  const hostname = window.location.hostname.toLowerCase();
+  if (hostname.startsWith('admin.')) return 'admin';
+  if (hostname.startsWith('compagnie.') || hostname.startsWith('company.')) return 'company';
+  return 'client';
+};
 
 function App() {
   // NOTE: Ce composant est le point d'entrée de l'application React.
@@ -41,6 +50,7 @@ function App() {
   const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
 
   const navigate = useNavigate();
+  const currentPortal = getPortalFromHostname();
 
   const handleSearch = async (data: SearchFormData) => {
     // normalize the search data to the TripSearchParams shape
@@ -245,9 +255,17 @@ function App() {
         <Navbar />
         <ServerWarmupBanner />
         <Routes>
-          <Route path="/" element={isAuthenticated ? <Navigate to="/home" replace /> : <LandingPage onNavigateToAuth={handleNavigateToAuth} onNavigateToHome={() => navigate('/')} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
-          <Route path="/login" element={<AuthPage mode={authMode} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
-          <Route path="/register" element={<AuthPage mode={'register'} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
+          <Route path="/" element={
+            currentPortal === 'admin'
+              ? (isAuthenticated ? <Navigate to="/admin" replace /> : <AuthPage mode="login" portal="admin" onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />)
+              : currentPortal === 'company'
+                ? (isAuthenticated ? <Navigate to="/company" replace /> : <AuthPage mode="login" portal="company" onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />)
+                : (isAuthenticated ? <Navigate to="/home" replace /> : <LandingPage onNavigateToAuth={handleNavigateToAuth} onNavigateToHome={() => navigate('/')} logoUrl="/logo.jpg" siteTitle="EvexTicket" />)
+          } />
+          <Route path="/login" element={<AuthPage mode={authMode} portal={currentPortal} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
+          <Route path="/register" element={<AuthPage mode={'register'} portal="client" onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
+          <Route path="/company/login" element={<AuthPage mode="login" portal="company" onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
+          <Route path="/admin/login" element={<AuthPage mode="login" portal="admin" onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
           <Route path="/home" element={
             <ProtectedRoute allowed={['user', 'company', 'admin']}>
               <HomePage onSearch={handleSearch} isAuthenticated={isAuthenticated} onNavigateToAuth={handleNavigateToAuth} onLogout={handleLogout} onListAllTrips={handleListAllTrips} />

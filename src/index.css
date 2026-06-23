@@ -118,27 +118,30 @@
 /* Feature card hover glow */
 .feature-card {
   position: relative;
-  transition: all 0.4s ease;
-}
-.feature-card::before {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(135deg, transparent, rgba(59, 130, 246, 0.3), transparent);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  opacity: 0;
-  transition: opacity 0.4s ease;
-}
-.feature-card:hover::before {
-  opacity: 1;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 .feature-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 20px 60px rgba(59, 130, 246, 0.15);
+  transform: translateY(-4px);
+  border-color: rgba(148, 163, 184, 0.35);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.07);
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.destination-card {
+  transition: transform 0.35s ease, box-shadow 0.35s ease;
+}
+
+.destination-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 22px 50px rgba(15, 23, 42, 0.12);
 }
 
 /* Stat counter animation */

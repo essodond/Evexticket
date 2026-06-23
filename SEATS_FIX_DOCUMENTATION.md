@@ -125,7 +125,7 @@ Réservation apparaît dans "Mes réservations"
 
 ### Via API REST
 ```bash
-GET http://192.168.1.64:8000/api/scheduled_trips/{trip_id}/
+GET http://192.168.1.65:8000/api/scheduled_trips/{trip_id}/
 
 Response:
 {

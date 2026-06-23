@@ -66,64 +66,72 @@ def _resolve_city_id(value):
     return None
 
 # Serializer pour l'inscription d'utilisateur
+from django.contrib.auth.hashers import make_password
+
 class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
-    password2 = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
-    phone = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    # New flow: phone + pin (4 digits). Email optional.
+    phone = serializers.CharField(write_only=True, required=True)
+    pin = serializers.CharField(write_only=True, required=True)
     token = serializers.CharField(read_only=True)
 
     class Meta:
         model = User
-        fields = ('username', 'email', 'first_name', 'last_name', 'password', 'password2', 'phone', 'token')
-
-    def validate(self, attrs):
-        if attrs['password'] != attrs['password2']:
-            raise serializers.ValidationError({"password": "Les mots de passe ne correspondent pas."})
-        return attrs
+        fields = ('username', 'email', 'first_name', 'last_name', 'phone', 'pin', 'token')
+        extra_kwargs = {
+            'username': {'required': False, 'allow_blank': True},
+            'email': {'required': False, 'allow_blank': True, 'allow_null': True},
+        }
 
     def validate_phone(self, value):
-        """Validate Togolese phone number format"""
         if not value:
-            return value
-        
-        # Remove common formatting characters, keep only digits and +
-        cleaned = ''.join(filter(lambda x: x.isdigit() or x == '+', str(value).strip()))
-        
-        # Accept format: +228XXXXXXXX or 228XXXXXXXX (8-11 digits after country code)
-        if not cleaned:
-            return value  # Allow empty
-        
-        if cleaned.startswith('+228') and len(cleaned) >= 13:
-            return value  # Valid
-        elif cleaned.startswith('228') and len(cleaned) >= 11:
-            return value  # Valid
-        elif cleaned.isdigit() and len(cleaned) == 8:
-            return value  # Accept 8-digit format (assume local)
+            raise serializers.ValidationError("Le numéro de téléphone est requis.")
+        # Normalize to canonical form: '228' + 8 digits (no plus, no spaces)
+        digits = ''.join([c for c in str(value) if c.isdigit()])
+        if digits.startswith('228') and len(digits) == 11:
+            stored = digits
+        elif len(digits) == 8:
+            stored = '228' + digits
         else:
-            raise serializers.ValidationError(
-                "Invalid phone format. Use +228XXXXXXXX, 228XXXXXXXX, or 8-digit local format"
-            )
+            raise serializers.ValidationError("Format de téléphone invalide. Utilisez 8 chiffres (ex: 90123456) ou +22890123456.")
+
+        # Ensure uniqueness: no other profile uses this phone
+        try:
+            from .models import UserProfile
+            if UserProfile.objects.filter(phone=stored).exists():
+                raise serializers.ValidationError("Un compte associé à ce numéro existe déjà.")
+        except Exception:
+            # If models not available at validation time, pass and let create handle errors
+            pass
+
+        return stored
+
+    def validate_pin(self, value):
+        if not value or not str(value).isdigit() or len(str(value)) != 4:
+            raise serializers.ValidationError('Le PIN doit être exactement 4 chiffres.')
+        return value
 
     def create(self, validated_data):
-        password2 = validated_data.pop('password2', None)
-        phone = validated_data.pop('phone', '').strip()
+        phone = validated_data.pop('phone')
+        pin = validated_data.pop('pin')
+        username = validated_data.get('username') or phone
+        email = validated_data.get('email') or ''
+
         user = User.objects.create_user(
-            username=validated_data['username'],
-            email=validated_data['email'],
+            username=username,
+            email=email,
             first_name=validated_data.get('first_name', ''),
             last_name=validated_data.get('last_name', ''),
-            password=validated_data['password']
+            password=None  # use unusable password; authentication will use profile.pin
         )
         try:
             from .models import UserProfile
             profile = getattr(user, 'profile', None)
             if not profile:
                 profile = UserProfile.objects.create(user=user)
-            if phone:
-                profile.phone = phone
-                profile.save()
+            profile.phone = phone
+            profile.pin = make_password(pin)
+            profile.save()
         except Exception:
-            # Ne pas bloquer l'inscription si le profil ne peut pas être créé
             pass
         token, created = Token.objects.get_or_create(user=user)
         user.token = token.key
@@ -135,6 +143,7 @@ class UserSerializer(serializers.ModelSerializer):
     is_company_admin = serializers.SerializerMethodField()
     phone_number = serializers.SerializerMethodField()
     company_id = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -142,9 +151,9 @@ class UserSerializer(serializers.ModelSerializer):
         # décider de la redirection (is_staff => Admin Général, is_company_admin calculé côté /me/)
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'is_active', 'is_staff', 'is_superuser', 'date_joined', 'is_company_admin', 'phone_number', 'company_id'
+            'is_active', 'is_staff', 'is_superuser', 'date_joined', 'is_company_admin', 'phone_number', 'company_id', 'role'
         ]
-        read_only_fields = ['id', 'date_joined', 'is_company_admin', 'phone_number', 'company_id']
+        read_only_fields = ['id', 'date_joined', 'is_company_admin', 'phone_number', 'company_id', 'role']
 
     def get_is_company_admin(self, obj):
         # Vérifie si l'utilisateur est admin d'au moins une compagnie
@@ -161,6 +170,13 @@ class UserSerializer(serializers.ModelSerializer):
         # Récupère l'ID de la première compagnie administrée par l'utilisateur
         company = obj.admin_companies.first()
         return company.id if company else None
+
+    def get_role(self, obj):
+        if obj.is_superuser:
+            return 'SUPER_ADMIN'
+        if obj.admin_companies.exists():
+            return 'ADMIN_COMPAGNIE'
+        return 'CLIENT'
 
 
 class CitySerializer(serializers.ModelSerializer):

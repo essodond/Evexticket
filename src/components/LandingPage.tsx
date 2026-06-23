@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bus, MapPin, Clock, Shield, Users, Star, ArrowRight, Lock, Zap, ChevronRight, Phone, Mail, CheckCircle } from 'lucide-react';
+import { Bus, MapPin, Clock, Shield, Users, Star, ArrowRight, Lock, Zap, ChevronRight, Phone, Mail, CheckCircle, Search, Ticket, Download, ArrowUpRight } from 'lucide-react';
 
 interface LandingPageProps {
   onNavigateToAuth: (mode: 'login' | 'register') => void;
@@ -10,100 +10,6 @@ interface LandingPageProps {
 }
 
 /* ====================== SVG COMPONENTS ====================== */
-
-/** Isometric 3D Bus SVG */
-const Bus3D: React.FC<{ className?: string; color?: string; animated?: boolean }> = ({ className = '', color = '#3b82f6', animated = false }) => (
-  <div className={`relative inline-block ${animated ? 'bus-rolling' : ''} ${className}`}>
-    {/* Speed lines (only when animated) */}
-    {animated && (
-      <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4">
-        <div className="speed-lines" style={{ animationDelay: '0s' }}>
-          <div className="w-6 h-[2px] bg-blue-300/40 rounded-full mb-2" />
-        </div>
-        <div className="speed-lines" style={{ animationDelay: '0.3s' }}>
-          <div className="w-8 h-[2px] bg-blue-300/30 rounded-full mb-2" />
-        </div>
-        <div className="speed-lines" style={{ animationDelay: '0.5s' }}>
-          <div className="w-5 h-[2px] bg-blue-300/30 rounded-full" />
-        </div>
-      </div>
-    )}
-    <svg viewBox="0 0 220 130" className="w-full h-auto" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Exhaust smoke */}
-      {animated && (
-        <>
-          <circle cx="18" cy="78" r="4" fill="#cbd5e1" opacity="0.3" className="exhaust-puff" />
-          <circle cx="14" cy="74" r="6" fill="#e2e8f0" opacity="0.2" className="exhaust-puff-delay" />
-          <circle cx="10" cy="70" r="5" fill="#e2e8f0" opacity="0.15" className="exhaust-puff-delay-2" />
-        </>
-      )}
-      {/* Bus body */}
-      <rect x="30" y="30" width="155" height="60" rx="12" fill={color} />
-      <rect x="30" y="30" width="155" height="60" rx="12" fill="url(#busShineAnim)" />
-      {/* Windows */}
-      <rect x="45" y="40" width="22" height="20" rx="4" fill="#bfdbfe" opacity="0.9" />
-      <rect x="73" y="40" width="22" height="20" rx="4" fill="#bfdbfe" opacity="0.9" />
-      <rect x="101" y="40" width="22" height="20" rx="4" fill="#bfdbfe" opacity="0.9" />
-      <rect x="129" y="40" width="22" height="20" rx="4" fill="#bfdbfe" opacity="0.9" />
-      {/* Windshield */}
-      <rect x="157" y="38" width="20" height="28" rx="5" fill="#93c5fd" />
-      <rect x="159" y="40" width="16" height="24" rx="3" fill="#bfdbfe" opacity="0.3" />
-      {/* Headlights with glow */}
-      <g className={animated ? 'headlight-glow' : ''}>
-        <circle cx="182" cy="75" r="5" fill="#fbbf24" />
-        <circle cx="182" cy="75" r="3" fill="#fef3c7" />
-      </g>
-      {/* Taillights */}
-      <rect x="30" y="68" width="6" height="10" rx="2" fill="#ef4444" />
-      {/* Stripe */}
-      <rect x="30" y="65" width="155" height="4" rx="2" fill="white" opacity="0.3" />
-      {/* Logo on bus */}
-      <text x="90" y="80" fill="white" fontSize="10" fontWeight="bold" fontFamily="system-ui" opacity="0.7">EVEX</text>
-
-      {/* Front wheel with animated spokes */}
-      <g>
-        <circle cx="150" cy="93" r="13" fill="#1e293b" />
-        <g className={animated ? 'wheel-spin' : ''} style={{ transformOrigin: '150px 93px' }}>
-          <circle cx="150" cy="93" r="8" fill="#475569" />
-          <circle cx="150" cy="93" r="3" fill="#94a3b8" />
-          {/* Spokes */}
-          <line x1="150" y1="85" x2="150" y2="101" stroke="#94a3b8" strokeWidth="1" opacity="0.5" />
-          <line x1="142" y1="93" x2="158" y2="93" stroke="#94a3b8" strokeWidth="1" opacity="0.5" />
-          <line x1="144" y1="87" x2="156" y2="99" stroke="#94a3b8" strokeWidth="1" opacity="0.4" />
-          <line x1="156" y1="87" x2="144" y2="99" stroke="#94a3b8" strokeWidth="1" opacity="0.4" />
-        </g>
-        {/* Tire tread marks */}
-        <circle cx="150" cy="93" r="13" fill="none" stroke="#334155" strokeWidth="1" strokeDasharray="3 3" />
-      </g>
-
-      {/* Rear wheel with animated spokes */}
-      <g>
-        <circle cx="65" cy="93" r="13" fill="#1e293b" />
-        <g className={animated ? 'wheel-spin' : ''} style={{ transformOrigin: '65px 93px' }}>
-          <circle cx="65" cy="93" r="8" fill="#475569" />
-          <circle cx="65" cy="93" r="3" fill="#94a3b8" />
-          {/* Spokes */}
-          <line x1="65" y1="85" x2="65" y2="101" stroke="#94a3b8" strokeWidth="1" opacity="0.5" />
-          <line x1="57" y1="93" x2="73" y2="93" stroke="#94a3b8" strokeWidth="1" opacity="0.5" />
-          <line x1="59" y1="87" x2="71" y2="99" stroke="#94a3b8" strokeWidth="1" opacity="0.4" />
-          <line x1="71" y1="87" x2="59" y2="99" stroke="#94a3b8" strokeWidth="1" opacity="0.4" />
-        </g>
-        <circle cx="65" cy="93" r="13" fill="none" stroke="#334155" strokeWidth="1" strokeDasharray="3 3" />
-      </g>
-
-      {/* Ground contact shadow */}
-      <ellipse cx="107" cy="108" rx="70" ry="4" fill="black" opacity="0.08" />
-
-      {/* Gradient definitions */}
-      <defs>
-        <linearGradient id="busShineAnim" x1="30" y1="30" x2="30" y2="90">
-          <stop offset="0%" stopColor="white" stopOpacity="0.15" />
-          <stop offset="100%" stopColor="white" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-    </svg>
-  </div>
-);
 
 /** Animated floating particles */
 const FloatingParticles: React.FC = () => (
@@ -122,17 +28,6 @@ const FloatingParticles: React.FC = () => (
         }}
       />
     ))}
-  </div>
-);
-
-/** Animated road with dashes */
-const AnimatedRoad: React.FC = () => (
-  <div className="relative w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-    <div className="absolute inset-0 flex gap-4 road-dash" style={{ width: '200%' }}>
-      {Array.from({ length: 40 }).map((_, i) => (
-        <div key={i} className="w-8 h-0.5 bg-yellow-400/70 rounded-full flex-shrink-0 mt-[3px]" />
-      ))}
-    </div>
   </div>
 );
 
@@ -166,6 +61,196 @@ const StatCounter: React.FC<{ value: string; label: string; delay: number }> = (
   );
 };
 
+const AppleIcon: React.FC<{ className?: string }> = ({ className = 'w-5 h-5' }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+    <path d="M16.37 12.16c.02 2.28 1.99 3.04 2.01 3.05-.02.05-.31 1.07-1.02 2.11-.61.9-1.25 1.79-2.26 1.81-.99.02-1.31-.59-2.45-.59-1.14 0-1.5.57-2.43.61-.97.04-1.71-.97-2.33-1.87-1.27-1.84-2.24-5.19-.94-7.44.64-1.12 1.78-1.83 3.02-1.85.94-.02 1.83.63 2.45.63.62 0 1.78-.78 3-.66.51.02 1.95.21 2.87 1.56-.07.05-1.71 1-1.69 2.64ZM14.54 5.4c.51-.62.85-1.48.76-2.34-.73.03-1.62.49-2.15 1.11-.47.55-.88 1.42-.77 2.26.81.06 1.65-.41 2.16-1.03Z" />
+  </svg>
+);
+
+const PlayStoreIcon: React.FC<{ className?: string }> = ({ className = 'w-5 h-5' }) => (
+  <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+    <path d="M4 3.5v17l9.45-8.5L4 3.5Z" fill="#34A853" />
+    <path d="M13.45 12 17.2 8.62 20.5 10.5c.67.38.67 1.34 0 1.72l-3.3 1.88L13.45 12Z" fill="#FBBC04" />
+    <path d="M4 3.5 17.2 8.62 13.45 12 4 3.5Z" fill="#4285F4" />
+    <path d="M4 20.5 13.45 12 17.2 15.38 4 20.5Z" fill="#EA4335" />
+  </svg>
+);
+
+const AndroidIcon: React.FC<{ className?: string }> = ({ className = 'w-5 h-5' }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+    <path d="M7.45 6.14 5.9 3.45l.87-.5 1.58 2.74A8.85 8.85 0 0 1 12 5c1.31 0 2.56.29 3.65.81l1.58-2.74.87.5-1.55 2.69A7 7 0 0 1 19.5 12v5a1.5 1.5 0 0 1-3 0v-5h-1v6.25a1.75 1.75 0 0 1-3.5 0V12h-1v6.25a1.75 1.75 0 0 1-3.5 0V12h-1v5a1.5 1.5 0 0 1-3 0v-5a7 7 0 0 1 2.95-5.86ZM8.5 9a.75.75 0 1 0 0 1.5A.75.75 0 0 0 8.5 9Zm7 0a.75.75 0 1 0 0 1.5A.75.75 0 0 0 15.5 9Z" />
+  </svg>
+);
+
+const StoreButton: React.FC<{
+  title: string;
+  subtitle: string;
+  dotted?: boolean;
+  icon: React.ReactNode;
+}> = ({ title, subtitle, dotted = false, icon }) => (
+  <button
+    className={[
+      'group flex min-w-[220px] items-center gap-4 rounded-2xl px-5 py-4 text-left transition-all duration-300',
+      dotted
+        ? 'border border-dashed border-blue-200 bg-white text-gray-900 hover:border-blue-400 hover:bg-blue-50/60 hover:shadow-[0_20px_60px_rgba(59,130,246,0.10)]'
+        : 'bg-[#111111] text-white shadow-[0_18px_40px_rgba(15,23,42,0.16)] hover:-translate-y-0.5 hover:shadow-[0_24px_48px_rgba(15,23,42,0.24)]'
+    ].join(' ')}
+    type="button"
+  >
+    <div
+      className={[
+        'flex h-11 w-11 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-105',
+        dotted ? 'bg-blue-50 text-blue-600' : 'bg-white/10 text-white'
+      ].join(' ')}
+    >
+      {icon}
+    </div>
+    <div className="flex-1">
+      <div className={`text-[11px] uppercase tracking-[0.18em] ${dotted ? 'text-gray-400' : 'text-white/55'}`}>
+        {subtitle}
+      </div>
+      <div className={`mt-1 text-sm font-semibold ${dotted ? 'text-gray-900' : 'text-white'}`}>
+        {title}
+      </div>
+    </div>
+    <ArrowUpRight className={`h-4 w-4 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 ${dotted ? 'text-blue-500' : 'text-white/70'}`} />
+  </button>
+);
+
+const SearchResultsScreen: React.FC = () => (
+  <div className="flex h-full flex-col bg-[#f8fafc]">
+    <div className="border-b border-slate-200/80 bg-white px-4 pb-3 pt-4">
+      <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+        <Search className="h-4 w-4 text-slate-400" />
+        <div className="min-w-0">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Recherche</div>
+          <div className="truncate text-sm font-semibold text-slate-800">Lome to Kara</div>
+        </div>
+      </div>
+    </div>
+    <div className="flex-1 space-y-3 p-4">
+      {[
+        { company: 'Evex Express', time: '06:45', arrival: '13:30', price: '7 000 FCFA', seats: '12 places' },
+        { company: 'Kara Premium', time: '08:10', arrival: '15:00', price: '8 500 FCFA', seats: '5 places' },
+        { company: 'Nord Connect', time: '10:20', arrival: '17:15', price: '6 500 FCFA', seats: '18 places' },
+      ].map((trip) => (
+        <div key={`${trip.company}-${trip.time}`} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-slate-900">{trip.company}</div>
+              <div className="mt-1 text-xs text-slate-400">{trip.seats}</div>
+            </div>
+            <div className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-600">
+              Direct
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-3">
+            <div>
+              <div className="text-base font-bold text-slate-900">{trip.time}</div>
+              <div className="text-[11px] text-slate-400">Lome</div>
+            </div>
+            <div className="flex-1">
+              <div className="relative border-t border-dashed border-slate-300">
+                <Bus className="absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 bg-white text-blue-500" />
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-base font-bold text-slate-900">{trip.arrival}</div>
+              <div className="text-[11px] text-slate-400">Kara</div>
+            </div>
+          </div>
+          <div className="mt-4 flex items-center justify-between">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Prix</div>
+            <div className="text-sm font-semibold text-slate-900">{trip.price}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+const TicketScreen: React.FC = () => (
+  <div className="flex h-full flex-col bg-[linear-gradient(180deg,#f8fbff_0%,#eef5ff_100%)] p-4">
+    <div className="mb-3 flex items-center justify-between">
+      <div>
+        <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">E-ticket</div>
+        <div className="mt-1 text-sm font-semibold text-slate-900">EvexTicket</div>
+      </div>
+      <div className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-600">
+        Confirmed
+      </div>
+    </div>
+    <div className="rounded-[28px] border border-white/70 bg-white p-4 shadow-[0_18px_40px_rgba(59,130,246,0.12)]">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Trajet</div>
+          <div className="mt-1 flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <span>Lome</span>
+            <ArrowRight className="h-3.5 w-3.5 text-blue-500" />
+            <span>Kara</span>
+          </div>
+        </div>
+        <div className="rounded-2xl bg-slate-50 px-3 py-2 text-right">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Siege</div>
+          <div className="text-sm font-semibold text-slate-900">A12</div>
+        </div>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+        <div className="rounded-2xl bg-slate-50 p-3">
+          <div className="text-slate-400">Depart</div>
+          <div className="mt-1 font-semibold text-slate-900">06:45</div>
+        </div>
+        <div className="rounded-2xl bg-slate-50 p-3">
+          <div className="text-slate-400">Compagnie</div>
+          <div className="mt-1 font-semibold text-slate-900">Evex Express</div>
+        </div>
+      </div>
+      <div className="mt-5 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+        <div className="mx-auto grid h-36 w-36 place-items-center rounded-2xl bg-white shadow-inner">
+          <div className="relative h-24 w-24">
+            <div className="absolute inset-0 grid grid-cols-6 gap-1">
+              {Array.from({ length: 36 }).map((_, index) => {
+                const filled = [0, 1, 4, 5, 6, 8, 9, 10, 14, 15, 18, 19, 20, 21, 22, 24, 27, 28, 29, 31, 34, 35].includes(index);
+                return <div key={index} className={`rounded-[2px] ${filled ? 'bg-slate-900' : 'bg-transparent'}`} />;
+              })}
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 text-center text-[11px] uppercase tracking-[0.18em] text-slate-400">
+          Scan at boarding
+        </div>
+      </div>
+      <div className="mt-4 flex items-center justify-between rounded-2xl bg-blue-50 px-3 py-3">
+        <div className="flex items-center gap-2">
+          <Ticket className="h-4 w-4 text-blue-600" />
+          <span className="text-xs font-medium text-blue-700">Ticket ID</span>
+        </div>
+        <span className="text-xs font-semibold text-blue-700">EVX-24-8742</span>
+      </div>
+    </div>
+  </div>
+);
+
+const PhoneMockup: React.FC<{
+  variant: 'search' | 'ticket';
+  className?: string;
+}> = ({ variant, className = '' }) => (
+  <div
+    className={[
+      'relative h-[560px] w-[280px] rounded-[42px] border border-slate-200/90 bg-[#0f172a] p-[10px] shadow-[0_30px_90px_rgba(15,23,42,0.20)]',
+      className
+    ].join(' ')}
+  >
+    <div className="absolute left-1/2 top-[14px] z-20 h-6 w-28 -translate-x-1/2 rounded-full bg-[#0b1220]" />
+    <div className="absolute right-[-2px] top-24 h-16 w-1 rounded-l-full bg-slate-300/70" />
+    <div className="absolute left-[-2px] top-20 h-10 w-1 rounded-r-full bg-slate-300/70" />
+    <div className="absolute left-[-2px] top-36 h-16 w-1 rounded-r-full bg-slate-300/70" />
+    <div className="h-full overflow-hidden rounded-[34px] border border-slate-200/70 bg-white">
+      {variant === 'search' ? <SearchResultsScreen /> : <TicketScreen />}
+    </div>
+  </div>
+);
+
 /* ====================== MAIN COMPONENT ====================== */
 
 const LandingPage: React.FC<LandingPageProps> = ({
@@ -198,45 +283,81 @@ const LandingPage: React.FC<LandingPageProps> = ({
       icon: <Bus className="w-7 h-7" />,
       title: 'Transport Moderne',
       description: 'Bus climatisés et confortables pour tous vos trajets à travers le Togo.',
-      color: 'from-blue-500 to-blue-600',
+      tone: 'bg-blue-50 text-blue-600 border-blue-100',
     },
     {
       icon: <Zap className="w-7 h-7" />,
       title: 'Réservation Instantanée',
       description: "Réservez votre billet en moins de 30 secondes depuis votre téléphone.",
-      color: 'from-blue-400 to-cyan-500',
+      tone: 'bg-sky-50 text-sky-600 border-sky-100',
     },
     {
       icon: <MapPin className="w-7 h-7" />,
       title: 'Couverture Nationale',
       description: 'Lomé, Kara, Kpalimé, Sokodé, Atakpamé et bien plus de destinations.',
-      color: 'from-blue-500 to-indigo-600',
+      tone: 'bg-indigo-50 text-indigo-600 border-indigo-100',
     },
     {
       icon: <Shield className="w-7 h-7" />,
       title: 'Paiement Sécurisé',
       description: 'Mobile Money, carte bancaire — vos transactions sont chiffrées et sûres.',
-      color: 'from-cyan-500 to-blue-600',
+      tone: 'bg-cyan-50 text-cyan-700 border-cyan-100',
     },
     {
       icon: <Clock className="w-7 h-7" />,
       title: 'Horaires Flexibles',
       description: 'Départs fréquents toute la journée pour convenir à votre planning.',
-      color: 'from-blue-600 to-blue-700',
+      tone: 'bg-blue-50 text-blue-700 border-blue-100',
     },
     {
       icon: <Users className="w-7 h-7" />,
       title: 'Support 24/7',
       description: 'Une équipe dédiée disponible à tout moment pour vous assister.',
-      color: 'from-indigo-500 to-blue-600',
+      tone: 'bg-violet-50 text-violet-600 border-violet-100',
     },
   ];
 
   const destinations = [
-    { name: 'Lomé', subtitle: 'Capitale', image: 'https://i.pinimg.com/736x/9c/cd/6e/9ccd6e29dc537fc53e9a08ee54e9b3a3.jpg' },
-    { name: 'Kara', subtitle: 'Nord Togo', image: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFnHDfOQwYE9pg0Xj3xoJdai_oD_sMfZnPLQ&s' },
-    { name: 'Atakpamé', subtitle: 'Centre', image: 'https://i.pinimg.com/1200x/fc/4b/8a/fc4b8af0ff5df7825dbfc659685ea477.jpg' },
-    { name: 'Sokodé', subtitle: 'Région Centrale', image: 'https://i.pinimg.com/1200x/e1/e1/a3/e1e1a39c9d441c11a4e1955120942222.jpg' },
+    {
+      name: 'Lomé',
+      subtitle: 'Capitale',
+      image: 'https://i.pinimg.com/736x/9c/cd/6e/9ccd6e29dc537fc53e9a08ee54e9b3a3.jpg',
+      teaser: 'Ville côtière, départs fréquents et ambiance urbaine.',
+      travel: 'Départs toute la journée',
+      badge: 'Populaire',
+      accent: 'text-cyan-400',
+      surface: 'from-[#071427] via-[#0a2d56] to-[#020816]',
+    },
+    {
+      name: 'Kara',
+      subtitle: 'Nord Togo',
+      image: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFnHDfOQwYE9pg0Xj3xoJdai_oD_sMfZnPLQ&s',
+      teaser: 'Une destination clé pour les trajets longue distance.',
+      travel: 'Environ 7h de trajet',
+      badge: 'Long courrier',
+      accent: 'text-sky-400',
+      surface: 'from-[#18253a] via-[#2c3f5f] to-[#070d18]',
+    },
+    {
+      name: 'Atakpamé',
+      subtitle: 'Centre',
+      image: 'https://i.pinimg.com/1200x/fc/4b/8a/fc4b8af0ff5df7825dbfc659685ea477.jpg',
+      teaser: 'Escapade idéale entre marchés, relief et culture locale.',
+      travel: 'Trajet direct disponible',
+      badge: 'Week-end',
+      accent: 'text-emerald-400',
+      surface: 'from-[#1d2738] via-[#394860] to-[#0b1018]',
+    },
+    {
+      name: 'Sokodé',
+      subtitle: 'Région Centrale',
+      image: 'https://i.pinimg.com/1200x/e1/e1/a3/e1e1a39c9d441c11a4e1955120942222.jpg',
+      teaser: 'Un arrêt majeur pour explorer le centre du pays.',
+      travel: 'Plusieurs départs par semaine',
+      badge: 'Culture',
+      accent: 'text-violet-400',
+      surface: 'from-[#1b2232] via-[#31415f] to-[#0a0f16]',
+    },
   ];
 
   const testimonials = [
@@ -325,133 +446,116 @@ const LandingPage: React.FC<LandingPageProps> = ({
       </header>
 
       {/* ==================== HERO SECTION ==================== */}
-      <section className="relative pt-32 md:pt-40 pb-20 px-4 sm:px-6 lg:px-8">
-        {/* Background blobs */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-40 -right-40 w-[600px] h-[600px] bg-blue-100/60 rounded-full blur-[120px] animate-float" />
-          <div className="absolute -bottom-60 -left-40 w-[500px] h-[500px] bg-blue-50/80 rounded-full blur-[100px] animate-float-slow" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-cyan-50/50 rounded-full blur-[80px] animate-float-delay" />
+      <section className="relative overflow-hidden px-4 pb-24 pt-32 sm:px-6 lg:px-8 lg:pb-28 lg:pt-40">
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(96,165,250,0.15),transparent_35%),radial-gradient(circle_at_80%_20%,rgba(191,219,254,0.9),transparent_28%),linear-gradient(180deg,#ffffff_0%,#f8fbff_52%,#ffffff_100%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:72px_72px] [mask-image:radial-gradient(circle_at_center,black,transparent_85%)]" />
+          <div className="absolute left-[8%] top-[14%] h-48 w-48 rounded-full bg-blue-100/70 blur-[90px]" />
+          <div className="absolute bottom-[6%] right-[8%] h-56 w-56 rounded-full bg-slate-100 blur-[110px]" />
         </div>
 
-        <div className="max-w-7xl mx-auto relative z-10">
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-            {/* Left: text */}
+        <div className="relative z-10 mx-auto max-w-7xl">
+          <div className="grid items-center gap-16 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
             <div className="animate-slide-up">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 border border-blue-100 text-blue-600 text-sm font-medium mb-8">
-                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                Plateforme N°1 au Togo
+              <div className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-white px-4 py-2 text-sm font-medium text-blue-600 shadow-sm">
+                <span className="h-2 w-2 rounded-full bg-blue-500" />
+                Mobile app showcase
               </div>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-[1.1] mb-6 text-gray-900">
-                Voyagez à travers le{' '}
-                <span className="text-gradient-blue">Togo</span>{' '}
-                en toute{' '}
-                <span className="relative inline-block">
-                  <span className="text-gradient-blue">simplicité</span>
-                  <svg className="absolute -bottom-2 left-0 w-full" viewBox="0 0 200 12" fill="none">
-                    <path d="M2 8C50 2 150 2 198 8" stroke="#3b82f6" strokeWidth="3" strokeLinecap="round" opacity="0.4" />
-                  </svg>
-                </span>
+              <h1 className="mt-8 max-w-2xl text-5xl font-extrabold leading-[0.96] tracking-[-0.04em] text-gray-950 sm:text-6xl lg:text-7xl">
+                Vos tickets de bus,
+                <br />
+                <span className="text-gradient-blue">partout avec vous</span>
               </h1>
 
-              <p className="text-lg text-gray-500 mb-10 max-w-lg leading-relaxed animate-slide-up-delay">
-                Réservez vos billets de bus en quelques secondes. Paiement sécurisé, suivi en temps réel et confort garanti pour chaque trajet.
+              <p className="mt-7 max-w-xl text-lg leading-relaxed text-gray-500 sm:text-xl">
+                Découvrez EvexTicket sur mobile avec une expérience fluide, élégante et instantanée pour rechercher vos trajets, réserver et présenter vos billets numériques en un geste.
               </p>
 
-              <div className="flex flex-col sm:flex-row gap-4 animate-slide-up-delay-2">
+              <div className="mt-10 flex flex-col gap-4 sm:max-w-[540px]">
+                <StoreButton
+                  title="Download on the App Store"
+                  subtitle="iPhone"
+                  icon={<AppleIcon />}
+                />
+                <StoreButton
+                  title="Get it on Google Play"
+                  subtitle="Android"
+                  icon={<PlayStoreIcon />}
+                />
+                <StoreButton
+                  title="Télécharger l'APK"
+                  subtitle="Direct install"
+                  dotted={true}
+                  icon={<AndroidIcon />}
+                />
+              </div>
+
+              <div className="mt-10 flex flex-wrap items-center gap-4 text-sm text-gray-500">
+                <div className="rounded-full border border-gray-200 bg-white px-4 py-2 shadow-sm">
+                  Recherche rapide
+                </div>
+                <div className="rounded-full border border-gray-200 bg-white px-4 py-2 shadow-sm">
+                  Billet QR sécurisé
+                </div>
+                <div className="rounded-full border border-gray-200 bg-white px-4 py-2 shadow-sm">
+                  Confirmation instantanée
+                </div>
+              </div>
+
+              <div className="mt-12 flex flex-col gap-4 sm:flex-row sm:items-center">
                 <button
                   onClick={handleReserveTicket}
-                  className="group relative inline-flex items-center justify-center gap-3 px-8 py-4 text-base font-bold text-white bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl shadow-2xl shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-[1.02] transition-all duration-300 overflow-hidden"
+                  className="inline-flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 px-7 py-4 text-base font-semibold text-white shadow-[0_24px_60px_rgba(59,130,246,0.28)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_28px_72px_rgba(59,130,246,0.34)]"
                 >
-                  <span className="absolute inset-0 bg-gradient-to-r from-blue-400 to-blue-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <span className="relative flex items-center gap-3">
-                    Réserver mon ticket
-                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                  </span>
+                  Voir la plateforme
+                  <ArrowRight className="h-5 w-5" />
                 </button>
                 <button
                   onClick={() => onNavigateToAuth('login')}
-                  className="inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-medium text-gray-700 border border-gray-200 rounded-2xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-300"
+                  className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-7 py-4 text-base font-medium text-gray-700 shadow-sm transition-all duration-300 hover:border-gray-300 hover:bg-gray-50"
                 >
-                  J&apos;ai déjà un compte
+                  Se connecter
                 </button>
               </div>
+            </div>
 
-              {/* Quick stats */}
-              <div className="mt-12 flex items-center gap-8">
-                <div className="flex -space-x-3">
-                  {['bg-blue-400', 'bg-cyan-400', 'bg-blue-500', 'bg-indigo-400'].map((c, i) => (
-                    <div key={i} className={`w-10 h-10 rounded-full ${c} border-2 border-white flex items-center justify-center text-xs font-bold text-white shadow-sm`}>
-                      {['AK', 'MA', 'SA', 'EK'][i]}
-                    </div>
-                  ))}
+            <div className="relative flex min-h-[620px] items-center justify-center perspective-1000">
+              <div className="absolute inset-x-[12%] top-[14%] h-[380px] rounded-full bg-blue-100/80 blur-[90px]" />
+              <div className="absolute bottom-[10%] right-[16%] h-40 w-40 rounded-full bg-slate-200/70 blur-[70px]" />
+
+              <PhoneMockup
+                variant="search"
+                className="absolute left-0 top-10 hidden rotate-[-12deg] lg:block"
+              />
+
+              <PhoneMockup
+                variant="ticket"
+                className="absolute right-3 top-0 z-10 rotate-[7deg] scale-[1.02]"
+              />
+
+              <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-full border border-white/80 bg-white/90 px-5 py-3 shadow-[0_20px_50px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50">
+                  <CheckCircle className="h-5 w-5 text-emerald-500" />
                 </div>
                 <div>
-                  <div className="text-sm font-semibold text-gray-900">+5 000 voyageurs</div>
-                  <div className="text-xs text-gray-400">nous font confiance</div>
+                  <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Status</div>
+                  <div className="text-sm font-semibold text-slate-900">Billet confirmé et prêt à scanner</div>
                 </div>
               </div>
-            </div>
 
-            {/* Right: 3D Bus visual */}
-            <div className="relative perspective-1000 animate-fade-in-delay">
-              {/* Glow behind bus */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-blue-100/60 rounded-full blur-[60px]" />
-
-              {/* Main bus card */}
-              <div className="relative card-3d rounded-3xl overflow-hidden bg-gradient-to-br from-blue-50 to-white border border-gray-100 shadow-xl shadow-blue-500/5 p-8 animate-float">
-                {/* Bus SVG */}
-                <div className="flex justify-center mb-6">
-                  <Bus3D className="w-64" animated={true} color="#3b82f6" />
-                </div>
-
-                {/* Road */}
-                <AnimatedRoad />
-
-                {/* Ticket preview card */}
-                <div className="mt-6 p-4 rounded-2xl bg-white border border-gray-100 shadow-sm">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-blue-500" />
-                      <span className="text-sm font-medium text-gray-700">Lomé</span>
-                    </div>
-                    <div className="flex-1 mx-3 border-t border-dashed border-gray-300 relative">
-                      <Bus className="w-4 h-4 text-blue-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white px-0.5" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-700">Kara</span>
-                      <div className="w-3 h-3 rounded-full bg-blue-500" />
-                    </div>
+              <div className="absolute right-0 top-24 rounded-[28px] border border-slate-200 bg-white/95 px-4 py-3 shadow-[0_18px_45px_rgba(15,23,42,0.10)] backdrop-blur-xl">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50">
+                    <Download className="h-5 w-5 text-blue-600" />
                   </div>
-                  <div className="flex items-center justify-between text-xs text-gray-400">
-                    <span>06:45 — Départ</span>
-                    <span>~7h de trajet</span>
-                    <span>7 000 FCFA</span>
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Mobile App</div>
+                    <div className="text-sm font-semibold text-slate-900">iOS, Android et APK</div>
                   </div>
                 </div>
               </div>
-
-              {/* Floating badge */}
-              <div className="absolute -top-4 -right-4 px-4 py-2 rounded-2xl bg-white border border-gray-100 shadow-lg animate-bounce-soft">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-green-500" />
-                  <span className="text-sm font-semibold text-green-600">Confirmé</span>
-                </div>
-              </div>
-
-              {/* Floating price tag */}
-              <div className="absolute -bottom-2 -left-4 px-5 py-3 rounded-2xl bg-white border border-gray-100 shadow-lg animate-float-delay">
-                <div className="text-xs text-gray-400">À partir de</div>
-                <div className="text-xl font-bold text-gray-900">3 500 <span className="text-sm font-normal text-gray-400">FCFA</span></div>
-              </div>
             </div>
-          </div>
-        </div>
-
-        {/* Animated bus driving across bottom */}
-        <div className="absolute bottom-4 left-0 w-full overflow-hidden pointer-events-none opacity-10">
-          <div className="animate-bus-drive">
-            <Bus3D className="w-32" animated={true} color="#60a5fa" />
           </div>
         </div>
       </section>
@@ -480,7 +584,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
           <div className="text-center mb-16 animate-slide-up">
             <h2 className="text-3xl md:text-4xl font-extrabold mb-4 text-gray-900">
               Pourquoi choisir{' '}
-              <span className="text-gradient-blue">EvexTicket</span> ?
+              <span className="text-blue-600">EvexTicket</span> ?
             </h2>
             <p className="text-gray-500 max-w-2xl mx-auto text-lg">
               Une plateforme pensée pour les voyageurs modernes — rapide, sécurisée et conçue pour simplifier vos déplacements.
@@ -491,14 +595,14 @@ const LandingPage: React.FC<LandingPageProps> = ({
             {features.map((feature, index) => (
               <div
                 key={index}
-                className="feature-card group rounded-2xl bg-white border border-gray-100 p-7 cursor-default shadow-sm hover:shadow-xl hover:shadow-blue-500/5 transition-all duration-400"
+                className="feature-card group rounded-2xl bg-white border border-gray-200/80 p-7 cursor-default shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-all duration-300"
                 style={{ animationDelay: `${index * 100}ms` }}
               >
-                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center mb-5 shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                  {React.cloneElement(feature.icon, { className: 'w-7 h-7 text-white' })}
+                <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center mb-5 transition-all duration-300 ${feature.tone}`}>
+                  {React.cloneElement(feature.icon, { className: 'w-5 h-5' })}
                 </div>
                 <h3 className="text-lg font-bold text-gray-900 mb-2">{feature.title}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">{feature.description}</p>
+                <p className="text-sm text-gray-500 leading-7">{feature.description}</p>
               </div>
             ))}
           </div>
@@ -556,46 +660,70 @@ const LandingPage: React.FC<LandingPageProps> = ({
 
       {/* ==================== DESTINATIONS ==================== */}
       <section className="py-20 px-4 sm:px-6 lg:px-8 relative">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute bottom-0 left-1/4 w-[500px] h-[500px] bg-blue-50/50 rounded-full blur-[120px]" />
-        </div>
-
         <div className="max-w-7xl mx-auto relative z-10">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-extrabold mb-4 text-gray-900">
-              Découvrez le <span className="text-gradient-blue">Togo</span>
-            </h2>
-            <p className="text-gray-500 text-lg">Des destinations magnifiques à portée de clic</p>
-          </div>
+          <div className="rounded-[32px] border border-gray-200 bg-white px-6 py-8 shadow-[0_22px_70px_rgba(15,23,42,0.06)] md:px-10 md:py-10">
+            <div className="mb-10 flex flex-col gap-4 md:mb-12 md:flex-row md:items-end md:justify-between">
+              <div className="max-w-2xl">
+                <h2 className="text-3xl md:text-4xl font-extrabold text-gray-950">
+                  Destinations populaires
+                </h2>
+                <p className="mt-3 text-lg text-gray-500">
+                  Explorez les trajets les plus demandés à travers le Togo avec un <span className="text-blue-500">confort garanti.</span>
+                </p>
+              </div>
+              <div className="hidden md:inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-500">
+                <span className="font-medium text-gray-700">Carousel destinations</span>
+                <ArrowRight className="h-4 w-4 text-blue-500" />
+              </div>
+            </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-            {destinations.map((dest, index) => (
-              <div
-                key={index}
-                className="group relative rounded-2xl overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-shadow duration-300"
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                <div className="aspect-[3/4] overflow-hidden">
-                  <img
-                    loading="lazy"
-                    src={dest.image}
-                    alt={dest.name}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                  />
-                </div>
-                {/* Overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-                {/* Content */}
-                <div className="absolute bottom-0 left-0 right-0 p-4 md:p-5">
-                  <h3 className="text-lg md:text-xl font-bold text-white">{dest.name}</h3>
-                  <p className="text-xs text-white/70">{dest.subtitle}</p>
-                  <div className="mt-3 flex items-center gap-1 text-xs text-blue-200 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <span>Explorer</span>
-                    <ChevronRight className="w-3 h-3" />
+            <div className="hide-scrollbar -mx-2 flex snap-x snap-mandatory gap-5 overflow-x-auto px-2 pb-4 md:gap-7">
+              {destinations.map((dest, index) => (
+                <div
+                  key={index}
+                  className={`destination-card group relative min-h-[350px] min-w-[290px] snap-start overflow-hidden rounded-[28px] bg-gradient-to-br ${dest.surface} p-5 md:min-h-[380px] md:min-w-[308px]`}
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
+                  <div className="absolute inset-0 overflow-hidden rounded-[28px]">
+                    <img
+                      loading="lazy"
+                      src={dest.image}
+                      alt={dest.name}
+                      className="h-full w-full scale-[1.08] object-cover opacity-[0.42] blur-[1px] transition-transform duration-700 group-hover:scale-[1.12]"
+                    />
+                  </div>
+                  <div className="absolute inset-0 rounded-[28px] bg-[radial-gradient(circle_at_center,rgba(148,163,184,0.10),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(0,0,0,0.22))]" />
+
+                  <div className="relative z-10 flex h-full flex-col">
+                    <div className="rounded-full border border-white/12 bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-sm w-fit">
+                      {dest.badge}
+                    </div>
+
+                    <div className="mt-auto pr-12">
+                      <h3 className="text-2xl font-bold text-white md:text-[26px]">{dest.name}</h3>
+                      <p className={`mt-1 text-sm font-medium ${dest.accent}`}>{dest.subtitle}</p>
+                      <p className="mt-4 max-w-[92%] text-sm leading-6 text-white/92">
+                        {dest.teaser}
+                      </p>
+                      <div className="mt-5 flex flex-wrap items-center gap-2.5 text-[11px] text-white/85">
+                        <div className="inline-flex items-center gap-1.5 rounded-full bg-black/24 px-3 py-1.5 backdrop-blur-sm">
+                          <MapPin className="h-3 w-3 text-rose-300" />
+                          {dest.name}
+                        </div>
+                        <div className="inline-flex items-center gap-1.5 rounded-full bg-black/24 px-3 py-1.5 backdrop-blur-sm">
+                          <Clock className="h-3 w-3 text-slate-200" />
+                          {dest.travel}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="absolute bottom-20 right-4 flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/12 text-white shadow-[0_10px_30px_rgba(0,0,0,0.18)] backdrop-blur-sm transition-all duration-300 group-hover:translate-x-1 group-hover:bg-white/16">
+                      <ChevronRight className="h-4 w-4" />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </section>

@@ -614,6 +614,40 @@ class ApiService {
 
   // Authentification (pour l'instant, simulation)
   async login(username: string, password: string): Promise<{ token: string; user: any }> {
+    return this.loginClient(username, password);
+  }
+
+  async loginClient(phone: string, pin: string): Promise<{ token: string; user: any }> {
+    const resp = await this.request<{ token: string; user: any }>('/auth/client/login/', {
+      method: 'POST',
+      body: JSON.stringify({ phone, pin }),
+    });
+    this.setAuthToken(resp.token);
+    try { localStorage.setItem('username', phone); } catch (e) { }
+    return resp;
+  }
+
+  async loginCompanyAdmin(email: string, password: string): Promise<{ token: string; user: any }> {
+    const resp = await this.request<{ token: string; user: any }>('/auth/company/login/', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    this.setAuthToken(resp.token);
+    try { localStorage.setItem('username', email); } catch (e) { }
+    return resp;
+  }
+
+  async loginSuperAdmin(email: string, password: string): Promise<{ token: string; user: any }> {
+    const resp = await this.request<{ token: string; user: any }>('/auth/admin/login/', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    this.setAuthToken(resp.token);
+    try { localStorage.setItem('username', email); } catch (e) { }
+    return resp;
+  }
+
+  async loginLegacy(username: string, password: string): Promise<{ token: string; user: any }> {
     // Obtenir token via endpoint DRF authtoken (email ou téléphone)
     const payload: any = { password };
     if (username && username.includes('@')) {
@@ -676,13 +710,11 @@ class ApiService {
   }
 
   async register(userData: {
-    username: string;
-    email: string;
-    password: string;
-    password2: string;
     first_name: string;
     last_name: string;
-    phone?: string;
+    phone: string;
+    pin: string;
+    email?: string | null;
   }): Promise<{ token: string; user: any }> {
     // Appel réel à l'API Django pour l'inscription
     const regController = new AbortController();

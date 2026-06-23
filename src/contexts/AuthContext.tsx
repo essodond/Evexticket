@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import apiService from '../services/api';
 
 type User = any;
+export type AuthPortal = 'client' | 'company' | 'admin';
 
 interface AuthContextValue {
   user: User | null;
@@ -9,7 +10,7 @@ interface AuthContextValue {
   loading: boolean;
   /** True when the backend is taking unusually long to respond (Render.com cold start). */
   serverStarting: boolean;
-  login: (email: string, password: string) => Promise<User>;
+  login: (identifier: string, secret: string, portal?: AuthPortal) => Promise<User>;
   register: (payload: any) => Promise<User>;
   logout: () => void;
 }
@@ -67,8 +68,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const resp = await apiService.login(email, password);
+  const login = async (identifier: string, secret: string, portal: AuthPortal = 'client') => {
+    const resp =
+      portal === 'admin'
+        ? await apiService.loginSuperAdmin(identifier, secret)
+        : portal === 'company'
+          ? await apiService.loginCompanyAdmin(identifier, secret)
+          : await apiService.loginClient(identifier, secret);
     if (resp.token) {
       apiService.setAuthToken(resp.token);
       // Use sessionStorage instead of localStorage for security (cleared on browser close)

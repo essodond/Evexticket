@@ -5,6 +5,7 @@ from django.utils import timezone
 from datetime import timedelta
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.contrib.auth.hashers import make_password
 
 
 class Company(models.Model):
@@ -484,9 +485,10 @@ def update_scheduled_trip_seats_on_booking(sender, instance, **kwargs):
 
 
 class UserProfile(models.Model):
-    """Profil utilisateur étendu pour stocker des infos supplémentaires comme le téléphone."""
+    """Profil utilisateur étendu pour stocker des infos supplémentaires comme le téléphone et le PIN."""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile', verbose_name='Utilisateur')
     phone = models.CharField(max_length=30, blank=True, null=True, verbose_name='Numéro de téléphone')
+    pin = models.CharField(max_length=128, blank=True, null=True, verbose_name='PIN haché')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Date de création')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Date de mise à jour')
 
@@ -503,7 +505,13 @@ def create_user_profile(sender, instance, created, **kwargs):
     """Créer automatiquement un profil lors de la création d'un utilisateur."""
     if created:
         try:
-            UserProfile.objects.create(user=instance)
+            profile = UserProfile.objects.create(user=instance)
+            # Définir un PIN par défaut '1234' haché pour les anciens/futurs utilisateurs
+            try:
+                profile.pin = make_password('1234')
+                profile.save()
+            except Exception:
+                pass
         except Exception:
             # Éviter de bloquer la création d'utilisateur en cas d'erreur
             pass

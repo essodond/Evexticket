@@ -4,18 +4,17 @@ import { User, Trip, TripStop, BoardingZone } from '../types';
 import { Platform, NativeModules } from 'react-native';
 
 export interface LoginData {
+  // username previously accepted email or phone; password reused as PIN in new flow
   username: string;
-  password: string;
+  password: string; // PIN (4 digits) for phone logins
 }
 
 export interface RegisterData {
-  email: string;
-  username: string;
-  password: string;
-  password2: string;
   first_name: string;
   last_name: string;
-  phone?: string;
+  phone: string;
+  pin: string;
+  email?: string | null; // optional now
 }
 
 export interface AuthResponse {
@@ -47,7 +46,20 @@ const API_BASE_URL = (() => {
   return 'https://api.evex-tg.com/api';
 })();
 */
-const API_BASE_URL = 'https://api.evex-tg.com/api';
+const resolveApiBase = () => {
+  // Expo/React Native: prefer build-time extra or env vars
+  const expoExtra = (Constants.expoConfig?.extra as any)?.EXPO_PUBLIC_API_BASE_URL || (Constants.manifest as any)?.extra?.EXPO_PUBLIC_API_BASE_URL;
+  const nodeEnv = process.env.EXPO_PUBLIC_API_BASE_URL || process.env.API_BASE_URL;
+  const raw = expoExtra || nodeEnv;
+  if (raw) {
+    const clean = String(raw).trim().replace(/\/$/, '');
+    return clean.endsWith('/api') ? clean : `${clean}/api`;
+  }
+  // Default to local dev server on your machine IP for testing
+  return 'http://192.168.1.65:8000/api';
+};
+const API_BASE_URL = resolveApiBase();
+console.log('API_BASE_URL utilisée:', API_BASE_URL);
 console.log('API_BASE_URL utilisée:', API_BASE_URL);
 const TIMEOUT = 60000; // 60s pour gérer les cold starts Render (30s+ de démarrage)
 
@@ -175,14 +187,16 @@ async function request<T>(
 
 export async function login(data: LoginData): Promise<AuthResponse> {
   try {
-    // Construire le payload selon l'identifiant fourni (email ou téléphone)
-    const payload: any = { password: data.password };
+    // For phone+pin: send phone and pin. For legacy email use email + password.
+    const payload: any = {};
     if (data.username && data.username.includes('@')) {
       payload.email = data.username;
+      payload.password = data.password;
     } else if (data.username) {
       payload.phone = data.username;
+      payload.pin = data.password; // new API expects 'pin'
     }
-    // Ajouter aussi username en repli possible
+    // Keep username for backward compatibility
     payload.username = data.username;
 
     const response = await request<AuthResponse>('/login/', {
@@ -199,29 +213,26 @@ export async function login(data: LoginData): Promise<AuthResponse> {
 
 export async function register(data: RegisterData): Promise<AuthResponse> {
   try {
+    // New phone+pin registration payload. Email is optional.
+    const body: any = {
+      first_name: data.first_name,
+      last_name: data.last_name,
+      phone: data.phone,
+      pin: data.pin,
+    };
+    if (data.email) body.email = data.email;
+
     const response = await request<any>('/register/', {
       method: 'POST',
-      body: JSON.stringify({
-        email: data.email,
-        username: data.username,
-        password: data.password,
-        password2: data.password2,
-        first_name: data.first_name,
-        last_name: data.last_name,
-        phone: data.phone,
-      }),
+      body: JSON.stringify(body),
     });
 
-    // Le backend register renvoie une structure plate : { username, email, token, ... }
-    // alors que login renvoie { user: {...}, token: "..." }
-    // On normalise ici pour que les deux aient le même format
+    // Normalisation similaire au précédent
     let normalizedResponse: AuthResponse;
 
     if (response.user && response.token) {
-      // Déjà au bon format (comme login)
       normalizedResponse = response;
     } else if (response.token) {
-      // Structure plate du register : extraire token et construire user
       const { token, ...userData } = response;
       normalizedResponse = {
         token,

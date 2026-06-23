@@ -128,7 +128,7 @@ setTickets(transformedTickets);
 ```bash
 # Remplacez TOKEN par votre token réel
 curl -H "Authorization: Token TOKEN" \
-     http://192.168.1.64:8000/api/my-bookings/
+     http://192.168.1.65:8000/api/my-bookings/
 
 # Doit retourner un TABLEAU directement:
 [

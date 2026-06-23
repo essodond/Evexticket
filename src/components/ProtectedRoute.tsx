@@ -29,6 +29,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowed }) =>
   }
 
   if (!auth.user) {
+    const allowedRoles = Array.isArray(allowed) ? allowed : allowed ? [allowed] : [];
+    if (allowedRoles.includes('admin')) return <Navigate to="/admin/login" replace />;
+    if (allowedRoles.includes('company')) return <Navigate to="/company/login" replace />;
     return <Navigate to="/login" replace />;
   }
 
