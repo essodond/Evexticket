@@ -61,6 +61,8 @@ const AuthPage: React.FC<AuthPageProps> = ({
   const PortalIcon = config.icon;
   const isClientPortal = portal === 'client';
   const effectiveMode = isClientPortal ? mode : 'login';
+  const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>(portal === 'client' ? 'phone' : 'email');
+  const loginByPhone = effectiveMode === 'register' ? true : loginMethod === 'phone';
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -74,7 +76,7 @@ const AuthPage: React.FC<AuthPageProps> = ({
   const [isLoading, setIsLoading] = useState(false);
 
   const setField = (name: keyof typeof formData, value: string) => {
-    const nextValue = isClientPortal && name === 'identifier' ? normalizeLocalPhone(value) : value;
+    const nextValue = loginByPhone && name === 'identifier' ? normalizeLocalPhone(value) : value;
     setFormData((prev) => ({ ...prev, [name]: nextValue }));
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }));
   };
@@ -88,7 +90,7 @@ const AuthPage: React.FC<AuthPageProps> = ({
       if (!formData.lastName.trim()) nextErrors.lastName = 'Le nom est requis';
     }
 
-    if (isClientPortal) {
+    if (loginByPhone) {
       if (!localPhone) nextErrors.identifier = 'Le numero de telephone est requis';
       if (localPhone && localPhone.length !== 8) nextErrors.identifier = 'Le numero doit contenir 8 chiffres';
       if (!/^\d{4}$/.test(formData.pinOrPassword)) nextErrors.pinOrPassword = 'Le code PIN doit contenir 4 chiffres';
@@ -127,7 +129,7 @@ const AuthPage: React.FC<AuthPageProps> = ({
       }
 
       const user = await auth.login(
-        isClientPortal ? normalizeLocalPhone(formData.identifier) : formData.identifier.trim(),
+        loginByPhone ? normalizeLocalPhone(formData.identifier) : formData.identifier.trim(),
         formData.pinOrPassword,
         portal,
       );
@@ -185,11 +187,36 @@ const AuthPage: React.FC<AuthPageProps> = ({
                 {effectiveMode === 'register' ? 'Creer un compte voyageur' : config.title}
               </h2>
               <p className="mt-2 text-gray-500">
-                {effectiveMode === 'register' ? 'Compte client avec telephone et code PIN.' : config.subtitle}
+                {effectiveMode === 'register'
+                  ? 'Compte client avec telephone et code PIN.'
+                  : 'Choisissez votre methode de connexion, puis connectez-vous avec email/mot de passe ou numero/PIN.'}
               </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
+              {effectiveMode === 'login' && (
+                <div className="flex flex-col gap-2 rounded-3xl border border-blue-100 bg-blue-50 p-3 text-sm text-gray-700">
+                  <span className="font-semibold text-gray-900">Mode de connexion</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setLoginMethod('phone')}
+                      className={`${loginMethod === 'phone' ? 'bg-white text-blue-700 shadow-sm' : 'bg-blue-100 text-blue-600'} flex-1 rounded-2xl px-4 py-3 text-sm font-medium transition flex items-center justify-center gap-2`}
+                    >
+                      {loginMethod === 'phone' && <CheckCircle className="h-4 w-4 text-green-500" />}
+                      Téléphone + PIN
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLoginMethod('email')}
+                      className={`${loginMethod === 'email' ? 'bg-white text-blue-700 shadow-sm' : 'bg-blue-100 text-blue-600'} flex-1 rounded-2xl px-4 py-3 text-sm font-medium transition flex items-center justify-center gap-2`}
+                    >
+                      {loginMethod === 'email' && <CheckCircle className="h-4 w-4 text-green-500" />}
+                      Email + mot de passe
+                    </button>
+                  </div>
+                </div>
+              )}
               {effectiveMode === 'register' && (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
@@ -212,37 +239,37 @@ const AuthPage: React.FC<AuthPageProps> = ({
               )}
 
               <div>
-                <label className="mb-1.5 block text-sm font-semibold text-gray-700" htmlFor="identifier">{config.identifierLabel}</label>
+                <label className="mb-1.5 block text-sm font-semibold text-gray-700" htmlFor="identifier">{loginByPhone ? 'Numero de telephone' : 'Email'}</label>
                 <div className="relative">
                   <PortalIcon className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-blue-400" />
                   <input
                     id="identifier"
-                    type={isClientPortal ? 'tel' : 'email'}
-                    inputMode={isClientPortal ? 'numeric' : 'email'}
-                    autoComplete={isClientPortal ? 'tel' : 'email'}
+                    type={loginByPhone ? 'tel' : 'email'}
+                    inputMode={loginByPhone ? 'numeric' : 'email'}
+                    autoComplete={loginByPhone ? 'tel' : 'email'}
                     className={iconInputClass}
                     value={formData.identifier}
                     onChange={(e) => setField('identifier', e.target.value)}
-                    placeholder={config.identifierPlaceholder}
+                    placeholder={loginByPhone ? '90 12 34 56' : 'admin@exemple.com'}
                   />
                 </div>
                 {errors.identifier && <ErrorText message={errors.identifier} />}
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-semibold text-gray-700" htmlFor="pinOrPassword">{config.secretLabel}</label>
+                <label className="mb-1.5 block text-sm font-semibold text-gray-700" htmlFor="pinOrPassword">{loginByPhone ? 'Code PIN' : 'Mot de passe'}</label>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-blue-400" />
                   <input
                     id="pinOrPassword"
                     type={showSecret ? 'text' : 'password'}
-                    inputMode={isClientPortal ? 'numeric' : 'text'}
-                    autoComplete={isClientPortal ? 'one-time-code' : 'current-password'}
-                    maxLength={isClientPortal ? 4 : undefined}
+                    inputMode={loginByPhone ? 'numeric' : 'text'}
+                    autoComplete={loginByPhone ? 'one-time-code' : 'current-password'}
+                    maxLength={loginByPhone ? 4 : undefined}
                     className={`${iconInputClass} pr-12`}
                     value={formData.pinOrPassword}
-                    onChange={(e) => setField('pinOrPassword', isClientPortal ? e.target.value.replace(/\D/g, '').slice(0, 4) : e.target.value)}
-                    placeholder={config.secretPlaceholder}
+                    onChange={(e) => setField('pinOrPassword', loginByPhone ? e.target.value.replace(/\D/g, '').slice(0, 4) : e.target.value)}
+                    placeholder={loginByPhone ? '1234' : 'Mot de passe'}
                   />
                   <button type="button" onClick={() => setShowSecret((value) => !value)} className="absolute right-4 top-1/2 -translate-y-1/2 text-blue-400 transition hover:text-blue-600">
                     {showSecret ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}

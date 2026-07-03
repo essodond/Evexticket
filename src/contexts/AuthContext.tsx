@@ -69,12 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (identifier: string, secret: string, portal: AuthPortal = 'client') => {
-    const resp =
-      portal === 'admin'
-        ? await apiService.loginSuperAdmin(identifier, secret)
-        : portal === 'company'
-          ? await apiService.loginCompanyAdmin(identifier, secret)
-          : await apiService.loginClient(identifier, secret);
+    const resp = await apiService.loginLegacy(identifier, secret); // unified login endpoint
     if (resp.token) {
       apiService.setAuthToken(resp.token);
       // Use sessionStorage instead of localStorage for security (cleared on browser close)
