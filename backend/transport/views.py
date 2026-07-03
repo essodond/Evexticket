@@ -371,6 +371,13 @@ class ScheduledTripViewSet(viewsets.ModelViewSet):
     serializer_class = ScheduledTripSerializer
     permission_classes = [permissions.AllowAny]
 
+    def get_queryset(self):
+        queryset = ScheduledTrip.objects.all()
+        company_id = self.request.query_params.get('company_id')
+        if company_id:
+            queryset = queryset.filter(trip__company_id=company_id)
+        return queryset.select_related('trip__company', 'trip__departure_city', 'trip__arrival_city')
+
     def perform_create(self, serializer):
         # Logic to ensure only company admins or staff can create scheduled trips
         trip = serializer.validated_data.get('trip')
