@@ -19,17 +19,10 @@ import MyTicketsPage from './components/MyTicketsPage';
 import ProfilePage from './components/ProfilePage';
 import CompanyDashboard from './components/CompanyDashboard';
 import AdminDashboard from './components/AdminDashboard';
+import { getPortalFromHostname } from './utils/portal';
 import type { AuthPortal } from './contexts/AuthContext';
 
 type AuthMode = 'login' | 'register';
-
-const getPortalFromHostname = (): AuthPortal => {
-  if (typeof window === 'undefined') return 'client';
-  const hostname = window.location.hostname.toLowerCase();
-  if (hostname.startsWith('admin.')) return 'admin';
-  if (hostname.startsWith('compagnie.') || hostname.startsWith('company.')) return 'company';
-  return 'client';
-};
 
 function App() {
   // NOTE: Ce composant est le point d'entrée de l'application React.
@@ -50,7 +43,7 @@ function App() {
   const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
 
   const navigate = useNavigate();
-  const currentPortal = getPortalFromHostname();
+  const currentPortal = getPortalFromHostname(typeof window !== 'undefined' ? window.location.hostname : undefined) as AuthPortal;
 
   const handleSearch = async (data: SearchFormData) => {
     // normalize the search data to the TripSearchParams shape

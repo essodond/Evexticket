@@ -30,6 +30,19 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*', cast=Csv())
 
+for host in [
+    '.evex-tg.local',
+    '.evex-tg.com',
+    'admin.evex-tg.local',
+    'compagnie.evex-tg.local',
+    'company.evex-tg.local',
+    'admin.evex-tg.com',
+    'compagnie.evex-tg.com',
+    'company.evex-tg.com',
+]:
+    if host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(host)
+
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATIC_URL = '/static/'
 
@@ -186,8 +199,24 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8081",
     "http://localhost:8084",
     "http://127.0.0.1:8084",
+    "http://admin.evex-tg.local:5173",
+    "http://compagnie.evex-tg.local:5173",
+    "http://company.evex-tg.local:5173",
+    "https://admin.evex-tg.local",
+    "https://compagnie.evex-tg.local",
+    "https://company.evex-tg.local",
+    "http://admin.evex-tg.com:5173",
+    "http://compagnie.evex-tg.com:5173",
+    "http://company.evex-tg.com:5173",
+    "https://admin.evex-tg.com",
+    "https://compagnie.evex-tg.com",
+    "https://company.evex-tg.com",
     "exp://localhost:19000",
-    
+]
+
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https?://([a-z0-9-]+\.)?evex-tg\.local(:\d+)?$",
+    r"^https?://([a-z0-9-]+\.)?evex-tg\.com(:\d+)?$",
 ]
 
 # Add dynamic origins from environment if needed
@@ -198,6 +227,19 @@ if _extra_cors:
 # Allow all for local development (restrict in production)
 CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL', default=False, cast=bool)
 CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://admin.evex-tg.local:5173",
+    "http://compagnie.evex-tg.local:5173",
+    "http://company.evex-tg.local:5173",
+    "https://admin.evex-tg.local",
+    "https://compagnie.evex-tg.local",
+    "https://company.evex-tg.local",
+    "https://admin.evex-tg.com",
+    "https://compagnie.evex-tg.com",
+    "https://company.evex-tg.com",
+]
 # Configuration de la langue et du fuseau horaire
 LANGUAGE_CODE = 'fr-fr'
 TIME_ZONE = 'Africa/Lome'
