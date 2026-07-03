@@ -8,6 +8,7 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -52,6 +53,7 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
 
   // Utiliser les sièges réels de l'API, avec gestion du statut "occupied"
   const seatsData = trip?.seats ? trip.seats : [];
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     const fetchTrip = async () => {
@@ -161,7 +163,10 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
       <ScrollView
         style={styles.content}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[
+          styles.contentContainer,
+          { paddingBottom: (styles.contentContainer?.paddingBottom || 0) + insets.bottom + 20 },
+        ]}
       >
         <View style={styles.header}>
           <View>
@@ -238,7 +243,7 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
           selectedSeatId={selectedSeat}
         />
 
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: Math.max(10, insets.bottom), paddingTop: 10 }]}>
           <View style={styles.footerPrice}>
             <Text style={styles.footerPriceLabel}>Prix total</Text>
             <Text style={styles.footerPriceValue}>{formatCurrency(parseFloat(trip.trip_info.price || '0'))}</Text>

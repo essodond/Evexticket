@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Plus, Edit, Trash2, Users, Download, Calendar, MapPin, DollarSign, Bus, BarChart3, FileText, Eye, XCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Users, Download, Calendar, MapPin, DollarSign, Bus, BarChart3, FileText, Eye, XCircle, Settings } from 'lucide-react';
 import apiService, { ScheduledTrip, Booking, CompanyStats, City, Trip } from '../services/api';
 import { useCities } from '../hooks/useApi';
 import AddTripModal from './AddTripModal';
 import ConfirmationModal from './ConfirmationModal';
 import NotificationModal from './NotificationModal';
 import CompanyCharts from './CompanyCharts';
+import StatCard from './widgets/StatCard';
 import { useAuth } from '../contexts/AuthContext';
 
 interface LocalBooking extends Booking {
@@ -39,7 +40,7 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
     );
   }
 
-  const [activeTab, setActiveTab] = useState('trips');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [showAddTripModal, setShowAddTripModal] = useState(false);
   const [editingTrip, setEditingTrip] = useState<ScheduledTrip | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -240,6 +241,13 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
     }).format(amount);
   };
 
+  const tabs = [
+    { id: 'dashboard', label: 'Tableau de bord', icon: BarChart3 },
+    { id: 'trips', label: 'Voyages', icon: Bus },
+    { id: 'bookings', label: 'Réservations', icon: FileText },
+    { id: 'settings', label: 'Paramètres', icon: Settings },
+  ];
+
   if (!companyId) {
     return <div>Chargement des données de la compagnie ou non autorisé...</div>;
   }
@@ -249,94 +257,78 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            {logoUrl && (
-              <img src={logoUrl} alt={siteTitle || "Logo"} className="h-12 w-12 rounded-xl shadow-sm" />
-            )}
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                Tableau de bord
-              </h1>
-              <p className="text-sm text-gray-500 mt-0.5">Compagnie <span className="font-semibold text-blue-600">{companyName}</span></p>
+        <div className="grid gap-6 rounded-[32px] bg-blue-600 p-8 text-white shadow-2xl shadow-blue-500/10 mb-8">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-sm uppercase tracking-[0.28em] text-blue-100/90 font-semibold mb-2">Dashboard compagnie</p>
+              <h1 className="text-4xl font-extrabold tracking-tight">Bonjour, gestionnaire {companyName ? `de ${companyName}` : ''}</h1>
+              <p className="mt-3 text-base leading-7 text-blue-100/85">Surveillez vos voyages, réservations et chiffre d'affaires avec un aperçu clair et rapide.</p>
             </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleDownloadReport}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white text-gray-700 text-sm font-medium rounded-xl border border-gray-200 hover:bg-gray-50 transition-all shadow-sm"
-            >
-              <Download size={16} />
-              Rapport
-            </button>
-            <button
-              onClick={() => setShowAddTripModal(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-all shadow-sm"
-            >
-              <Plus size={16} />
-              Nouveau voyage
-            </button>
-          </div>
-        </div>
-
-        {/* Stats Section */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-          <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center">
-                <Bus className="h-5 w-5 text-blue-600" />
-              </div>
-              <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-full uppercase tracking-wider">Voyages</span>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => setShowAddTripModal(true)}
+                className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-blue-700 shadow-lg shadow-blue-950/10 transition hover:bg-blue-50"
+              >
+                <Plus size={16} />
+                Nouveau voyage
+              </button>
+              <button
+                onClick={handleDownloadReport}
+                className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/20"
+              >
+                <Download size={16} />
+                Rapport
+              </button>
             </div>
-            <p className="text-3xl font-extrabold text-gray-900">
-              {stats?.scheduled_trips ? formatNumber(stats.scheduled_trips) : '0'}
-            </p>
-            <p className="text-xs text-gray-400 mt-1">Voyages programmés</p>
           </div>
 
-          <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center">
-                <FileText className="h-5 w-5 text-emerald-600" />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-[28px] bg-white/10 p-5 backdrop-blur-sm border border-white/20">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold uppercase tracking-[0.2em] text-blue-100/70">Voyages</div>
+                <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 text-white shadow-sm">
+                  <Bus size={18} />
+                </div>
               </div>
-              <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full uppercase tracking-wider">Réservations</span>
+              <p className="mt-6 text-4xl font-extrabold text-white">{stats?.scheduled_trips ? formatNumber(stats.scheduled_trips) : '0'}</p>
+              <p className="mt-1 text-sm text-blue-100/80">Voyages programmés</p>
             </div>
-            <p className="text-3xl font-extrabold text-gray-900">
-              {stats?.total_bookings ? formatNumber(stats.total_bookings) : '0'}
-            </p>
-            <p className="text-xs text-gray-400 mt-1">Total des réservations</p>
-          </div>
-
-          <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-11 h-11 rounded-xl bg-amber-50 flex items-center justify-center">
-                <DollarSign className="h-5 w-5 text-amber-600" />
+            <div className="rounded-[28px] bg-white/10 p-5 backdrop-blur-sm border border-white/20">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold uppercase tracking-[0.2em] text-blue-100/70">Réservations</div>
+                <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 text-white shadow-sm">
+                  <FileText size={18} />
+                </div>
               </div>
-              <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-2 py-1 rounded-full uppercase tracking-wider">Revenu</span>
+              <p className="mt-6 text-4xl font-extrabold text-white">{stats?.total_bookings ? formatNumber(stats.total_bookings) : '0'}</p>
+              <p className="mt-1 text-sm text-blue-100/80">Total des réservations</p>
             </div>
-            <p className="text-2xl font-extrabold text-gray-900">
-              {stats?.total_revenue ? formatCurrency(stats.total_revenue) : '0'} <span className="text-sm font-normal text-gray-400">FCFA</span>
-            </p>
-            <p className="text-xs text-gray-400 mt-1">Chiffre d'affaires</p>
-          </div>
-
-          <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-11 h-11 rounded-xl bg-purple-50 flex items-center justify-center">
-                <Users className="h-5 w-5 text-purple-600" />
+            <div className="rounded-[28px] bg-white/10 p-5 backdrop-blur-sm border border-white/20">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold uppercase tracking-[0.2em] text-blue-100/70">Revenu</div>
+                <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 text-white shadow-sm">
+                  <DollarSign size={18} />
+                </div>
               </div>
-              <span className="text-[10px] font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded-full uppercase tracking-wider">Clients</span>
+              <p className="mt-6 text-4xl font-extrabold text-white">{stats?.total_revenue ? formatCurrency(stats.total_revenue) : '0'}</p>
+              <p className="mt-1 text-sm text-blue-100/80">Chiffre d'affaires</p>
             </div>
-            <p className="text-3xl font-extrabold text-gray-900">
-              {stats?.active_clients ? formatNumber(stats.active_clients) : '0'}
-            </p>
-            <p className="text-xs text-gray-400 mt-1">Clients réguliers</p>
+            <div className="rounded-[28px] bg-white/10 p-5 backdrop-blur-sm border border-white/20">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold uppercase tracking-[0.2em] text-blue-100/70">Clients</div>
+                <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 text-white shadow-sm">
+                  <Users size={18} />
+                </div>
+              </div>
+              <p className="mt-6 text-4xl font-extrabold text-white">{stats?.active_clients ? formatNumber(stats.active_clients) : '0'}</p>
+              <p className="mt-1 text-sm text-blue-100/80">Clients réguliers</p>
+            </div>
           </div>
         </div>
 
         {/* Tabs */}
         <div className="mb-6">
-          <div className="flex gap-2 bg-white rounded-xl p-1.5 shadow-sm border border-gray-100 w-fit">
+          <div className="inline-flex gap-2 rounded-full bg-slate-100/90 p-1.5 shadow-sm ring-1 ring-slate-200">
             {[{
               key: 'dashboard', label: 'Tableau de bord', icon: <BarChart3 size={16} /> },
               { key: 'trips', label: 'Voyages', icon: <Bus size={16} />, count: trips.length },
@@ -345,18 +337,16 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ logoUrl, siteTitle 
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all ${
                   activeTab === tab.key
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 {tab.icon}
                 {tab.label}
                 {tab.count !== undefined && (
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                    activeTab === tab.key ? 'bg-blue-500 text-blue-100' : 'bg-gray-100 text-gray-500'
-                  }`}>
+                  <span className={`text-[11px] rounded-full px-2 py-0.5 ${activeTab === tab.key ? 'bg-blue-50 text-blue-700' : 'bg-slate-200 text-slate-600'}`}>
                     {tab.count}
                   </span>
                 )}

@@ -3,13 +3,14 @@ import apiService, { City } from '../services/api';
 import { Company as TCompany, Trip as TTrip, User as TUser } from '../types';
 import { useCities } from '../hooks/useApi';
 import { useAuth } from '../contexts/AuthContext';
-import { Edit, Trash2, Users, Download, Bus, BarChart3, FileText, Eye, Building, Lock, TrendingUp, DollarSign, Calendar, RefreshCw, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { Edit, Trash2, Users, Download, Bus, BarChart3, FileText, Eye, Building, Lock, TrendingUp, DollarSign, Calendar, RefreshCw, ChevronLeft, ChevronRight, Search, Bell, Settings } from 'lucide-react';
 import AddCompanyModal from './AddCompanyModal';
 import AddTripModal from './AddTripModal';
 import ExportTicketsModal from './ExportTicketsModal';
 import AdminCharts from './AdminCharts';
 import NotificationModal from './NotificationModal';
 import UserDetailsModal from './UserDetailsModal';
+import StatCard from './widgets/StatCard';
 
 type Company = TCompany;
 type Trip = TTrip;
@@ -47,6 +48,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const [stats, setStats] = useState<any>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -184,6 +186,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
     { id: 'trips', label: 'Trajets', icon: Bus },
     { id: 'users', label: 'Utilisateurs', icon: Users },
     { id: 'reports', label: 'Rapports', icon: FileText },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'settings', label: 'Paramètres', icon: Settings },
   ];
 
   useEffect(() => { try { const params = new URLSearchParams(window.location.search); const t = params.get('tab'); if (t) setActiveTab(t); else { const saved = localStorage.getItem('admin_active_tab'); if (saved) setActiveTab(saved); } } catch (e) {} }, []);
@@ -192,80 +196,131 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
   // ============ RENDERERS ============
 
   const renderOverview = () => {
-    const statCards = [
-      { label: 'Utilisateurs', value: stats?.total_users ?? users.length, icon: Users, color: 'blue', bg: 'bg-blue-50', iconBg: 'bg-blue-100', textColor: 'text-blue-700' },
-      { label: 'Compagnies', value: stats?.active_companies ?? companies.length, icon: Building, color: 'emerald', bg: 'bg-emerald-50', iconBg: 'bg-emerald-100', textColor: 'text-emerald-700' },
-      { label: 'Trajets actifs', value: stats?.active_trips ?? trips.length, icon: Bus, color: 'violet', bg: 'bg-violet-50', iconBg: 'bg-violet-100', textColor: 'text-violet-700' },
-      { label: 'Réservations', value: stats?.total_bookings ?? 0, icon: Calendar, color: 'amber', bg: 'bg-amber-50', iconBg: 'bg-amber-100', textColor: 'text-amber-700' },
-      { label: 'Revenus total', value: `${Number(stats?.total_revenue ?? 0).toLocaleString('fr-FR')} FCFA`, icon: DollarSign, color: 'green', bg: 'bg-green-50', iconBg: 'bg-green-100', textColor: 'text-green-700' },
-      { label: 'Revenus (semaine)', value: `${Number(stats?.revenue_this_week ?? 0).toLocaleString('fr-FR')} FCFA`, icon: TrendingUp, color: 'cyan', bg: 'bg-cyan-50', iconBg: 'bg-cyan-100', textColor: 'text-cyan-700' },
+    // KPI first row
+    const firstRow = [
+      { id: 'users', title: 'Utilisateurs', value: stats?.total_users ?? users.length, icon: <Users className="w-5 h-5" />, color: '#2563EB', percent: stats?.users_change_pct ? `${stats.users_change_pct}%` : undefined, spark: stats?.users_spark || [2,3,5,4,6,7] },
+      { id: 'companies', title: 'Compagnies', value: stats?.active_companies ?? companies.length, icon: <Building className="w-5 h-5" />, color: '#10B981', percent: stats?.companies_change_pct ? `${stats.companies_change_pct}%` : undefined, spark: stats?.companies_spark || [1,2,2,3,4,3] },
+      { id: 'trips', title: 'Trajets actifs', value: stats?.active_trips ?? trips.length, icon: <Bus className="w-5 h-5" />, color: '#7C3AED', percent: stats?.trips_change_pct ? `${stats.trips_change_pct}%` : undefined, spark: stats?.trips_spark || [3,4,3,5,6,5] },
+      { id: 'bookings', title: 'Réservations', value: stats?.total_bookings ?? 0, icon: <Calendar className="w-5 h-5" />, color: '#F59E0B', percent: stats?.bookings_change_pct ? `${stats.bookings_change_pct}%` : undefined, spark: stats?.bookings_spark || [5,6,7,6,8,9] },
+    ];
+
+    const secondRow = [
+      { id: 'rev_today', title: "Revenus aujourd'hui", value: `${Number(stats?.revenue_today ?? 0).toLocaleString('fr-FR')} FCFA`, icon: <DollarSign className="w-5 h-5" />, color: '#2563EB', percent: stats?.revenue_today_pct ? `${stats.revenue_today_pct}%` : undefined, spark: stats?.revenue_today_spark || [10,12,8,14,16] },
+      { id: 'rev_week', title: 'Revenus semaine', value: `${Number(stats?.revenue_this_week ?? 0).toLocaleString('fr-FR')} FCFA`, icon: <TrendingUp className="w-5 h-5" />, color: '#10B981', percent: stats?.revenue_week_pct ? `${stats.revenue_week_pct}%` : undefined, spark: stats?.revenue_week_spark || [60,70,65,80,90] },
+      { id: 'rev_month', title: 'Revenus mois', value: `${Number(stats?.revenue_this_month ?? 0).toLocaleString('fr-FR')} FCFA`, icon: <TrendingUp className="w-5 h-5" />, color: '#F59E0B', percent: stats?.revenue_month_pct ? `${stats.revenue_month_pct}%` : undefined, spark: stats?.revenue_month_spark || [200,240,230,260,300] },
+      { id: 'rev_total', title: 'Revenus total', value: `${Number(stats?.total_revenue ?? 0).toLocaleString('fr-FR')} FCFA`, icon: <DollarSign className="w-5 h-5" />, color: '#7C3AED', percent: stats?.revenue_total_pct ? `${stats.revenue_total_pct}%` : undefined, spark: stats?.revenue_total_spark || [1000,1100,1200,1150,1250] },
     ];
 
     return (
-      <div className="space-y-8">
-        {/* Stat Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {statCards.map((card, i) => {
-            const Icon = card.icon;
-            return (
-              <div key={i} className={`${card.bg} rounded-2xl p-5 border border-white/60 shadow-sm hover:shadow-md transition-shadow`}>
-                <div className="flex items-center justify-between mb-3">
-                  <div className={`${card.iconBg} p-2.5 rounded-xl`}>
-                    <Icon className={`w-5 h-5 ${card.textColor}`} />
-                  </div>
-                </div>
-                <p className="text-sm font-medium text-gray-500 mb-1">{card.label}</p>
-                <p className={`text-2xl font-bold ${card.textColor}`}>
-                  {typeof card.value === 'number' ? card.value.toLocaleString('fr-FR') : card.value}
-                </p>
-              </div>
-            );
-          })}
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {firstRow.map((c) => (
+            <StatCard key={c.id} title={c.title} value={c.value} percent={c.percent} color={c.color} icon={c.icon} sparkData={c.spark} />
+          ))}
         </div>
 
-        {/* Quick stats row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-              <Calendar className="w-5 h-5 mr-2 text-blue-600" />
-              Cette semaine
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-gray-500">Réservations</p>
-                <p className="text-2xl font-bold text-gray-900">{stats?.bookings_this_week ?? 0}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Revenus</p>
-                <p className="text-2xl font-bold text-green-600">{Number(stats?.revenue_this_week ?? 0).toLocaleString('fr-FR')} <span className="text-sm">FCFA</span></p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-              <TrendingUp className="w-5 h-5 mr-2 text-emerald-600" />
-              Ce mois
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-gray-500">Réservations</p>
-                <p className="text-2xl font-bold text-gray-900">{stats?.bookings_this_month ?? 0}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Revenus</p>
-                <p className="text-2xl font-bold text-green-600">{Number(stats?.revenue_this_month ?? 0).toLocaleString('fr-FR')} <span className="text-sm">FCFA</span></p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Charts */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <AdminCharts stats={stats} companies={companies} trips={trips} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {secondRow.map((c) => (
+            <StatCard key={c.id} title={c.title} value={c.value} percent={c.percent} color={c.color} icon={c.icon} sparkData={c.spark} />
+          ))}
         </div>
       </div>
     );
-  };
+  }
+
+  function renderAnalytics() {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+            <h3 className="text-sm font-semibold text-slate-600 mb-4">Revenue Chart</h3>
+            <div className="h-64">
+              <AdminCharts stats={stats} companies={companies} trips={trips} />
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+            <h3 className="text-sm font-semibold text-slate-600 mb-4">Reservations by Company</h3>
+            <div className="space-y-3">
+              {(companies.slice(0,6) || []).map((co, idx) => (
+                <div key={co.id} className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-md bg-blue-50 flex items-center justify-center text-blue-600">{co.name?.[0] || 'C'}</div>
+                    <div>
+                      <div className="text-sm font-medium">{co.name}</div>
+                      <div className="text-xs text-slate-400">{Math.floor(Math.random()*200)} réservations</div>
+                    </div>
+                  </div>
+                  <div className="w-36">
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div style={{ width: `${20 + (idx * 10)}%` }} className="h-2 bg-blue-500" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+            <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center text-green-600">+</div>
+                <div>
+                  <div className="text-sm font-medium">Nouvelle réservation</div>
+                  <div className="text-xs text-slate-500">Réservation pour Lomé → Aného • 2 min</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">C</div>
+                <div>
+                  <div className="text-sm font-medium">Nouvelle compagnie</div>
+                  <div className="text-xs text-slate-500">Compagnie XYZ a rejoint la plateforme • 1h</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+            <h3 className="text-lg font-semibold mb-4">Quick Statistics</h3>
+            <div className="flex items-center justify-center h-48 text-slate-400">Donut chart placeholder</div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <h3 className="text-lg font-semibold mb-4">Recent Reservations</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs text-slate-500 uppercase tracking-wider">
+                <tr>
+                  <th className="px-4 py-3 text-left">Client</th>
+                  <th className="px-4 py-3 text-left">Company</th>
+                  <th className="px-4 py-3">Departure</th>
+                  <th className="px-4 py-3">Destination</th>
+                  <th className="px-4 py-3">Seat</th>
+                  <th className="px-4 py-3">Payment</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                <tr>
+                  <td className="px-4 py-3">Jean Dupont</td>
+                  <td className="px-4 py-3">Compagnie A</td>
+                  <td className="px-4 py-3">Lomé</td>
+                  <td className="px-4 py-3">Aného</td>
+                  <td className="px-4 py-3">12A</td>
+                  <td className="px-4 py-3">FCFA 2,500</td>
+                  <td className="px-4 py-3"><span className="px-3 py-1 rounded-full bg-green-50 text-green-700 text-xs">Confirmed</span></td>
+                  <td className="px-4 py-3">•••</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const renderCompanies = () => (
     <div className="space-y-6">
@@ -514,26 +569,91 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
 
   // ============ MAIN RENDER ============
   return (
-    <div className="min-h-screen bg-gray-50/80">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16 sm:h-20">
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Administration Evexticket</h1>
-              <p className="text-sm text-gray-500 hidden sm:block">Gérez votre plateforme de transport</p>
-            </div>
-            <button onClick={() => window.location.reload()} className="p-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors" title="Rafraîchir">
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </header>
-
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="flex gap-6">
+          {/* Sidebar */}
+          <aside className={`transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-72'} hidden lg:block`}>
+            <div className="sticky top-6">
+              <div className={`flex items-center justify-between gap-3 mb-8 ${isSidebarCollapsed ? 'px-1.5' : ''}`}>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/60 rounded-xl flex items-center justify-center shadow-sm">ET</div>
+                  {!isSidebarCollapsed && (
+                    <div>
+                      <div className="text-sm font-semibold">EvexTicket</div>
+                      <div className="text-xs text-slate-500">Administration</div>
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+                  title={isSidebarCollapsed ? 'Développer la barre latérale' : 'Réduire la barre latérale'}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/90 text-slate-700 shadow-sm hover:bg-slate-100 transition-colors"
+                >
+                  {isSidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+                </button>
+              </div>
+
+              <nav className="space-y-1">
+                {tabs.map((item) => {
+                  const Icon = item.icon as any;
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveTab(item.id)}
+                      title={item.label}
+                      className={`w-full flex items-center gap-3 rounded-xl px-3 py-2 transition-colors ${isActive ? 'bg-white shadow-sm text-slate-900' : 'text-slate-700 hover:bg-white/60'}`}
+                    >
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${isActive ? 'bg-blue-100 text-blue-600' : 'bg-white/80 text-slate-600'}`}>
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      {!isSidebarCollapsed && (
+                        <div className="flex-1 text-sm font-medium text-left">{item.label}</div>
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
+
+              <div className="mt-8 border-t pt-4">
+                <div className={`flex items-center gap-3 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-semibold">A</div>
+                  {!isSidebarCollapsed && (
+                    <div>
+                      <div className="text-sm font-medium">Admin</div>
+                      <div className="text-xs text-slate-500">evex@company.com</div>
+                    </div>
+                  )}
+                </div>
+                {!isSidebarCollapsed && (
+                  <button className="mt-4 w-full text-left px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50">Logout</button>
+                )}
+              </div>
+            </div>
+          </aside>
+
+          {/* Main content */}
+          <main className="flex-1">
+            {/* Hero */}
+            <header className="w-full bg-[#2563EB] text-white rounded-2xl p-6 mb-6 shadow-lg">
+              <div className="flex items-start justify-between gap-6">
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-blue-100/90 font-semibold">ADMINISTRATION</p>
+                  <h1 className="mt-3 text-3xl sm:text-4xl font-extrabold">Pilotage centralisé d'EvexTicket</h1>
+                  <p className="mt-2 text-sm text-blue-50/90 max-w-2xl">Surveillez en temps réel les compagnies, trajets, réservations, utilisateurs et rapports depuis une interface moderne.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button className="p-2 rounded-md hover:bg-white/20"><Bell className="w-5 h-5 text-white" /></button>
+                  
+                  <div className="w-10 h-10 rounded-full bg-white text-[#2563EB] flex items-center justify-center font-semibold">AD</div>
+                </div>
+              </div>
+            </header>
         {/* Tabs */}
         <div className="mb-6 -mx-4 px-4 overflow-x-auto">
-          <nav className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit min-w-full sm:min-w-0">
+          <nav className="inline-flex gap-2 bg-slate-100/80 p-1.5 rounded-full shadow-sm ring-1 ring-slate-200">
             {tabs.map(t => {
               const Icon = t.icon;
               const isActive = activeTab === t.id;
@@ -541,7 +661,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
                 <button
                   key={t.id}
                   onClick={() => setActiveTab(t.id)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${isActive ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${isActive ? 'bg-white text-blue-600 shadow-md' : 'text-slate-600 hover:text-slate-900'}`}
                 >
                   <Icon className="w-4 h-4" />
                   {t.label}
@@ -568,12 +688,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
           ) : (
             <>
               {activeTab === 'overview' && renderOverview()}
+              {activeTab === 'analytics' && renderAnalytics()}
               {activeTab === 'companies' && renderCompanies()}
               {activeTab === 'trips' && renderTrips()}
               {activeTab === 'users' && renderUsers()}
               {activeTab === 'reports' && renderReports()}
             </>
           )}
+        </div>
+          </main>
         </div>
       </div>
 
