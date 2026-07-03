@@ -6,6 +6,7 @@ import { ScheduledTrip, TripSearchParams } from '../services/api';
 interface ResultsPageProps {
   searchData: TripSearchParams | null;
   searchResults: ScheduledTrip[];
+  allTripsDate?: string | null;
   onBack: () => void;
   onSelectTrip: (trip: ScheduledTrip) => void;
   searchLoading?: boolean;
@@ -17,6 +18,7 @@ const BOOKING_CLOSED_MESSAGE =
 const ResultsPage: React.FC<ResultsPageProps> = ({
   searchData,
   searchResults,
+  allTripsDate,
   onBack,
   onSelectTrip,
   searchLoading = false,
@@ -166,6 +168,14 @@ const ResultsPage: React.FC<ResultsPageProps> = ({
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {!searchData && allTripsDate && (
+          <div className="mb-6 rounded-[28px] border border-blue-100 bg-blue-50/80 p-4 text-sm text-blue-900 shadow-sm">
+            <div className="font-semibold">Trajets disponibles pour</div>
+            <div className="mt-1 text-lg font-bold text-slate-900">{formatDate(allTripsDate)}</div>
+            <div className="mt-2 text-slate-600">Affichage des trajets d'aujourd'hui ou du prochain jour disponible.</div>
           </div>
         )}
 

@@ -41,6 +41,7 @@ function App() {
   const [selectedTrip, setSelectedTrip] = useState<ScheduledTrip | null>(null);
   const [bookingData, setBookingData] = useState<BookingData | null>(null);
   const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
+  const [allTripsDate, setAllTripsDate] = useState<string | null>(null);
 
   const navigate = useNavigate();
   const currentPortal = getPortalFromHostname(typeof window !== 'undefined' ? window.location.hostname : undefined) as AuthPortal;
@@ -97,10 +98,50 @@ function App() {
   const handleListAllTrips = async () => {
     try {
       const trips = await apiService.getScheduledTrips();
-      setSearchResults(trips);
+      const normalizeDay = (date: Date) => {
+        const copy = new Date(date);
+        copy.setHours(0, 0, 0, 0);
+        return copy;
+      };
+
+      const today = normalizeDay(new Date());
+      const tomorrow = normalizeDay(new Date(today));
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const upcoming = trips.filter((trip) => {
+        if (!trip.date) return false;
+        const tripDate = normalizeDay(new Date(trip.date));
+        return tripDate >= today;
+      });
+
+      const todayTrips = upcoming.filter((trip) => {
+        const tripDate = normalizeDay(new Date(trip.date));
+        return tripDate.getTime() === today.getTime();
+      });
+      const tomorrowTrips = upcoming.filter((trip) => {
+        const tripDate = normalizeDay(new Date(trip.date));
+        return tripDate.getTime() === tomorrow.getTime();
+      });
+
+      let filteredTrips = todayTrips;
+      let selectedDate = today;
+      if (todayTrips.length === 0) {
+        filteredTrips = tomorrowTrips;
+        selectedDate = tomorrow;
+      }
+      if (filteredTrips.length === 0 && upcoming.length > 0) {
+        filteredTrips = upcoming;
+        selectedDate = normalizeDay(new Date(upcoming[0].date));
+      }
+
+      const selectedDateIso = filteredTrips.length > 0 ? selectedDate.toISOString().slice(0, 10) : null;
+
+      setSearchResults(filteredTrips);
       setSearchData(null);
+      setAllTripsDate(selectedDateIso);
       try {
-        writeLocalStorage('searchResults', trips);
+        writeLocalStorage('searchResults', filteredTrips);
+        writeLocalStorage('allTripsDate', selectedDateIso);
         removeLocalStorage('searchData');
         writeLocalStorage('currentView', 'results');
       } catch (e) {
@@ -119,6 +160,7 @@ function App() {
     const storedSelectedTrip = readLocalStorage<ScheduledTrip>('selectedTrip');
     const storedBookingData = readLocalStorage<BookingData>('bookingData');
     const storedPaymentData = readLocalStorage<PaymentData>('paymentData');
+    const storedAllTripsDate = readLocalStorage<string>('allTripsDate');
 
     if (storedSearchData) setSearchData(storedSearchData);
     if (storedSearchResults) setSearchResults(storedSearchResults);
@@ -129,6 +171,7 @@ function App() {
     }
     if (storedBookingData) setBookingData(storedBookingData);
     if (storedPaymentData) setPaymentData(storedPaymentData);
+    if (storedAllTripsDate) setAllTripsDate(storedAllTripsDate);
     // Note: data guards (redirect if data missing) are now handled synchronously
     // in the route elements themselves — no useEffect redirect needed.
   }, []);
@@ -171,20 +214,22 @@ function App() {
     setSelectedTrip(null);
     setBookingData(null);
     setPaymentData(null);
-    removeLocalStorage('searchData', 'searchResults', 'selectedTrip', 'bookingData', 'paymentData');
+    setAllTripsDate(null);
+    removeLocalStorage('searchData', 'searchResults', 'selectedTrip', 'bookingData', 'paymentData', 'allTripsDate');
     writeLocalStorage('currentView', 'home');
     navigate('/');
   };
 
   const handleLogout = () => {
     authLogout();
-    removeLocalStorage('searchData', 'searchResults', 'selectedTrip', 'bookingData', 'paymentData');
+    removeLocalStorage('searchData', 'searchResults', 'selectedTrip', 'bookingData', 'paymentData', 'allTripsDate');
     writeLocalStorage('currentView', 'landing');
     navigate('/');
     setSearchData(null);
     setSelectedTrip(null);
     setBookingData(null);
     setPaymentData(null);
+    setAllTripsDate(null);
   };
 
   const handleNavigateToAuth = (mode: AuthMode) => {
@@ -264,9 +309,15 @@ function App() {
               <HomePage onSearch={handleSearch} isAuthenticated={isAuthenticated} onNavigateToAuth={handleNavigateToAuth} onLogout={handleLogout} onListAllTrips={handleListAllTrips} />
             </ProtectedRoute>
           } />
-          <Route path="/results" element={
+              <Route path="/results" element={
             <ProtectedRoute allowed={['user', 'company', 'admin']}>
-              <ResultsPage searchData={searchData} searchResults={searchResults as any} onBack={() => navigate('/home')} onSelectTrip={handleTripSelect} />
+              <ResultsPage
+                searchData={searchData}
+                searchResults={searchResults as any}
+                allTripsDate={allTripsDate}
+                onBack={() => navigate('/home')}
+                onSelectTrip={handleTripSelect}
+              />
             </ProtectedRoute>
           } />
           <Route path="/booking" element={
