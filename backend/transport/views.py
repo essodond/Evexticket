@@ -1,5 +1,6 @@
 import json
 import logging
+from decimal import Decimal
 from rest_framework.decorators import action
 from rest_framework.decorators import api_view
 from rest_framework.decorators import permission_classes
@@ -13,6 +14,7 @@ from django.db.models import Sum, Q, Count, ProtectedError
 from django.core.serializers.json import DjangoJSONEncoder
 from django.forms.models import model_to_dict
 from rest_framework import generics, status, permissions, viewsets, serializers
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from django.contrib.auth.models import User
 from rest_framework.permissions import AllowAny
@@ -187,6 +189,11 @@ class EmailAuthToken(APIView):
             user = authenticate(request, username=username, password=password)
 
         if user:
+            if hasattr(user, 'agentguichet') and not user.agentguichet.actif:
+                return Response(
+                    {'detail': 'Ce compte guichet est désactivé.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             token, created = Token.objects.get_or_create(user=user)
             user_serializer = UserSerializer(user)
             return Response({
@@ -213,6 +220,8 @@ def user_is_client(user):
         and not user.is_staff
         and not user.is_superuser
         and not user.admin_companies.exists()
+        and not hasattr(user, 'company_admin')
+        and not hasattr(user, 'agentguichet')
     )
 
 
@@ -222,7 +231,22 @@ def user_is_company_admin(user):
         and user.is_active
         and not user.is_staff
         and not user.is_superuser
-        and user.admin_companies.exists()
+        and (
+            user.admin_companies.filter(is_active=True).exists()
+            or (hasattr(user, 'company_admin') and user.company_admin.is_active)
+        )
+    )
+
+
+def user_is_guichet_agent(user):
+    return (
+        user
+        and user.is_active
+        and not user.is_staff
+        and not user.is_superuser
+        and hasattr(user, 'agentguichet')
+        and user.agentguichet.actif
+        and user.agentguichet.compagnie.is_active
     )
 
 
@@ -234,6 +258,32 @@ class ClientAuthToken(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        password = request.data.get('password')
+        if email:
+            if not password:
+                return Response(
+                    {'detail': 'Le mot de passe est requis.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                user_obj = User.objects.get(email=email)
+                user = authenticate(request, username=user_obj.username, password=password)
+            except User.DoesNotExist:
+                user = authenticate(request, username=email, password=password)
+
+            if not user:
+                return Response(
+                    {'detail': 'Identifiants invalides.'},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+            if not user_is_client(user):
+                return Response(
+                    {'detail': 'Accès non autorisé pour ce portail.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            return build_auth_response(user)
+
         raw_phone = request.data.get('phone') or request.data.get('phone_number')
         phone = normalize_phone(raw_phone) if raw_phone else None
         pin = request.data.get('pin')
@@ -282,6 +332,44 @@ class CompanyAuthToken(APIView):
             return Response({'detail': 'Identifiants invalides.'}, status=status.HTTP_401_UNAUTHORIZED)
         if not user_is_company_admin(user):
             return Response({'detail': 'Accès non autorisé pour ce portail.'}, status=status.HTTP_403_FORBIDDEN)
+
+        return build_auth_response(user)
+
+
+class GuichetAuthToken(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        password = request.data.get('password')
+
+        if not email:
+            return Response(
+                {'detail': "L'email du gestionnaire est requis."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not password:
+            return Response(
+                {'detail': 'Le mot de passe est requis.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            user_obj = User.objects.get(email=email)
+            user = authenticate(request, username=user_obj.username, password=password)
+        except User.DoesNotExist:
+            user = authenticate(request, username=email, password=password)
+
+        if not user:
+            return Response(
+                {'detail': 'Identifiants invalides.'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        if not user_is_guichet_agent(user):
+            return Response(
+                {'detail': 'Accès non autorisé pour ce portail.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         return build_auth_response(user)
 
@@ -371,6 +459,11 @@ class ScheduledTripViewSet(viewsets.ModelViewSet):
     serializer_class = ScheduledTripSerializer
     permission_classes = [permissions.AllowAny]
 
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [permissions.IsAuthenticated()]
+        return [permissions.AllowAny()]
+
     def get_queryset(self):
         queryset = ScheduledTrip.objects.all()
         company_id = self.request.query_params.get('company_id')
@@ -383,7 +476,11 @@ class ScheduledTripViewSet(viewsets.ModelViewSet):
         trip = serializer.validated_data.get('trip')
         if trip:
             company = trip.company
-            if not (self.request.user.is_staff or company.admins.filter(id=self.request.user.id).exists()):
+            if not (
+                self.request.user.is_staff
+                or company.admin_user_id == self.request.user.id
+                or company.admins.filter(id=self.request.user.id).exists()
+            ):
                 raise serializers.ValidationError(
                     f"Vous n'avez pas la permission de créer des trajets planifiés pour la compagnie '{company.name}' (ID: {company.id})."
                 )
@@ -392,7 +489,11 @@ class ScheduledTripViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         scheduled_trip = self.get_object()
         trip = scheduled_trip.trip
-        if not (self.request.user.is_staff or trip.company.admins.filter(id=self.request.user.id).exists()):
+        if not (
+            self.request.user.is_staff
+            or trip.company.admin_user_id == self.request.user.id
+            or trip.company.admins.filter(id=self.request.user.id).exists()
+        ):
             raise serializers.ValidationError(
                 f"Vous n'avez pas la permission de modifier ce trajet planifié pour la compagnie '{trip.company.name}'."
             )
@@ -400,7 +501,11 @@ class ScheduledTripViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         trip = instance.trip
-        if not (self.request.user.is_staff or trip.company.admins.filter(id=self.request.user.id).exists()):
+        if not (
+            self.request.user.is_staff
+            or trip.company.admin_user_id == self.request.user.id
+            or trip.company.admins.filter(id=self.request.user.id).exists()
+        ):
             raise serializers.ValidationError(
                 f"Vous n'avez pas la permission de supprimer ce trajet planifié pour la compagnie '{trip.company.name}'."
             )
@@ -650,39 +755,131 @@ class CompanyStatsView(APIView):
             return Response({"detail": "Compagnie non trouvée."}, status=status.HTTP_404_NOT_FOUND)
 
         # Vérifier si l'utilisateur est un admin de la compagnie
-        if not (request.user.is_staff or company.admins.filter(id=request.user.id).exists()):
+        if not (
+            request.user.is_staff
+            or company.admin_user_id == request.user.id
+            or company.admins.filter(id=request.user.id).exists()
+        ):
             return Response({"detail": "Vous n'êtes pas autorisé à voir les statistiques de cette compagnie."}, status=status.HTTP_403_FORBIDDEN)
 
-        # Calculer les statistiques pour la compagnie
-        total_bookings = Booking.objects.filter(trip__company=company).count()
-        total_revenue = Booking.objects.filter(trip__company=company, status='confirmed').aggregate(total=Sum('total_price'))['total'] or 0
-        active_clients = Booking.objects.filter(trip__company=company).values('passenger_email').distinct().count()
-        scheduled_trips = ScheduledTrip.objects.filter(trip__company=company, date__gte=timezone.now().date()).count()
-        
-# Nombre de réservations confirmées
-        confirmed_bookings = Booking.objects.filter(
+        # Imports locaux pour éviter une dépendance circulaire au chargement des apps.
+        from guichet.models import Agence, VenteGuichet
+
+        today = timezone.localdate()
+        valid_sale_statuses = ['valide', 'utilise']
+        confirmed_bookings_qs = Booking.objects.filter(
             trip__company=company,
-            status='confirmed'
-        ).count()
-
-        # Nombre total de places disponibles
-        total_seats = ScheduledTrip.objects.filter(
-            trip__company=company
-        ).aggregate(
-            total=Sum('trip__capacity')
-        )['total'] or 0
-
-        # Calcul du taux moyen d’occupation
-        average_occupancy = (
-            confirmed_bookings / total_seats
-            if total_seats > 0 else 0
+            status='confirmed',
         )
+        guichet_sales_qs = VenteGuichet.objects.filter(
+            voyage__trip__company=company,
+            statut__in=valid_sale_statuses,
+        )
+
+        mobile_bookings = confirmed_bookings_qs.count()
+        guichet_sales = guichet_sales_qs.count()
+        mobile_revenue = confirmed_bookings_qs.aggregate(total=Sum('total_price'))['total'] or Decimal('0')
+        guichet_revenue = guichet_sales_qs.aggregate(total=Sum('montant_billet'))['total'] or 0
+        total_bookings = mobile_bookings + guichet_sales
+        total_revenue = mobile_revenue + Decimal(guichet_revenue)
+
+        mobile_clients = Booking.objects.filter(
+            trip__company=company,
+        ).exclude(passenger_email='').values('passenger_email').distinct().count()
+        guichet_clients = VenteGuichet.objects.filter(
+            voyage__trip__company=company,
+            statut__in=valid_sale_statuses,
+        ).exclude(client_telephone='').values('client_telephone').distinct().count()
+        active_clients = mobile_clients + guichet_clients
+
+        upcoming_trips = ScheduledTrip.objects.filter(
+            trip__company=company,
+            date__gte=today,
+            is_active=True,
+        )
+        scheduled_trips = upcoming_trips.count()
+        total_seats = upcoming_trips.aggregate(total=Sum('trip__capacity'))['total'] or 0
+        occupied_upcoming = Booking.objects.filter(
+            scheduled_trip__in=upcoming_trips,
+            status='confirmed',
+        ).count() + VenteGuichet.objects.filter(
+            voyage__in=upcoming_trips,
+            statut__in=valid_sale_statuses,
+        ).count()
+        average_occupancy = min(occupied_upcoming / total_seats, 1) if total_seats > 0 else 0
+
+        agency_performance = []
+        for agence in Agence.objects.filter(compagnie=company):
+            valid_sales = agence.ventes.filter(statut__in=valid_sale_statuses)
+            agency_performance.append({
+                'id': str(agence.id),
+                'name': agence.nom,
+                'tickets': valid_sales.count(),
+                'revenue': valid_sales.aggregate(total=Sum('montant_billet'))['total'] or 0,
+                'active': agence.is_active,
+            })
+        unassigned_sales = guichet_sales_qs.filter(agence=None)
+        if unassigned_sales.exists():
+            agency_performance.append({
+                'id': 'sans-agence',
+                'name': 'Sans agence',
+                'tickets': unassigned_sales.count(),
+                'revenue': unassigned_sales.aggregate(total=Sum('montant_billet'))['total'] or 0,
+                'active': False,
+            })
+        agency_performance.sort(key=lambda item: item['tickets'], reverse=True)
+
+        sales_analytics = []
+        for offset in range(6, -1, -1):
+            day = today - timedelta(days=offset)
+            day_bookings = confirmed_bookings_qs.filter(booking_date__date=day)
+            day_guichet_sales = guichet_sales_qs.filter(created_at__date=day)
+            day_mobile_revenue = day_bookings.aggregate(total=Sum('total_price'))['total'] or Decimal('0')
+            day_guichet_revenue = day_guichet_sales.aggregate(total=Sum('montant_billet'))['total'] or 0
+            sales_analytics.append({
+                'date': day.isoformat(),
+                'tickets': day_bookings.count() + day_guichet_sales.count(),
+                'revenue': day_mobile_revenue + Decimal(day_guichet_revenue),
+            })
+
+        recent_guichet_sales = [
+            {
+                'id': sale.reference_vente,
+                'passenger_name': sale.client_nom,
+                'passenger_phone': sale.client_telephone,
+                'route': f'{sale.voyage.trip.departure_city.name} → {sale.voyage.trip.arrival_city.name}',
+                'agency': sale.agence.nom if sale.agence else 'Sans agence',
+                'counter': sale.guichet.nom if sale.guichet else None,
+                'agent': f'{sale.agent.prenom} {sale.agent.nom}'.strip(),
+                'travel_date': sale.voyage.date,
+                'booking_date': sale.created_at,
+                'status': sale.statut,
+                'source': 'guichet',
+            }
+            for sale in VenteGuichet.objects.filter(
+                voyage__trip__company=company,
+            ).select_related(
+                'agent',
+                'agence',
+                'guichet',
+                'voyage__trip__departure_city',
+                'voyage__trip__arrival_city',
+            ).order_by('-created_at')[:5]
+        ]
+
         stats = {
             'total_bookings': total_bookings,
+            'mobile_bookings': mobile_bookings,
+            'guichet_sales': guichet_sales,
             'total_revenue': total_revenue,
+            'mobile_revenue': mobile_revenue,
+            'guichet_revenue': guichet_revenue,
             'active_clients': active_clients,
             'scheduled_trips': scheduled_trips,
-            "average_occupancy": average_occupancy,
+            'average_occupancy': average_occupancy,
+            'agency_performance': agency_performance,
+            'sales_analytics': sales_analytics,
+            'recent_guichet_sales': recent_guichet_sales,
         }
         
         serializer = CompanyStatsSerializer(stats)
@@ -694,9 +891,9 @@ class CompanyViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy', 'hard_delete', 'restore_company']:
+        if self.action in ['create', 'destroy', 'hard_delete', 'restore_company']:
             self.permission_classes = [permissions.IsAdminUser]
-        elif self.action == 'retrieve':
+        elif self.action in ['retrieve', 'update', 'partial_update']:
             self.permission_classes = [permissions.IsAuthenticated]
         return super().get_permissions()
 
@@ -715,6 +912,35 @@ class CompanyViewSet(viewsets.ModelViewSet):
             base_queryset = Company.objects.all()
 
         return base_queryset.order_by('name')
+
+    def perform_update(self, serializer):
+        company = serializer.instance
+        user = self.request.user
+        is_company_admin = (
+            company.admin_user_id == user.id
+            or company.admins.filter(id=user.id).exists()
+        )
+        if not (user.is_staff or is_company_admin):
+            raise PermissionDenied("Vous ne pouvez modifier que votre propre compagnie.")
+
+        changed_fields = list(serializer.validated_data.keys())
+        old_values = make_json_safe({
+            field: getattr(company, field, None)
+            for field in changed_fields
+        })
+        updated_company = serializer.save()
+        new_values = make_json_safe({
+            field: getattr(updated_company, field, None)
+            for field in changed_fields
+        })
+        log_action(
+            user=user,
+            action='UPDATE',
+            instance=updated_company,
+            old_values=old_values,
+            new_values=new_values,
+            ip_address=get_client_ip(self.request),
+        )
 
     def perform_destroy(self, instance):
         old_values = build_company_delete_snapshot(instance)
@@ -828,7 +1054,11 @@ class CompanyBookingsView(generics.ListAPIView):
             raise Http404
 
         # Check if the user is an admin of the company or a staff member
-        if not (self.request.user.is_staff or company.admins.filter(id=self.request.user.id).exists()):
+        if not (
+            self.request.user.is_staff
+            or company.admin_user_id == self.request.user.id
+            or company.admins.filter(id=self.request.user.id).exists()
+        ):
             # Properly return 403 Forbidden instead of silently returning empty queryset
             raise permissions.PermissionDenied("You do not have permission to view this company's bookings.")
 
@@ -844,6 +1074,11 @@ class TripViewSet(viewsets.ModelViewSet):
     serializer_class = TripSerializer
     permission_classes = [permissions.AllowAny]
 
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [permissions.IsAuthenticated()]
+        return [permissions.AllowAny()]
+
     def get_queryset(self):
         # Allow staff to see all trips, authenticated company admins to see their company trips,
         # and anonymous users to get active public trips.
@@ -853,12 +1088,18 @@ class TripViewSet(viewsets.ModelViewSet):
         if not user.is_authenticated:
             return Trip.objects.filter(is_active=True)
         # Filter trips by companies the user administers
-        return Trip.objects.filter(company__admins=user).distinct()
+        return Trip.objects.filter(
+            Q(company__admins=user) | Q(company__admin_user=user)
+        ).distinct()
 
     def perform_create(self, serializer):
         # Ensure the user creating the trip is an admin of the associated company
         company = serializer.validated_data.get('company')
-        if not (self.request.user.is_staff or company.admins.filter(id=self.request.user.id).exists()):
+        if not (
+            self.request.user.is_staff
+            or company.admin_user_id == self.request.user.id
+            or company.admins.filter(id=self.request.user.id).exists()
+        ):
             raise serializers.ValidationError(
                 f"Vous n'avez pas la permission de créer des trajets pour la compagnie '{company.name}' (ID: {company.id}). "
                 f"Votre ID utilisateur: {self.request.user.id}. Admins de la compagnie: {[admin.id for admin in company.admins.all()]}"
@@ -868,14 +1109,22 @@ class TripViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         # Ensure the user updating the trip is an admin of the associated company
         company = serializer.instance.company
-        if not (self.request.user.is_staff or company.admins.filter(id=self.request.user.id).exists()):
+        if not (
+            self.request.user.is_staff
+            or company.admin_user_id == self.request.user.id
+            or company.admins.filter(id=self.request.user.id).exists()
+        ):
             raise serializers.ValidationError("You do not have permission to update trips for this company.")
         serializer.save()
 
     def perform_destroy(self, instance):
         from django.db.models import ProtectedError
         company = instance.company
-        if not (self.request.user.is_staff or company.admins.filter(id=self.request.user.id).exists()):
+        if not (
+            self.request.user.is_staff
+            or company.admin_user_id == self.request.user.id
+            or company.admins.filter(id=self.request.user.id).exists()
+        ):
             raise serializers.ValidationError("You do not have permission to delete trips for this company.")
         try:
             instance.delete()

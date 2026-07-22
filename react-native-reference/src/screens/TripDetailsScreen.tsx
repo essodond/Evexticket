@@ -248,12 +248,46 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
             <Text style={styles.footerPriceLabel}>Prix total</Text>
             <Text style={styles.footerPriceValue}>{formatCurrency(parseFloat(trip.trip_info.price || '0'))}</Text>
           </View>
-          <Button
-            title="Réserver maintenant"
-            onPress={() => navigation.navigate('Payment', { trip, selectedSeat })}
-            style={styles.bookButton}
-            disabled={!selectedSeat}
-          />
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            {/* Suivre le bus — visible en simulation 3h avant le départ */}
+            {(() => {
+              const getMinutesUntilDeparture = () => {
+                try {
+                  const dateStr = (trip as any).departure_date || (trip as any).date || (trip as any).trip_info?.departure_date || (trip as any).trip_info?.date || '';
+                  const timeStr = (trip as any).departure_time || (trip as any).trip_info?.departure_time || (trip as any).trip_info?.departure || '';
+                  if (!dateStr || !timeStr) return Infinity;
+                  const parts = dateStr.split('-').map((p: string) => parseInt(p, 10));
+                  const [year, month, day] = parts;
+                  const [hourStr, minuteStr] = timeStr.split(':');
+                  const hour = parseInt(hourStr || '0', 10);
+                  const minute = parseInt(minuteStr || '0', 10);
+                  const dep = new Date(year, (month || 1) - 1, day, hour, minute);
+                  return Math.round((dep.getTime() - Date.now()) / 60000);
+                } catch {
+                  return Infinity;
+                }
+              };
+              const minutes = getMinutesUntilDeparture();
+              const isTrackingSoon = minutes <= 180 && minutes > 0; // visible 3h before
+              if (isTrackingSoon) {
+                return (
+                  <Button
+                    title="Suivre le bus"
+                    onPress={() => navigation.navigate('TrackBus', { tripId: trip.id })}
+                    style={{ marginRight: 8, backgroundColor: '#06b6d4' }}
+                  />
+                );
+              }
+              return null;
+            })()}
+
+            <Button
+              title="Réserver maintenant"
+              onPress={() => navigation.navigate('Payment', { trip, selectedSeat })}
+              style={styles.bookButton}
+              disabled={!selectedSeat}
+            />
+          </View>
         </View>
       </ScrollView>
     </View>

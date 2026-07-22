@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertCircle, ArrowLeft, Building2, CheckCircle, Eye, EyeOff, Lock, Phone, Shield, User } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Building2, CheckCircle, Eye, EyeOff, Lock, Mail, Phone, Shield, Ticket, User } from 'lucide-react';
 import { AuthPortal, useAuth } from '../contexts/AuthContext';
 
 interface AuthPageProps {
@@ -14,8 +14,8 @@ interface AuthPageProps {
 
 const portalCopy = {
   client: {
-    title: 'Portail Voyageurs',
-    subtitle: 'Connexion par telephone et code PIN',
+    title: 'Portail EvexTicket',
+    subtitle: 'Voyageurs, administrateurs, compagnies et guichets',
     identifierLabel: 'Numero de telephone',
     identifierPlaceholder: '90 12 34 56',
     secretLabel: 'Code PIN',
@@ -32,6 +32,16 @@ const portalCopy = {
     secretPlaceholder: 'Mot de passe',
     icon: Building2,
     successRouteLabel: 'Acceder au portail compagnie',
+  },
+  guichet: {
+    title: 'Portail Guichet',
+    subtitle: 'Connexion réservée aux gestionnaires de guichet',
+    identifierLabel: 'Email du gestionnaire',
+    identifierPlaceholder: 'guichet@compagnie.tg',
+    secretLabel: 'Mot de passe',
+    secretPlaceholder: 'Mot de passe',
+    icon: Ticket,
+    successRouteLabel: 'Accéder au guichet',
   },
   admin: {
     title: 'Portail Global',
@@ -62,7 +72,8 @@ const AuthPage: React.FC<AuthPageProps> = ({
   const isClientPortal = portal === 'client';
   const effectiveMode = isClientPortal ? mode : 'login';
   const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>(portal === 'client' ? 'phone' : 'email');
-  const loginByPhone = effectiveMode === 'register' ? true : loginMethod === 'phone';
+  const loginByPhone = effectiveMode === 'register' ? true : isClientPortal && loginMethod === 'phone';
+  const IdentifierIcon = loginByPhone ? Phone : Mail;
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -189,12 +200,14 @@ const AuthPage: React.FC<AuthPageProps> = ({
               <p className="mt-2 text-gray-500">
                 {effectiveMode === 'register'
                   ? 'Compte client avec telephone et code PIN.'
-                  : 'Choisissez votre methode de connexion, puis connectez-vous avec email/mot de passe ou numero/PIN.'}
+                  : isClientPortal
+                    ? 'Voyageurs : telephone + PIN. Administrateurs : email + mot de passe.'
+                    : config.subtitle}
               </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
-              {effectiveMode === 'login' && (
+              {effectiveMode === 'login' && isClientPortal && (
                 <div className="flex flex-col gap-2 rounded-3xl border border-blue-100 bg-blue-50 p-3 text-sm text-gray-700">
                   <span className="font-semibold text-gray-900">Mode de connexion</span>
                   <div className="flex gap-2">
@@ -241,7 +254,7 @@ const AuthPage: React.FC<AuthPageProps> = ({
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-gray-700" htmlFor="identifier">{loginByPhone ? 'Numero de telephone' : 'Email'}</label>
                 <div className="relative">
-                  <PortalIcon className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-blue-400" />
+                  <IdentifierIcon className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-blue-400" />
                   <input
                     id="identifier"
                     type={loginByPhone ? 'tel' : 'email'}

@@ -12,6 +12,7 @@ router.register(r'scheduled_trips', views.ScheduledTripViewSet, basename='schedu
 router.register(r'users', views.UserViewSet, basename='user')
 
 urlpatterns = [
+    path('platform-admin/', include('transport.platform_admin_urls')),
     path('companies/<int:company_id>/bookings/', views.CompanyBookingsView.as_view(), name='company-bookings'),
     path('dashboard/stats/', views.DashboardStatsView.as_view(), name='dashboard-stats'),
     path('companies/<int:company_id>/stats/', views.CompanyStatsView.as_view(), name='company-stats'),
@@ -19,6 +20,7 @@ urlpatterns = [
     path('login/', views.EmailAuthToken.as_view(), name='api-token-auth'),
     path('auth/client/login/', views.ClientAuthToken.as_view(), name='client-login'),
     path('auth/company/login/', views.CompanyAuthToken.as_view(), name='company-login'),
+    path('auth/guichet/login/', views.GuichetAuthToken.as_view(), name='guichet-login'),
     path('auth/admin/login/', views.SuperAdminAuthToken.as_view(), name='super-admin-login'),
     path('me/change_pin/', views.ChangePinView.as_view(), name='change-pin'),
     path('token/refresh/', views.TokenRefreshView.as_view(), name='token-refresh'),

@@ -3,6 +3,7 @@ from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 from datetime import timedelta
+from decimal import Decimal
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from .mixins import SoftDeleteModel
@@ -30,6 +31,13 @@ class Company(SoftDeleteModel):
     website = models.URLField(blank=True, null=True, verbose_name="Site web")
     logo = models.URLField(blank=True, null=True, verbose_name="URL du logo")
     is_active = models.BooleanField(default=True, verbose_name="Compagnie active")
+    commission_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=10.00,
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
+        verbose_name="Commission EVEX (%)",
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Date de mise à jour")
     
@@ -58,6 +66,47 @@ class Company(SoftDeleteModel):
 
     def __str__(self):
         return self.name
+
+
+class PlatformConfiguration(models.Model):
+    """Configuration singleton de la plateforme, modifiable par le super administrateur."""
+
+    service_fee = models.PositiveIntegerField(default=300, verbose_name="Frais de service (FCFA)")
+    default_commission_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=10.00,
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
+        verbose_name="Commission par défaut (%)",
+    )
+    cancellation_delay_hours = models.PositiveIntegerField(
+        default=2,
+        verbose_name="Délai minimal d'annulation (heures)",
+    )
+    email_notifications = models.BooleanField(default=True)
+    sms_notifications = models.BooleanField(default=True)
+    maintenance_mode = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
+
+    class Meta:
+        verbose_name = "Configuration de la plateforme"
+        verbose_name_plural = "Configuration de la plateforme"
+
+    @classmethod
+    def load(cls):
+        configuration, _ = cls.objects.get_or_create(pk=1)
+        return configuration
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
 
 
 class City(models.Model):

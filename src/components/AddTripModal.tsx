@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, MapPin, Clock, DollarSign, Bus, AlertCircle, CheckCircle } from 'lucide-react';
 import apiService from '../services/api';
-import { City, Trip as SharedTrip, Company } from '../types';
+import { City, Company } from '../types';
 
 interface AddTripModalProps {
   isOpen: boolean;
@@ -11,6 +11,7 @@ interface AddTripModalProps {
   companyId?: string | number;
   companies?: Company[];
   cities?: City[];
+  requireDate?: boolean;
 }
 
 const AddTripModal: React.FC<AddTripModalProps> = ({
@@ -19,7 +20,8 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
   onSave,
   editingTrip,
   companyId,
-  cities: propCities
+  cities: propCities,
+  requireDate = true,
 }) => {
   // Helper pour calculer la durée en minutes (gère le lendemain)
   const computeDurationMinutes = (dep: string, arr: string) => {
@@ -192,8 +194,9 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
       newErrors.arrivalTime = 'L\'heure d\'arrivée est requise';
     }
 
-    // Note: Trip model does not include a 'date' field (ScheduledTrip handles dated runs).
-    // We keep the date input optional for UI use but do not require it here.
+    if (requireDate && !formData.date) {
+      newErrors.date = 'La date du voyage est requise';
+    }
 
     // Calculer et valider que la durée est strictement positive (en minutes)
     const minutes = computeDurationMinutes(formData.departureTime, formData.arrivalTime);
@@ -305,20 +308,26 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
     try {
       setErrorMessage(null);
       // Determine if we are editing a ScheduledTrip
-      const isScheduledEditing = editingTrip && ((editingTrip as any).trip || (editingTrip as any).trip_info);
+      const isScheduledEditing = editingTrip && (
+        (editingTrip as any).scheduled_trip_id
+        || (editingTrip as any).trip
+        || (editingTrip as any).trip_id
+        || (editingTrip as any).trip_info
+      );
 
       if (editingTrip) {
         if (isScheduledEditing) {
           // editing a scheduled trip: first update the underlying Trip, then update the ScheduledTrip (date/is_active)
           const scheduled = editingTrip as any;
-          const tripId = scheduled.trip || scheduled.trip_info?.id || scheduled.id;
+          const tripId = scheduled.trip || scheduled.trip_id || scheduled.trip_info?.id || scheduled.id;
+          const scheduledId = scheduled.scheduled_trip_id || scheduled.id;
           const updatedTrip = await apiService.updateTrip(Number(tripId), payload);
           // update scheduled trip metadata if date/isActive were changed
           const scheduledPayload: any = {};
           if (formData.date) scheduledPayload.date = formData.date;
           scheduledPayload.is_active = Boolean(formData.isActive);
           try {
-            const updatedScheduled = await apiService.updateScheduledTrip(Number(scheduled.id), scheduledPayload);
+            const updatedScheduled = await apiService.updateScheduledTrip(Number(scheduledId), scheduledPayload);
             setSuccessMessage('Trajet programmé modifié avec succès.');
             onSave(updatedScheduled as any);
           } catch (sErr) {
@@ -469,7 +478,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
             {/* Date du trajet */}
             <div>
               <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
-                Date du trajet *
+                Date du voyage {requireDate ? '*' : '(optionnelle)'}
               </label>
               <input
                 type="date"
@@ -617,7 +626,9 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
                 Durée estimée
               </label>
               <div className="px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg">
-                {formData.duration > 0 ? `${formData.duration} heures` : 'Calcul automatique'}
+                {formData.duration > 0
+                  ? `${Math.floor(formData.duration / 60)} h ${formData.duration % 60} min`
+                  : 'Calcul automatique'}
               </div>
             </div>
 

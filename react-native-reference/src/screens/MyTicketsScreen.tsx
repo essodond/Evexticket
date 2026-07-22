@@ -201,6 +201,33 @@ export default function MyTicketsScreen({ navigation }: Props) {
                         <Text style={[styles.mainActionText, { marginLeft: 10 }]}>Voir le billet</Text>
                       </TouchableOpacity>
 
+                      {/* Suivre le bus — simulation : visible 3h avant le départ */}
+                      {(() => {
+                        const getMinutesUntilDeparture = (dateStr: string, timeStr: string) => {
+                          try {
+                            if (!dateStr || !timeStr) return Infinity;
+                            const parts = dateStr.split('-').map((p: string) => parseInt(p, 10));
+                            const [year, month, day] = parts;
+                            const [h, m] = timeStr.split(':').map((s: string) => parseInt(s || '0', 10));
+                            const dep = new Date(year, (month || 1) - 1, day, h || 0, m || 0);
+                            return Math.round((dep.getTime() - Date.now()) / 60000);
+                          } catch { return Infinity; }
+                        };
+
+                        const minutes = getMinutesUntilDeparture(ticket.date, ticket.departure);
+                        const showTrack = minutes <= 180 && minutes > 0;
+                        if (!showTrack) return null;
+                        return (
+                          <TouchableOpacity
+                            style={[styles.mainActionButton, { marginLeft: 10, backgroundColor: '#06b6d4' }]}
+                            onPress={() => navigation.navigate('TrackBus' as any, { tripId: String(ticket.id) })}
+                          >
+                            <Ionicons name="navigate" size={20} color={COLORS.white} />
+                            <Text style={[styles.mainActionText, { marginLeft: 10 }]}>Suivre le bus</Text>
+                          </TouchableOpacity>
+                        );
+                      })()}
+
                       <TouchableOpacity 
                         style={[styles.deleteIconButton, { marginLeft: 10 }]}
                         onPress={() => setHiddenTickets(prev => new Set(prev).add(ticket.id))}

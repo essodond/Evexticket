@@ -141,6 +141,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     """Serializer pour les utilisateurs"""
     is_company_admin = serializers.SerializerMethodField()
+    is_guichet_agent = serializers.SerializerMethodField()
     phone_number = serializers.SerializerMethodField()
     company_id = serializers.SerializerMethodField()
     role = serializers.SerializerMethodField()
@@ -151,13 +152,20 @@ class UserSerializer(serializers.ModelSerializer):
         # décider de la redirection (is_staff => Admin Général, is_company_admin calculé côté /me/)
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'is_active', 'is_staff', 'is_superuser', 'date_joined', 'is_company_admin', 'phone_number', 'company_id', 'role'
+            'is_active', 'is_staff', 'is_superuser', 'date_joined', 'is_company_admin',
+            'is_guichet_agent', 'phone_number', 'company_id', 'role'
         ]
-        read_only_fields = ['id', 'date_joined', 'is_company_admin', 'phone_number', 'company_id', 'role']
+        read_only_fields = [
+            'id', 'date_joined', 'is_company_admin', 'is_guichet_agent',
+            'phone_number', 'company_id', 'role'
+        ]
 
     def get_is_company_admin(self, obj):
         # Vérifie si l'utilisateur est admin d'au moins une compagnie
-        return obj.admin_companies.exists()
+        return obj.admin_companies.exists() or hasattr(obj, 'company_admin')
+
+    def get_is_guichet_agent(self, obj):
+        return hasattr(obj, 'agentguichet') and obj.agentguichet.actif
 
     def get_phone_number(self, obj):
         try:
@@ -169,13 +177,21 @@ class UserSerializer(serializers.ModelSerializer):
     def get_company_id(self, obj):
         # Récupère l'ID de la première compagnie administrée par l'utilisateur
         company = obj.admin_companies.first()
-        return company.id if company else None
+        if company:
+            return company.id
+        if hasattr(obj, 'company_admin'):
+            return obj.company_admin.id
+        if hasattr(obj, 'agentguichet'):
+            return obj.agentguichet.compagnie_id
+        return None
 
     def get_role(self, obj):
         if obj.is_superuser:
             return 'SUPER_ADMIN'
-        if obj.admin_companies.exists():
+        if obj.admin_companies.exists() or hasattr(obj, 'company_admin'):
             return 'ADMIN_COMPAGNIE'
+        if hasattr(obj, 'agentguichet') and obj.agentguichet.actif:
+            return 'AGENT_GUICHET'
         return 'CLIENT'
 
 
@@ -201,7 +217,8 @@ class CompanySerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'description', 'address', 'phone', 'email', 
             'website', 'logo', 'is_active', 'created_at', 'updated_at',
-            'admin_user', 'admins', 'trips_count', 'admin_email', 'admin_password'
+            'admin_user', 'admins', 'trips_count', 'admin_email', 'admin_password',
+            'commission_rate'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'trips_count']
 
@@ -470,8 +487,6 @@ class BookingSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         from django.db import transaction
 
-        EVEX_COMMISSION_RATE = Decimal('0.10')
-
         with transaction.atomic():
             # Verrouiller le ScheduledTrip pour éviter les réservations concurrentes du même siège
             scheduled_trip = validated_data.get('scheduled_trip')
@@ -494,7 +509,8 @@ class BookingSerializer(serializers.ModelSerializer):
             booking = super().create(validated_data)
 
             total_price = booking.total_price
-            evex_commission = total_price * EVEX_COMMISSION_RATE
+            commission_rate = Decimal(booking.trip.company.commission_rate) / Decimal('100')
+            evex_commission = total_price * commission_rate
             company_revenue = total_price - evex_commission
 
             # Créer le paiement en statut 'pending' — sera confirmé après le vrai paiement
@@ -822,8 +838,16 @@ class BookingCreateSerializer(serializers.ModelSerializer):
 class CompanyStatsSerializer(serializers.Serializer):
     scheduled_trips = serializers.IntegerField()
     total_bookings = serializers.IntegerField()
+    mobile_bookings = serializers.IntegerField()
+    guichet_sales = serializers.IntegerField()
     total_revenue = serializers.DecimalField(max_digits=10, decimal_places=2)
+    mobile_revenue = serializers.DecimalField(max_digits=10, decimal_places=2)
+    guichet_revenue = serializers.DecimalField(max_digits=10, decimal_places=2)
     average_occupancy = serializers.FloatField()
+    active_clients = serializers.IntegerField()
+    agency_performance = serializers.ListField(child=serializers.DictField(), required=False)
+    sales_analytics = serializers.ListField(child=serializers.DictField(), required=False)
+    recent_guichet_sales = serializers.ListField(child=serializers.DictField(), required=False)
 
 class DashboardStatsSerializer(serializers.Serializer):
     total_bookings = serializers.IntegerField()

@@ -63,6 +63,10 @@ console.log('API_BASE_URL utilisée:', API_BASE_URL);
 console.log('API_BASE_URL utilisée:', API_BASE_URL);
 const TIMEOUT = 60000; // 60s pour gérer les cold starts Render (30s+ de démarrage)
 
+// Toggle pour simulation locale des paiements QoS (ne supprime pas l'implémentation réelle)
+// Mettre à `true` pour désactiver les appels réels vers l'API de paiement pendant les tests.
+export const SIMULATE_QOS_PAYMENTS = true;
+
 async function handleResponse(response: Response) {
   const contentType = response.headers.get('content-type');
   const isJson = contentType && contentType.includes('application/json');
@@ -419,6 +423,22 @@ export async function createBooking(data: BookingData): Promise<any> {
 
 export async function initiateQosPayment(data: InitiateQosPaymentPayload): Promise<InitiateQosPaymentResponse> {
   try {
+    if (SIMULATE_QOS_PAYMENTS) {
+      console.log('⚠️ simulate QoS payment - initiateQosPayment short-circuit');
+      const nowRef = `SIM-${Date.now()}`;
+      const montant_billet = Number(data.montant_billet || 0);
+      const montant_total = Number(data.montant_total ?? (montant_billet || 0));
+      return {
+        reference_evex: nowRef,
+        transaction_id: nowRef,
+        montant_billet,
+        frais_evex: Math.max(montant_total - montant_billet, 0),
+        montant_total,
+        operateur: data.operateur,
+        siege: String(data.numero_siege),
+        expires_dans: '5 minutes',
+      } as InitiateQosPaymentResponse;
+    }
     const [firstname = '', ...lastnameParts] = String(data.client_nom || '').trim().split(' ');
     const amount = Number(data.montant_total ?? data.montant_billet);
     const ticketAmount = Number(data.montant_billet);
@@ -456,6 +476,19 @@ export async function initiateQosPayment(data: InitiateQosPaymentPayload): Promi
 
 export async function verifyQosPayment(reference: string): Promise<VerifyQosPaymentResponse> {
   try {
+    if (SIMULATE_QOS_PAYMENTS) {
+      console.log('⚠️ simulate QoS payment - verifyQosPayment short-circuit for', reference);
+      return {
+        reference,
+        statut: 'paye',
+        montant_total: 0,
+        frais_evex: 0,
+        montant_billet: 0,
+        siege: '',
+        paye: true,
+        message: 'Simulation: paiement confirme',
+      } as VerifyQosPaymentResponse;
+    }
     const response = await request<any>('/payments/status/', {
       method: 'POST',
       body: JSON.stringify({ transref: reference }),

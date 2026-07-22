@@ -15,12 +15,12 @@ from transport.models import (
     Reservation,
     ScheduledTrip,
     Siege,
+    PlatformConfiguration,
 )
 from transport.services import qos_service
 
 logger = logging.getLogger(__name__)
 
-FRAIS_EVEX_FIXES = 300
 TAUX_FRAIS_QOS = Decimal('0.017')
 
 
@@ -58,9 +58,10 @@ def _calculer_frais_qos(montant_total):
 
 def creer_reservation(voyage_id, siege_id, client_nom, client_telephone, montant_billet, operateur):
     montant_billet = int(montant_billet)
-    montant_total = montant_billet + FRAIS_EVEX_FIXES
+    frais_evex_fixes = PlatformConfiguration.load().service_fee
+    montant_total = montant_billet + frais_evex_fixes
     frais_qos = _calculer_frais_qos(montant_total)
-    revenu_net_evex = FRAIS_EVEX_FIXES - frais_qos
+    revenu_net_evex = frais_evex_fixes - frais_qos
 
     for _ in range(5):
         reference_evex = _generer_reference_evex()
@@ -71,7 +72,7 @@ def creer_reservation(voyage_id, siege_id, client_nom, client_telephone, montant
                 client_nom=client_nom,
                 client_telephone=client_telephone,
                 montant_billet=montant_billet,
-                frais_evex=FRAIS_EVEX_FIXES,
+                frais_evex=frais_evex_fixes,
                 montant_total=montant_total,
                 frais_qos=frais_qos,
                 revenu_net_evex=revenu_net_evex,

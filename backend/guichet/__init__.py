@@ -1,0 +1,1 @@
+"""Guichet app package"""

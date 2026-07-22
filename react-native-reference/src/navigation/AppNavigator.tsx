@@ -19,6 +19,8 @@ import PaymentScreen from '../screens/PaymentScreen';
 import TicketScreen from '../screens/TicketScreen';
 import MyTicketsScreen from '../screens/MyTicketsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import TrackBusScreen from '../screens/TrackBusScreen';
+import StartTrackingScreen from '../screens/StartTrackingScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -131,6 +133,16 @@ export default function AppNavigator() {
         options={{
           animation: 'slide_from_bottom',
         }}
+      />
+      <Stack.Screen
+        name="TrackBus"
+        component={TrackBusScreen}
+        options={{ animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="StartTracking"
+        component={StartTrackingScreen}
+        options={{ animation: 'slide_from_bottom' }}
       />
       <Stack.Screen 
         name="Payment" 

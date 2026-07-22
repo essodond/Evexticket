@@ -28,6 +28,8 @@ export type RootStackParamList = {
   TripDetails: { trip: Trip };
   Payment: { trip: Trip; selectedSeat?: string | null };
   Ticket: { trip: Trip };
+  TrackBus: { tripId?: string };
+  StartTracking: { tripId?: string };
 };
 
 export type MainTabParamList = {

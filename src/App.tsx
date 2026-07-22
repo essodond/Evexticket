@@ -18,8 +18,31 @@ import ConfirmationPage from './components/ConfirmationPage';
 import MyTicketsPage from './components/MyTicketsPage';
 import ProfilePage from './components/ProfilePage';
 import CompanyDashboard from './components/CompanyDashboard';
-import AdminDashboard from './components/AdminDashboard';
-import { getPortalFromHostname } from './utils/portal';
+import CompanyLayout from './components/CompanyLayout';
+import {
+  CompanyAgenciesPage,
+  CompanyAgencyDetailPage,
+  CompanyBusesPage,
+  CompanyPersonnelPage,
+  CompanyProfilePage,
+  CompanyRevenuePage,
+  CompanyRoutesPage,
+  CompanySettingsPage,
+  CompanyTicketsPage,
+  CompanyVoyageDetailPage,
+  CompanyVoyagesPage,
+} from './components/company/CompanyPages';
+import AdminLayout from './components/AdminLayout';
+import { AdminDashboardPage, AdminCompaniesPage, AdminCompanyDetailPage, AdminUsersPage, AdminVoyagesPage, AdminTicketsPage, AdminFinancePage, AdminAnalyticsPage, AdminAuditPage, AdminSettingsPage } from './components/admin/AdminPages';
+import GuichetLayout from './components/guichet/GuichetLayout';
+import {
+  GuichetHistoryPage,
+  GuichetHomePage,
+  GuichetSalePage,
+  GuichetScannerPage,
+  GuichetTripsPage,
+} from './components/guichet/GuichetPages';
+import { getAuthenticatedHomePath, getPortalFromHostname } from './utils/portal';
 import type { AuthPortal } from './contexts/AuthContext';
 
 type AuthMode = 'login' | 'register';
@@ -35,7 +58,7 @@ function App() {
   // ce pattern par un contexte d'authentification (AuthContext) et un routeur (react-router).
   // Routing replaces the older `currentView` state; keep minimal state for UI flows
   const [authMode, setAuthMode] = useState<AuthMode>('login');
-  const { isAuthenticated, logout: authLogout } = useAuth();
+  const { isAuthenticated, user: authenticatedUser, logout: authLogout } = useAuth();
   const [searchData, setSearchData] = useState<SearchData | null>(null);
   const [searchResults, setSearchResults] = useState<ScheduledTrip[]>([]);
   const [selectedTrip, setSelectedTrip] = useState<ScheduledTrip | null>(null);
@@ -238,22 +261,10 @@ function App() {
     navigate('/login');
   };
 
-  const handleAuthSuccess = (user?: { is_staff?: boolean; is_company_admin?: boolean }) => {
-    // Deprecated: handled by AuthContext. Kept for backward compatibility with children components
-    if (user) {
-      if (user.is_staff) {
-        writeLocalStorage('currentView', 'admin-dashboard');
-        navigate('/admin');
-        return;
-      }
-      if (user.is_company_admin) {
-        writeLocalStorage('currentView', 'company-dashboard');
-        navigate('/company');
-        return;
-      }
-    }
-    writeLocalStorage('currentView', 'home');
-    navigate('/home');
+  const handleAuthSuccess = (user?: { is_staff?: boolean; is_superuser?: boolean; is_company_admin?: boolean; is_guichet_agent?: boolean }) => {
+    const destination = getAuthenticatedHomePath(user);
+    writeLocalStorage('currentView', destination);
+    navigate(destination);
   };
 
   // Quick navigation for demonstration
@@ -298,11 +309,22 @@ function App() {
               ? (isAuthenticated ? <Navigate to="/admin" replace /> : <AuthPage mode="login" portal="admin" onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />)
               : currentPortal === 'company'
                 ? (isAuthenticated ? <Navigate to="/company" replace /> : <AuthPage mode="login" portal="company" onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />)
-                : (isAuthenticated ? <Navigate to="/home" replace /> : <LandingPage onNavigateToAuth={handleNavigateToAuth} onNavigateToHome={() => navigate('/')} logoUrl="/logo.jpg" siteTitle="EvexTicket" />)
+                : currentPortal === 'guichet'
+                  ? (isAuthenticated ? <Navigate to="/guichet" replace /> : <AuthPage mode="login" portal="guichet" onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />)
+                  : (isAuthenticated ? <Navigate to={getAuthenticatedHomePath(authenticatedUser)} replace /> : <LandingPage onNavigateToAuth={handleNavigateToAuth} onNavigateToHome={() => navigate('/')} logoUrl="/logo.jpg" siteTitle="EvexTicket" />)
           } />
+          <Route path="/guichet" element={<ProtectedRoute allowed="guichet"><GuichetLayout /></ProtectedRoute>}>
+            <Route index element={<Navigate replace to="tableau-de-bord" />} />
+            <Route path="tableau-de-bord" element={<GuichetHomePage />} />
+            <Route path="vente" element={<GuichetSalePage />} />
+            <Route path="voyages" element={<GuichetTripsPage />} />
+            <Route path="scanner" element={<GuichetScannerPage />} />
+            <Route path="historique" element={<GuichetHistoryPage />} />
+          </Route>
           <Route path="/login" element={<AuthPage mode={authMode} portal={currentPortal} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
           <Route path="/register" element={<AuthPage mode={'register'} portal="client" onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
           <Route path="/company/login" element={<AuthPage mode="login" portal="company" onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
+          <Route path="/guichet/login" element={<AuthPage mode="login" portal="guichet" onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
           <Route path="/admin/login" element={<AuthPage mode="login" portal="admin" onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
           <Route path="/home" element={
             <ProtectedRoute allowed={['user', 'company', 'admin']}>
@@ -362,15 +384,46 @@ function App() {
 
           <Route path="/company" element={
             <ProtectedRoute allowed={['company']}>
-              <CompanyDashboard logoUrl="/logo.jpg" siteTitle="EvexTicket" />
+              <CompanyLayout />
             </ProtectedRoute>
-          } />
+          }>
+            <Route index element={<Navigate replace to="tableau-de-bord" />} />
+            <Route path="tableau-de-bord" element={<CompanyDashboard />} />
+            <Route path="ma-compagnie" element={<CompanyProfilePage />} />
+            <Route path="agences" element={<CompanyAgenciesPage />} />
+            <Route path="agences/:id" element={<CompanyAgencyDetailPage />} />
+            <Route path="utilisateurs" element={<CompanyPersonnelPage />} />
+            <Route path="bus" element={<CompanyBusesPage />} />
+            <Route path="trajets" element={<CompanyRoutesPage />} />
+            <Route path="voyages" element={<CompanyVoyagesPage />} />
+            <Route path="voyages/:id" element={<CompanyVoyageDetailPage />} />
+            <Route path="billets" element={<CompanyTicketsPage />} />
+            <Route path="revenus" element={<CompanyRevenuePage />} />
+            <Route path="parametres" element={<CompanySettingsPage />} />
+          </Route>
 
           <Route path="/admin" element={
             <ProtectedRoute allowed={['admin']}>
-              <AdminDashboard />
+              <AdminLayout />
             </ProtectedRoute>
-          } />
+          }>
+            <Route index element={<Navigate replace to="tableau-de-bord" />} />
+            <Route path="tableau-de-bord" element={<AdminDashboardPage />} />
+            <Route path="compagnies" element={<AdminCompaniesPage />} />
+            <Route path="compagnies/:id" element={<AdminCompanyDetailPage />} />
+            <Route path="utilisateurs" element={<AdminUsersPage />} />
+            <Route path="voyages" element={<AdminVoyagesPage />} />
+            <Route path="billets" element={<AdminTicketsPage />} />
+            <Route path="finances" element={<AdminFinancePage />} />
+            <Route path="statistiques" element={<AdminAnalyticsPage />} />
+            <Route path="audit" element={<AdminAuditPage />} />
+            <Route path="parametres" element={<AdminSettingsPage />} />
+            <Route path="ma-compagnie" element={<Navigate replace to="/admin/compagnies" />} />
+            <Route path="agences/*" element={<Navigate replace to="/admin/compagnies" />} />
+            <Route path="bus" element={<Navigate replace to="/admin/voyages" />} />
+            <Route path="trajets" element={<Navigate replace to="/admin/voyages" />} />
+            <Route path="revenus" element={<Navigate replace to="/admin/finances" />} />
+          </Route>
 
         </Routes>
 

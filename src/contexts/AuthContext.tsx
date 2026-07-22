@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import apiService from '../services/api';
 
 type User = any;
-export type AuthPortal = 'client' | 'company' | 'admin';
+export type AuthPortal = 'client' | 'company' | 'guichet' | 'admin';
 
 interface AuthContextValue {
   user: User | null;
@@ -69,7 +69,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (identifier: string, secret: string, portal: AuthPortal = 'client') => {
-    const resp = await apiService.loginLegacy(identifier, secret); // unified login endpoint
+    const resp = portal === 'admin'
+      ? await apiService.loginSuperAdmin(identifier, secret)
+      : portal === 'company'
+        ? await apiService.loginCompanyAdmin(identifier, secret)
+        : portal === 'guichet'
+          ? await apiService.loginGuichetAgent(identifier, secret)
+          : identifier.includes('@')
+            ? await apiService.loginUnifiedEmail(identifier, secret)
+            : await apiService.loginClient(identifier, secret);
     if (resp.token) {
       apiService.setAuthToken(resp.token);
       // Use sessionStorage instead of localStorage for security (cleared on browser close)

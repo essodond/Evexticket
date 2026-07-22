@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { safeJsonParse, readLocalStorage, writeLocalStorage, removeLocalStorage } from '../storage';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { safeJsonParse, readLocalStorage, writeLocalStorage, removeLocalStorage } from './storage';
 
 // Mock localStorage
 const localStorageMock = (() => {

@@ -2,7 +2,7 @@ from .user import UserProfile
 from .audit import AuditLog
 from .base import (
     Company, City, Trip, TripStop, BoardingZone, Booking, Payment, Review, Notification,
-    Siege, Reservation, CompteCagnotte, HistoriqueReversement
+    Siege, Reservation, CompteCagnotte, HistoriqueReversement, PlatformConfiguration
 )
 from .base import ScheduledTrip
 from .mixins import SoftDeleteModel
@@ -25,4 +25,5 @@ __all__ = [
     'Reservation',
     'CompteCagnotte',
     'HistoriqueReversement',
+    'PlatformConfiguration',
 ]
