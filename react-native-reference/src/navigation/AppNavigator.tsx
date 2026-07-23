@@ -21,6 +21,9 @@ import MyTicketsScreen from '../screens/MyTicketsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import TrackBusScreen from '../screens/TrackBusScreen';
 import StartTrackingScreen from '../screens/StartTrackingScreen';
+import StationMapScreen from '../screens/StationMapScreen';
+import TicketAssistantScreen from '../screens/TicketAssistantScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -60,6 +63,8 @@ function MainTabs() {
             iconName = focused ? 'ticket' : 'ticket-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
+          } else if (route.name === 'Notifications') {
+            iconName = focused ? 'notifications' : 'notifications-outline';
           }
           return <Ionicons name={iconName} size={24} color={color} />;
         },
@@ -68,6 +73,7 @@ function MainTabs() {
       {/* Tes écrans restent les mêmes */}
       <Tab.Screen name="Home" component={HomeConnectedScreen as React.ComponentType<any>} options={{ tabBarLabel: 'Accueil' }} />
       <Tab.Screen name="MyTickets" component={MyTicketsScreen as React.ComponentType<any>} options={{ tabBarLabel: 'Tickets' }} />
+      <Tab.Screen name="Notifications" component={NotificationsScreen as React.ComponentType<any>} options={{ tabBarLabel: 'Alertes' }} />
       <Tab.Screen name="Profile" component={ProfileScreen as React.ComponentType<any>} options={{ tabBarLabel: 'Profil' }} />
     </Tab.Navigator>
   );
@@ -144,6 +150,11 @@ export default function AppNavigator() {
         component={StartTrackingScreen}
         options={{ animation: 'slide_from_bottom' }}
       />
+      <Stack.Screen
+        name="StationMap"
+        component={StationMapScreen}
+        options={{ animation: 'slide_from_bottom' }}
+      />
       <Stack.Screen 
         name="Payment" 
         component={PaymentScreen}
@@ -157,6 +168,11 @@ export default function AppNavigator() {
         options={{
           animation: 'fade',
         }}
+      />
+      <Stack.Screen
+        name="TicketAssistant"
+        component={TicketAssistantScreen}
+        options={{ animation: 'slide_from_bottom' }}
       />
     </Stack.Navigator>
   );

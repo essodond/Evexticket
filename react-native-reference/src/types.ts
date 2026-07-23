@@ -53,6 +53,7 @@ export interface Trip {
     id: number;
     price: string;
     stops: TripStop[];
+    departure_station?: StationDestination | null;
   };
   seats: Seat[];
 }
@@ -61,19 +62,36 @@ export type PaymentMethod = 'flooz' | 'tmoney';
 
 export interface TripStop {
   id: number;
-  trip: number;
+  trip?: number;
   city: City | number;
   city_name?: string;
-  arrival_time: string;
-  departure_time: string;
+  sequence?: number;
+  segment_price?: string | null;
+  arrival_time?: string;
+  departure_time?: string;
   boarding_zones?: BoardingZone[];
 }
 
 export interface BoardingZone {
   id: number;
   trip_stop: number;
+  city?: number;
+  city_name?: string;
   name: string;
-  location: string;
+  description?: string;
+  location?: string;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
+}
+
+export interface StationDestination {
+  id?: string;
+  name: string;
+  address?: string;
+  city_name: string;
+  latitude: number;
+  longitude: number;
+  source?: 'boarding_zone' | 'agency';
 }
 
 export type RootStackParamList = {
@@ -87,6 +105,8 @@ export type RootStackParamList = {
   Ticket: { trip: Trip };
   TrackBus: { tripId?: string | number };
   StartTracking: { tripId?: string | number };
+  StationMap: { station: StationDestination };
+  TicketAssistant: { bookingId: number; reference?: string };
   PaymentSuccess: undefined;
   PaymentFailed: undefined;
 };
@@ -95,6 +115,7 @@ export type MainTabParamList = {
   Home: undefined;
   MyTickets: undefined;
   Profile: undefined;
+  Notifications: undefined;
 };
 
 export type RootStackScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<

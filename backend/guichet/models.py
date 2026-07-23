@@ -40,6 +40,20 @@ class Agence(SoftDeleteModel):
     ville = models.ForeignKey('transport.City', on_delete=models.PROTECT, related_name='agences')
     adresse = models.CharField(max_length=300)
     telephone = models.CharField(max_length=30)
+    latitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        verbose_name='Latitude de la gare',
+    )
+    longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        verbose_name='Longitude de la gare',
+    )
     gestionnaire = models.ForeignKey(
         AgentGuichet,
         on_delete=models.SET_NULL,

@@ -4,7 +4,7 @@ from .models import Agence, AgentGuichet, Guichet, VenteGuichet, ControlePassage
 
 @admin.register(Agence)
 class AgenceAdmin(admin.ModelAdmin):
-    list_display = ('nom', 'ville', 'compagnie', 'gestionnaire', 'is_active', 'is_deleted')
+    list_display = ('nom', 'ville', 'compagnie', 'latitude', 'longitude', 'gestionnaire', 'is_active', 'is_deleted')
     list_filter = ('compagnie', 'ville', 'is_active', 'is_deleted')
     search_fields = ('nom', 'adresse', 'telephone')
 

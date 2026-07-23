@@ -30,6 +30,7 @@ class AgenceSerializer(serializers.ModelSerializer):
         model = Agence
         fields = [
             'id', 'nom', 'ville_id', 'ville', 'adresse', 'telephone',
+            'latitude', 'longitude',
             'gestionnaire_id', 'gestionnaire', 'nb_personnel',
             'nb_guichets', 'billets_vendus_mois', 'statut', 'is_active',
             'created_at', 'updated_at',
@@ -44,6 +45,17 @@ class AgenceSerializer(serializers.ModelSerializer):
 
         if not nom:
             raise serializers.ValidationError({'nom': "Le nom de l'agence est requis."})
+        latitude = attrs.get('latitude', getattr(self.instance, 'latitude', None))
+        longitude = attrs.get('longitude', getattr(self.instance, 'longitude', None))
+        if (latitude is None) != (longitude is None):
+            raise serializers.ValidationError({
+                'latitude': 'La latitude et la longitude doivent être renseignées ensemble.',
+                'longitude': 'La latitude et la longitude doivent être renseignées ensemble.',
+            })
+        if latitude is not None and not (-90 <= latitude <= 90):
+            raise serializers.ValidationError({'latitude': 'La latitude doit être comprise entre -90 et 90.'})
+        if longitude is not None and not (-180 <= longitude <= 180):
+            raise serializers.ValidationError({'longitude': 'La longitude doit être comprise entre -180 et 180.'})
         if compagnie and gestionnaire:
             if gestionnaire.compagnie_id != compagnie.id:
                 raise serializers.ValidationError({'gestionnaire_id': 'Ce gestionnaire appartient à une autre compagnie.'})

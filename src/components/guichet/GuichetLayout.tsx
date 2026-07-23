@@ -6,6 +6,7 @@ import {
   LogOut,
   MapPin,
   Menu,
+  Mic2,
   QrCode,
   TicketPlus,
 } from 'lucide-react';
@@ -30,6 +31,7 @@ const icons: Record<GuichetNavigationKey, React.ComponentType<{ className?: stri
   trips: Bus,
   scanner: QrCode,
   history: History,
+  assistant: Mic2,
 };
 
 const GuichetLayout: React.FC = () => {

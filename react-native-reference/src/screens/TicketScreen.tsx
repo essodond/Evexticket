@@ -22,6 +22,7 @@ import { RootStackParamList } from '../types';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
 import Button from '../components/Button';
+import { findDepartureStation } from '../utils/station';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Ticket'>;
 
@@ -60,6 +61,7 @@ export default function TicketScreen({ navigation, route }: Props) {
     .map((part: string) => part[0]?.toUpperCase())
     .join('') || 'EV';
   const qrSize = Math.min(210, Math.max(164, width - 154));
+  const departureStation = findDepartureStation(ticketData);
   const qrPayload = JSON.stringify({
     type: 'EVEX_TICKET',
     reference: ticketNumber,
@@ -295,6 +297,25 @@ export default function TicketScreen({ navigation, route }: Props) {
             ℹ️ Veuillez arriver 15 minutes avant le départ. Conservez ce ticket jusqu'à la fin de votre voyage.
           </Text>
         </View>
+
+        {departureStation && (
+          <TouchableOpacity
+            style={styles.stationButton}
+            onPress={() => navigation.navigate('StationMap', { station: departureStation })}
+          >
+            <View style={styles.stationButtonIcon}>
+              <Ionicons name="map" size={22} color={COLORS.primary} />
+            </View>
+            <View style={styles.stationButtonContent}>
+              <Text style={styles.stationButtonEyebrow}>REJOINDRE LA GARE</Text>
+              <Text style={styles.stationButtonTitle}>{departureStation.name}</Text>
+              <Text style={styles.stationButtonAddress} numberOfLines={1}>
+                {departureStation.address || departureStation.city_name}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color={COLORS.primary} />
+          </TouchableOpacity>
+        )}
 
         <View style={styles.actions}>
           <Button
@@ -662,6 +683,45 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     color: COLORS.text,
     lineHeight: 20,
+  },
+  stationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#CFE2FF',
+    backgroundColor: '#F4F8FF',
+  },
+  stationButtonIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stationButtonContent: {
+    flex: 1,
+    marginHorizontal: 12,
+  },
+  stationButtonEyebrow: {
+    color: COLORS.primary,
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.bold,
+    letterSpacing: 1,
+  },
+  stationButtonTitle: {
+    marginTop: 2,
+    color: COLORS.text,
+    fontSize: FONT_SIZES.base,
+    fontWeight: FONT_WEIGHTS.bold,
+  },
+  stationButtonAddress: {
+    marginTop: 2,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZES.xs,
   },
   actions: {
     flexDirection: 'row',

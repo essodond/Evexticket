@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart3, Building2, CalendarClock, ClipboardList, LayoutDashboard, LogOut, Menu, Settings, Ticket, Users, WalletCards } from 'lucide-react';
+import { BarChart3, Building2, CalendarClock, ClipboardList, LayoutDashboard, LogOut, Menu, Settings, Sparkles, Ticket, Users, WalletCards } from 'lucide-react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -11,6 +11,7 @@ const links = [
   { to: 'billets', label: 'Billets', icon: Ticket },
   { to: 'finances', label: 'Finances', icon: WalletCards },
   { to: 'statistiques', label: 'Statistiques', icon: BarChart3 },
+  { to: 'copilote', label: 'Copilote IA', icon: Sparkles },
   { to: 'audit', label: 'Journal d’audit', icon: ClipboardList },
   { to: 'parametres', label: 'Paramètres', icon: Settings },
 ];

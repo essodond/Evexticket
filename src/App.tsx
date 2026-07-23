@@ -42,6 +42,8 @@ import {
   GuichetScannerPage,
   GuichetTripsPage,
 } from './components/guichet/GuichetPages';
+import GuichetVoiceAssistantPage from './components/guichet/GuichetVoiceAssistantPage';
+import ManagementCopilotPage from './components/ai/ManagementCopilotPage';
 import { getAuthenticatedHomePath, getPortalFromHostname } from './utils/portal';
 import type { AuthPortal } from './contexts/AuthContext';
 
@@ -320,6 +322,7 @@ function App() {
             <Route path="voyages" element={<GuichetTripsPage />} />
             <Route path="scanner" element={<GuichetScannerPage />} />
             <Route path="historique" element={<GuichetHistoryPage />} />
+            <Route path="assistant" element={<GuichetVoiceAssistantPage />} />
           </Route>
           <Route path="/login" element={<AuthPage mode={authMode} portal={currentPortal} onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
           <Route path="/register" element={<AuthPage mode={'register'} portal="client" onBack={() => navigate('/')} onSuccess={handleAuthSuccess} onSwitchMode={handleNavigateToAuth} logoUrl="/logo.jpg" siteTitle="EvexTicket" />} />
@@ -399,6 +402,7 @@ function App() {
             <Route path="voyages/:id" element={<CompanyVoyageDetailPage />} />
             <Route path="billets" element={<CompanyTicketsPage />} />
             <Route path="revenus" element={<CompanyRevenuePage />} />
+            <Route path="copilote" element={<ManagementCopilotPage scope="company" />} />
             <Route path="parametres" element={<CompanySettingsPage />} />
           </Route>
 
@@ -416,6 +420,7 @@ function App() {
             <Route path="billets" element={<AdminTicketsPage />} />
             <Route path="finances" element={<AdminFinancePage />} />
             <Route path="statistiques" element={<AdminAnalyticsPage />} />
+            <Route path="copilote" element={<ManagementCopilotPage scope="admin" />} />
             <Route path="audit" element={<AdminAuditPage />} />
             <Route path="parametres" element={<AdminSettingsPage />} />
             <Route path="ma-compagnie" element={<Navigate replace to="/admin/compagnies" />} />

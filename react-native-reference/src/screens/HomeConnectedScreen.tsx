@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -18,11 +18,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList, Trip } from '../types';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
-import { getTrips, getCities, City } from '../services/api';
+import {
+  getTrips,
+  getCities,
+  City,
+  getAIRecommendations,
+  AISearchResponse,
+} from '../services/api';
 import TripCard from '../components/TripCard';
-import Input from '../components/Input';
 import Select from '../components/Select';
+import FloatingTravelAssistant from '../components/FloatingTravelAssistant';
 import { useAuth } from '../contexts/AuthContext';
+import { detectCurrentDepartureCity } from '../services/location';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MainTabs'>;
 
@@ -45,6 +52,12 @@ export default function HomeConnectedScreen({ navigation }: Props) {
   const [loadingCities, setLoadingCities] = useState<boolean>(true);
   const [citiesError, setCitiesError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'departure' | 'price' | 'duration' | 'seats'>('departure');
+  const [aiResultsActive, setAiResultsActive] = useState(false);
+  const [recommendations, setRecommendations] = useState<Trip[]>([]);
+  const [currentCity, setCurrentCity] = useState<City | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locationNotice, setLocationNotice] = useState<string | null>(null);
+  const locationRequestStarted = useRef(false);
 
   // Récupérer la liste des villes
   useEffect(() => {
@@ -63,6 +76,54 @@ export default function HomeConnectedScreen({ navigation }: Props) {
     };
 
     fetchCities();
+  }, []);
+
+  const loadNearbyRecommendations = useCallback(async () => {
+    if (!cities.length) return;
+    setLocating(true);
+    setLocationNotice(null);
+    try {
+      const detected = await detectCurrentDepartureCity(cities);
+      setCurrentCity(detected.city);
+      setSearchFrom((current) => current || detected.city.name);
+      const nearbyTrips = await getAIRecommendations(detected.city.name);
+      setRecommendations(nearbyTrips);
+      setLocationNotice(
+        nearbyTrips.length
+          ? `Les suggestions partent uniquement de ${detected.city.name}.`
+          : `Aucun départ disponible depuis ${detected.city.name} pour le moment.`,
+      );
+    } catch (locationError) {
+      setCurrentCity(null);
+      setLocationNotice(
+        locationError instanceof Error
+          ? locationError.message
+          : 'Impossible de déterminer votre ville actuelle.',
+      );
+      getAIRecommendations()
+        .then(setRecommendations)
+        .catch(() => setRecommendations([]));
+    } finally {
+      setLocating(false);
+    }
+  }, [cities]);
+
+  useEffect(() => {
+    if (!cities.length || locationRequestStarted.current) return;
+    locationRequestStarted.current = true;
+    void loadNearbyRecommendations();
+  }, [cities, loadNearbyRecommendations]);
+
+  const handleAIResults = useCallback((response: AISearchResponse) => {
+    setTrips(response.trips);
+    setSearchFrom(response.criteria.departure_city || '');
+    setSearchTo(response.criteria.arrival_city || '');
+    setSelectedCompany('');
+    setAiResultsActive(true);
+    setError(null);
+    if (response.criteria.travel_date) {
+      setDate(new Date(`${response.criteria.travel_date}T12:00:00`));
+    }
   }, []);
 
   const fetchAndFilterTrips = useCallback(async () => {
@@ -124,12 +185,14 @@ export default function HomeConnectedScreen({ navigation }: Props) {
 
   useEffect(() => {
     fetchAndFilterTrips();
-  }, [displayDate, date, fetchAndFilterTrips]);
+  }, [displayDate, fetchAndFilterTrips]);
 
   const onRefresh = useCallback(() => {
+    setAiResultsActive(false);
     setRefreshing(true);
     fetchAndFilterTrips();
-  }, [fetchAndFilterTrips]);
+    void loadNearbyRecommendations();
+  }, [fetchAndFilterTrips, loadNearbyRecommendations]);
 
   const onDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(Platform.OS === 'ios');
@@ -159,10 +222,14 @@ export default function HomeConnectedScreen({ navigation }: Props) {
       const fromName = depName.toLowerCase?.() || '';
       const toName = arrName.toLowerCase?.() || '';
       const company = companyName.toLowerCase?.() || '';
-      const matchFrom = searchFrom
+      const matchFrom = aiResultsActive ? true : searchFrom
         ? fromName.includes(searchFrom.toLowerCase())
         : true;
-      const matchTo = searchTo ? toName.includes(searchTo.toLowerCase()) : true;
+      const matchTo = aiResultsActive
+        ? true
+        : searchTo
+          ? toName.includes(searchTo.toLowerCase())
+          : true;
       const matchCompany = selectedCompany
         ? company.includes(selectedCompany.toLowerCase())
         : true;
@@ -309,8 +376,97 @@ export default function HomeConnectedScreen({ navigation }: Props) {
           />
         }
       >
+        {!aiResultsActive && (
+          <View style={styles.locationCard}>
+            <View style={styles.locationIcon}>
+              <Ionicons
+                name={currentCity ? 'navigate' : 'location-outline'}
+                size={22}
+                color={COLORS.primary}
+              />
+            </View>
+            <View style={styles.locationContent}>
+              <Text style={styles.locationEyebrow}>DÉPART AUTOUR DE MOI</Text>
+              <Text style={styles.locationTitle}>
+                {locating
+                  ? 'Localisation en cours…'
+                  : currentCity
+                    ? `Vous êtes à ${currentCity.name}`
+                    : 'Localisation non disponible'}
+              </Text>
+              {locationNotice && (
+                <Text style={styles.locationText}>{locationNotice}</Text>
+              )}
+            </View>
+            <TouchableOpacity
+              style={styles.locationRefresh}
+              onPress={() => void loadNearbyRecommendations()}
+              disabled={locating}
+              accessibilityLabel="Actualiser ma position"
+            >
+              <Ionicons
+                name="refresh"
+                size={19}
+                color={locating ? COLORS.textMuted : COLORS.primary}
+              />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {!aiResultsActive && recommendations.length > 0 && (
+          <View style={styles.recommendationSection}>
+            <View style={styles.recommendationHeader}>
+              <View>
+                <Text style={styles.recommendationEyebrow}>
+                  {currentCity ? `AU DÉPART DE ${currentCity.name.toUpperCase()}` : 'POUR VOUS'}
+                </Text>
+                <Text style={styles.recommendationTitle}>
+                  {currentCity ? 'Tickets proches de vous' : 'Voyages recommandés'}
+                </Text>
+              </View>
+              <Ionicons name="sparkles-outline" size={22} color={COLORS.primary} />
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.recommendationList}
+            >
+              {recommendations.slice(0, 5).map((trip) => (
+                <TouchableOpacity
+                  key={`recommendation-${trip.id}`}
+                  style={styles.recommendationCard}
+                  onPress={() => navigation.navigate('TripDetails', { trip })}
+                >
+                  <Text style={styles.recommendationCompany} numberOfLines={1}>
+                    {trip.trip_info?.company_name || 'Compagnie'}
+                  </Text>
+                  <Text style={styles.recommendationRoute} numberOfLines={1}>
+                    {trip.trip_info?.departure_city_name} → {trip.trip_info?.arrival_city_name}
+                  </Text>
+                  <View style={styles.recommendationMeta}>
+                    <Text style={styles.recommendationDate}>
+                      {new Date(`${trip.date}T00:00:00`).toLocaleDateString('fr-FR', {
+                        day: '2-digit',
+                        month: 'short',
+                      })}
+                    </Text>
+                    <Text style={styles.recommendationPrice}>
+                      {Number(trip.trip_info?.price || 0).toLocaleString('fr-FR')} F
+                    </Text>
+                  </View>
+                  <Text style={styles.recommendationReason} numberOfLines={2}>
+                    {(trip as any).ai_reason || 'Horaire et disponibilité intéressants'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         <View style={styles.tripsHeader}>
-          <Text style={styles.tripsTitle}>Trajets disponibles</Text>
+          <Text style={styles.tripsTitle}>
+            {aiResultsActive ? 'Résultats de l’assistant' : 'Trajets disponibles'}
+          </Text>
           <Text style={styles.tripsCount}>{filteredTrips.length} résultats</Text>
         </View>
 
@@ -535,6 +691,7 @@ export default function HomeConnectedScreen({ navigation }: Props) {
           )
         )}
       </ScrollView>
+      <FloatingTravelAssistant cities={cities} onResults={handleAIResults} />
     </View>
   );
 }
@@ -752,4 +909,76 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: FONT_WEIGHTS.semibold,
   },
+  recommendationSection: { marginBottom: 22 },
+  locationCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#CFE2FF',
+    backgroundColor: '#F4F8FF',
+    padding: 14,
+    marginBottom: 20,
+  },
+  locationIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 15,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationContent: { flex: 1, marginHorizontal: 12 },
+  locationEyebrow: {
+    color: COLORS.primary,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  locationTitle: {
+    color: COLORS.text,
+    fontSize: FONT_SIZES.base,
+    fontWeight: FONT_WEIGHTS.bold,
+    marginTop: 2,
+  },
+  locationText: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 3,
+  },
+  locationRefresh: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recommendationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  recommendationEyebrow: { color: COLORS.primary, fontSize: 10, fontWeight: '800', letterSpacing: 1.3 },
+  recommendationTitle: { color: '#102846', fontSize: 19, fontWeight: '800', marginTop: 2 },
+  recommendationList: { gap: 12, paddingRight: 4 },
+  recommendationCard: {
+    width: 230,
+    borderRadius: 20,
+    padding: 16,
+    backgroundColor: '#102F58',
+  },
+  recommendationCompany: { color: '#AFCDF8', fontSize: 11, fontWeight: '700' },
+  recommendationRoute: { color: COLORS.white, fontSize: 17, fontWeight: '800', marginTop: 6 },
+  recommendationMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+  },
+  recommendationDate: { color: '#C6D7EE', fontSize: 12, fontWeight: '600' },
+  recommendationPrice: { color: '#7BE3BD', fontSize: 13, fontWeight: '800' },
+  recommendationReason: { color: '#9FB4D0', fontSize: 11, lineHeight: 16, marginTop: 11 },
 });

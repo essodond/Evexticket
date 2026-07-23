@@ -20,6 +20,7 @@ import Button from '../components/Button';
 import SeatSelection from '../components/SeatSelection';
 import { getTripDetails } from '../services/api';
 import { SeatStatus } from '../components/SeatSelection'; // Import SeatStatus
+import { findDepartureStation } from '../utils/station';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TripDetails'>;
 
@@ -139,6 +140,7 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
   const departureTimeLabel = formatTime(departureTime);
   const arrivalTimeLabel = formatTime(arrivalTime);
   const seatsLeft = (trip as any).seats_left ?? (trip as any).seatsLeft ?? '';
+  const departureStation = findDepartureStation(trip);
 
   return (
     <View style={styles.container}>
@@ -224,7 +226,33 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
           />
         </View>
 
-
+        <View style={styles.stationCard}>
+          <View style={styles.stationCardHeader}>
+            <View style={styles.stationCardIcon}>
+              <Ionicons name="map" size={22} color={COLORS.primary} />
+            </View>
+            <View style={styles.stationCardContent}>
+              <Text style={styles.stationCardEyebrow}>GARE DE DÉPART</Text>
+              <Text style={styles.stationCardTitle}>
+                {departureStation?.name || 'Coordonnées à renseigner'}
+              </Text>
+              <Text style={styles.stationCardAddress}>
+                {departureStation
+                  ? departureStation.address || departureStation.city_name
+                  : 'La compagnie doit géolocaliser son agence ou sa zone d’embarquement.'}
+              </Text>
+            </View>
+          </View>
+          {departureStation && (
+            <TouchableOpacity
+              style={styles.stationMapButton}
+              onPress={() => navigation.navigate('StationMap', { station: departureStation })}
+            >
+              <Ionicons name="navigate-outline" size={19} color={COLORS.white} />
+              <Text style={styles.stationMapButtonText}>Carte et itinéraire</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         <View style={styles.notice}>
           <Text style={styles.noticeText}>
@@ -455,6 +483,63 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     color: COLORS.text,
     lineHeight: 20,
+  },
+  stationCard: {
+    borderWidth: 1,
+    borderColor: '#CFE2FF',
+    backgroundColor: '#F5F9FF',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 18,
+  },
+  stationCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  stationCardIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stationCardContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  stationCardEyebrow: {
+    color: COLORS.primary,
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.bold,
+    letterSpacing: 1,
+  },
+  stationCardTitle: {
+    marginTop: 2,
+    color: COLORS.text,
+    fontSize: FONT_SIZES.base,
+    fontWeight: FONT_WEIGHTS.bold,
+  },
+  stationCardAddress: {
+    marginTop: 3,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZES.xs,
+    lineHeight: 17,
+  },
+  stationMapButton: {
+    minHeight: 46,
+    marginTop: 14,
+    borderRadius: 15,
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  stationMapButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: FONT_WEIGHTS.bold,
   },
   footer: {
     backgroundColor: COLORS.white,

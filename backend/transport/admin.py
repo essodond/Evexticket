@@ -9,6 +9,7 @@ from .models import (
     Review,
     Notification,
     TripStop,
+    BoardingZone,
     Siege,
     Reservation,
     CompteCagnotte,
@@ -21,6 +22,13 @@ class TripStopInline(admin.TabularInline):
     extra = 1
     fields = ['city', 'sequence', 'segment_price']
     ordering = ['sequence']
+
+
+@admin.register(BoardingZone)
+class BoardingZoneAdmin(admin.ModelAdmin):
+    list_display = ['name', 'city', 'trip_stop', 'latitude', 'longitude']
+    list_filter = ['city', 'trip_stop__trip__company']
+    search_fields = ['name', 'description', 'city__name', 'trip_stop__trip__company__name']
 
 
 @admin.register(Company)

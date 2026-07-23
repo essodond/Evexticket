@@ -987,7 +987,6 @@ class CompanyViewSet(viewsets.ModelViewSet):
             ScheduledTrip.objects.filter(trip__company=company).delete()
             TripStop.objects.filter(trip__company=company).delete()
             Trip.all_objects.filter(company=company).delete()
-            BoardingZone.objects.filter(company=company).delete()
             company.hard_delete()
 
         log_action(

@@ -258,25 +258,28 @@ class CompanySerializer(serializers.ModelSerializer):
         return company
 
 
-class TripStopSerializer(serializers.ModelSerializer):
-    city_name = serializers.CharField(source='city.name', read_only=True)
-
-    class Meta:
-        model = TripStop
-        fields = ['id', 'city', 'city_name', 'sequence', 'segment_price']
-
-
 class BoardingZoneSerializer(serializers.ModelSerializer):
-    company_name = serializers.CharField(source='company.name', read_only=True)
-    trip_name = serializers.CharField(source='trip.__str__', read_only=True)
+    city_name = serializers.CharField(source='city.name', read_only=True)
 
     class Meta:
         model = BoardingZone
         fields = [
-            'id', 'company', 'company_name', 'trip', 'trip_name', 'name', 
-            'address', 'latitude', 'longitude', 'is_active', 'created_at', 'updated_at'
+            'id', 'city', 'city_name', 'trip_stop', 'name',
+            'description', 'latitude', 'longitude',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'city_name']
+
+
+class TripStopSerializer(serializers.ModelSerializer):
+    city_name = serializers.CharField(source='city.name', read_only=True)
+    boarding_zones = BoardingZoneSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = TripStop
+        fields = [
+            'id', 'city', 'city_name', 'sequence', 'segment_price',
+            'boarding_zones',
+        ]
 
 
 # Supprimé: StopSerializer (le modèle canonique est TripStop)
@@ -292,6 +295,7 @@ class TripSerializer(serializers.ModelSerializer):
     bookings_count = serializers.SerializerMethodField()
     available_seats = serializers.SerializerMethodField()
     stops = TripStopSerializer(many=True, required=False)
+    departure_station = serializers.SerializerMethodField()
 
     class Meta:
         model = Trip
@@ -301,7 +305,7 @@ class TripSerializer(serializers.ModelSerializer):
             'company_name', 'company_logo', 'departure_city', 'departure_city_name', 'arrival_city', 'arrival_city_name',
             'price', 'departure_time', 'arrival_time',
             'duration', 'bus_type', 'capacity',
-            'bookings_count', 'available_seats', 'stops'
+            'bookings_count', 'available_seats', 'stops', 'departure_station'
         ]
         read_only_fields = [
             'id', 'company_name', 'company_logo', 'departure_city_name', 'arrival_city_name',
@@ -315,6 +319,63 @@ class TripSerializer(serializers.ModelSerializer):
     def get_available_seats(self, obj):
         confirmed_bookings = obj.bookings.filter(status='confirmed').count()
         return obj.capacity - confirmed_bookings
+
+    def get_departure_station(self, obj):
+        """Expose une gare réelle : zone d'embarquement, puis agence géolocalisée."""
+        departure_stop = (
+            obj.stops.filter(city_id=obj.departure_city_id)
+            .prefetch_related('boarding_zones')
+            .order_by('sequence')
+            .first()
+        )
+        if departure_stop:
+            zone = (
+                departure_stop.boarding_zones
+                .exclude(latitude__isnull=True)
+                .exclude(longitude__isnull=True)
+                .first()
+            )
+            if zone:
+                return {
+                    'id': str(zone.id),
+                    'name': zone.name,
+                    'address': zone.description,
+                    'city_name': zone.city.name,
+                    'latitude': zone.latitude,
+                    'longitude': zone.longitude,
+                    'source': 'boarding_zone',
+                }
+
+        try:
+            from guichet.models import Agence
+
+            agency = (
+                Agence.objects.filter(
+                    compagnie_id=obj.company_id,
+                    ville_id=obj.departure_city_id,
+                    is_active=True,
+                    is_deleted=False,
+                )
+                .exclude(latitude__isnull=True)
+                .exclude(longitude__isnull=True)
+                .order_by('nom')
+                .first()
+            )
+        except (ImportError, LookupError):
+            agency = None
+
+        if not agency:
+            return None
+
+        return {
+            'id': str(agency.id),
+            'name': agency.nom,
+            'address': agency.adresse,
+            'city_name': agency.ville.name,
+            'latitude': agency.latitude,
+            'longitude': agency.longitude,
+            'source': 'agency',
+        }
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)

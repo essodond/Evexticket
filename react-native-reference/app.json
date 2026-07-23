@@ -12,7 +12,7 @@
     },
     "jsEngine": "jsc",
     "extra": {
-      "EXPO_PUBLIC_API_BASE_URL": "https://api.evex-tg.com/api",
+      "EXPO_PUBLIC_API_BASE_URL": "http://192.168.1.66:8000/api",
       "eas": {
         "projectId": "acf02b91-e1aa-4041-b503-e80693a2790a"
       }
@@ -30,6 +30,9 @@
       "bundleIdentifier": "com.evex.ticket",
       "infoPlist": {
         "NSCameraUsageDescription": "Cette application nécessite l'accès à la caméra pour scanner les QR codes.",
+        "NSMicrophoneUsageDescription": "Autorisez EVEX Ticket à utiliser le microphone pour rechercher un voyage à la voix.",
+        "NSSpeechRecognitionUsageDescription": "Autorisez EVEX Ticket à convertir votre demande vocale en recherche de voyage.",
+        "NSLocationWhenInUseUsageDescription": "Autorisez EVEX Ticket à utiliser votre position pour recommander les départs proches et vous guider vers la gare.",
         "NSPhotoLibraryUsageDescription": "Cette application nécessite l'accès à vos photos pour enregistrer vos billets.",
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -38,6 +41,9 @@
       "package": "com.evex.ticket",
       "permissions": [
         "CAMERA",
+        "RECORD_AUDIO",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -56,6 +62,22 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Autorisez EVEX Ticket à utiliser votre position pour recommander les départs proches et vous guider vers la gare."
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Autorisez EVEX Ticket à utiliser le microphone pour rechercher un voyage à la voix.",
+          "speechRecognitionPermission": "Autorisez EVEX Ticket à convertir votre demande vocale en recherche de voyage.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
+        }
+      ],
       [
         "expo-build-properties",
         {

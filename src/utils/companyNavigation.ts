@@ -8,6 +8,7 @@ export const companyNavigationItems = [
   { key: 'trips', label: 'Voyages', path: '/company/voyages' },
   { key: 'tickets', label: 'Billets', path: '/company/billets' },
   { key: 'revenues', label: 'Revenus', path: '/company/revenus' },
+  { key: 'copilot', label: 'Copilote IA', path: '/company/copilote' },
   { key: 'settings', label: 'Paramètres', path: '/company/parametres' },
 ] as const;
 

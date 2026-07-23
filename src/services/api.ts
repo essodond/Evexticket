@@ -257,6 +257,70 @@ export interface PlatformAdminDashboard {
   recent_activity: Array<{ id: number; action: string; model: string; object: string; user: string; timestamp: string }>;
 }
 
+export interface AICopilotResponse {
+  answer: string;
+  suggestions: string[];
+  provider: 'openai' | 'fallback';
+  metrics: {
+    confirmed_bookings: number;
+    revenue_fcfa: number;
+    upcoming_trips: number;
+    active_companies: number;
+    average_rating: number;
+    high_risk_bookings: number;
+  };
+}
+
+export interface AITripInsights {
+  scheduled_trip_id: number;
+  occupancy_forecast_percent: number;
+  current_occupancy_percent: number;
+  predicted_delay_minutes: number;
+  reported_delay_minutes: number;
+  confidence_percent: number;
+  delay_message: string;
+  updated_at: string;
+}
+
+export interface AIBookingRisk {
+  booking_id: number;
+  score: number;
+  level: 'low' | 'medium' | 'high';
+  flags: string[];
+  reviewed: boolean;
+  updated_at: string;
+}
+
+export interface AIReviewAnalysis {
+  summary: { positive: number; neutral: number; negative: number; urgent: number };
+  reviews: Array<{
+    review_id: number;
+    sentiment: 'positive' | 'neutral' | 'negative';
+    category: string;
+    urgency: number;
+    summary: string;
+    provider: string;
+  }>;
+}
+
+export interface AIVoiceCommandResponse {
+  intent: 'search_trip';
+  provider: 'openai' | 'fallback';
+  criteria: Record<string, unknown>;
+  trips: Array<{
+    id: number;
+    date: string;
+    available_seats: number;
+    trip_info: {
+      company_name: string;
+      departure_city_name: string;
+      arrival_city_name: string;
+      departure_time: string;
+      price: number | string;
+    };
+  }>;
+}
+
 export interface PlatformAdminFinance {
   totals: { gross: number; evex: number; company_due: number; pending_payouts: number; refunds: number };
   monthly: PlatformAdminDashboard['monthly'];
@@ -323,6 +387,8 @@ export interface Agency {
   ville: { id: number; nom: string; region: string };
   adresse: string;
   telephone: string;
+  latitude: string | null;
+  longitude: string | null;
   gestionnaire: AgencyManager | null;
   nb_personnel: number;
   nb_guichets: number;
@@ -338,6 +404,8 @@ export interface AgencyPayload {
   ville_id: number;
   adresse: string;
   telephone: string;
+  latitude?: number | null;
+  longitude?: number | null;
   gestionnaire_id?: number | null;
   is_active?: boolean;
 }
@@ -1206,6 +1274,39 @@ class ApiService {
     this.setAuthToken(resp.token);
     try { localStorage.setItem('username', identifier); } catch (e) { }
     return resp;
+  }
+
+  async askManagementCopilot(question: string): Promise<AICopilotResponse> {
+    return this.request<AICopilotResponse>('/ai/copilot/', {
+      method: 'POST',
+      body: JSON.stringify({ question }),
+    });
+  }
+
+  async getAITripInsights(scheduledTripId: number): Promise<AITripInsights> {
+    return this.request<AITripInsights>(`/ai/trips/${scheduledTripId}/insights/`);
+  }
+
+  async reportAITripDelay(scheduledTripId: number, reportedDelayMinutes: number): Promise<AITripInsights> {
+    return this.request<AITripInsights>(`/ai/trips/${scheduledTripId}/insights/`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reported_delay_minutes: reportedDelayMinutes }),
+    });
+  }
+
+  async getAIBookingRisk(bookingId: number): Promise<AIBookingRisk> {
+    return this.request<AIBookingRisk>(`/ai/bookings/${bookingId}/risk/`);
+  }
+
+  async getAIReviewAnalysis(): Promise<AIReviewAnalysis> {
+    return this.request<AIReviewAnalysis>('/ai/reviews/analysis/');
+  }
+
+  async interpretGuichetVoiceCommand(transcript: string): Promise<AIVoiceCommandResponse> {
+    return this.request<AIVoiceCommandResponse>('/ai/voice-command/', {
+      method: 'POST',
+      body: JSON.stringify({ transcript }),
+    });
   }
 
   async loginUnifiedEmail(email: string, password: string): Promise<{ token: string; user: any }> {

@@ -74,6 +74,7 @@ INSTALLED_APPS = [
     'transport',
     'payments',
     'guichet',
+    'ai_assistant',
 ]
 
 MIDDLEWARE = [
@@ -281,4 +282,14 @@ QOSPAY_CLIENT_ID = config(
 
 # Reservation temporaire des sieges
 SIEGE_EXPIRY_MINUTES = config('SIEGE_EXPIRY_MINUTES', default=5, cast=int)
+
+# Intelligence assistée EVEX.
+# La clé reste exclusivement côté Django. Le mode fallback conserve les fonctions
+# essentielles lorsque le fournisseur IA n'est pas configuré ou indisponible.
+EVEX_AI_ENABLED = config('EVEX_AI_ENABLED', default=True, cast=bool)
+OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
+OPENAI_BASE_URL = config('OPENAI_BASE_URL', default='https://api.openai.com/v1')
+OPENAI_AI_MODEL = config('OPENAI_AI_MODEL', default='gpt-5.6-luna')
+OPENAI_REASONING_EFFORT = config('OPENAI_REASONING_EFFORT', default='low')
+OPENAI_TIMEOUT_SECONDS = config('OPENAI_TIMEOUT_SECONDS', default=25, cast=int)
 

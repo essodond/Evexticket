@@ -1,4 +1,4 @@
-export type GuichetNavigationKey = 'dashboard' | 'sale' | 'trips' | 'scanner' | 'history';
+export type GuichetNavigationKey = 'dashboard' | 'sale' | 'trips' | 'scanner' | 'history' | 'assistant';
 
 export const guichetNavigationItems: Array<{
   key: GuichetNavigationKey;
@@ -10,4 +10,5 @@ export const guichetNavigationItems: Array<{
   { key: 'trips', label: 'Voyages', path: '/guichet/voyages' },
   { key: 'scanner', label: 'Scanner un billet', path: '/guichet/scanner' },
   { key: 'history', label: 'Historique', path: '/guichet/historique' },
+  { key: 'assistant', label: 'Assistant vocal', path: '/guichet/assistant' },
 ];

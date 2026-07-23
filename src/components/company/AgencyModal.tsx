@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Building2, MapPin, Phone, UserRound, X } from 'lucide-react';
+import { Building2, LocateFixed, MapPin, Phone, UserRound, X } from 'lucide-react';
 import apiService from '../../services/api';
 import type { Agency, AgencyPayload, City, GuichetAgent } from '../../services/api';
 
@@ -15,8 +15,17 @@ interface AgencyModalProps {
 }
 
 const AgencyModal: React.FC<AgencyModalProps> = ({ open, agency, cities, agents, onClose, onSaved }) => {
-  const [form, setForm] = useState({ nom: '', ville_id: '', adresse: '', telephone: '', gestionnaire_id: '' });
+  const [form, setForm] = useState({
+    nom: '',
+    ville_id: '',
+    adresse: '',
+    telephone: '',
+    gestionnaire_id: '',
+    latitude: '',
+    longitude: '',
+  });
   const [saving, setSaving] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -27,6 +36,8 @@ const AgencyModal: React.FC<AgencyModalProps> = ({ open, agency, cities, agents,
       adresse: agency?.adresse || '',
       telephone: agency?.telephone || '',
       gestionnaire_id: agency?.gestionnaire?.id ? String(agency.gestionnaire.id) : '',
+      latitude: agency?.latitude ? String(agency.latitude) : '',
+      longitude: agency?.longitude ? String(agency.longitude) : '',
     });
     setError(null);
   }, [agency, open]);
@@ -43,6 +54,8 @@ const AgencyModal: React.FC<AgencyModalProps> = ({ open, agency, cities, agents,
       adresse: form.adresse.trim(),
       telephone: form.telephone.trim(),
       gestionnaire_id: form.gestionnaire_id ? Number(form.gestionnaire_id) : null,
+      latitude: form.latitude ? Number(form.latitude) : null,
+      longitude: form.longitude ? Number(form.longitude) : null,
     };
     try {
       const saved = agency
@@ -54,6 +67,30 @@ const AgencyModal: React.FC<AgencyModalProps> = ({ open, agency, cities, agents,
     } finally {
       setSaving(false);
     }
+  };
+
+  const useCurrentPosition = () => {
+    if (!navigator.geolocation) {
+      setError('La géolocalisation n’est pas disponible dans ce navigateur.');
+      return;
+    }
+    setLocating(true);
+    setError(null);
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setForm((current) => ({
+          ...current,
+          latitude: coords.latitude.toFixed(6),
+          longitude: coords.longitude.toFixed(6),
+        }));
+        setLocating(false);
+      },
+      () => {
+        setError('Position introuvable. Autorisez la localisation ou saisissez les coordonnées.');
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 },
+    );
   };
 
   return (
@@ -71,6 +108,15 @@ const AgencyModal: React.FC<AgencyModalProps> = ({ open, agency, cities, agents,
             <ModalField icon={<Phone className="h-4 w-4" />} label="Téléphone"><input value={form.telephone} onChange={(event) => setForm((current) => ({ ...current, telephone: event.target.value }))} required placeholder="90 00 00 00" className={fieldClass} /></ModalField>
             <ModalField icon={<UserRound className="h-4 w-4" />} label="Gestionnaire"><select value={form.gestionnaire_id} onChange={(event) => setForm((current) => ({ ...current, gestionnaire_id: event.target.value }))} className={fieldClass}><option value="">Aucun gestionnaire</option>{agents.filter((agent) => agent.actif && (!agent.agence || agent.agence.id === agency?.id)).map((agent) => <option key={agent.id} value={agent.id}>{agent.prenom} {agent.nom}</option>)}</select></ModalField>
             <label className="sm:col-span-2"><span className="mb-2 block text-sm font-semibold text-slate-700">Adresse complète</span><textarea value={form.adresse} onChange={(event) => setForm((current) => ({ ...current, adresse: event.target.value }))} required rows={3} placeholder="Quartier, rue, repère…" className={fieldClass} /></label>
+            <ModalField icon={<MapPin className="h-4 w-4" />} label="Latitude"><input type="number" step="0.000001" min="-90" max="90" value={form.latitude} onChange={(event) => setForm((current) => ({ ...current, latitude: event.target.value }))} placeholder="6.125600" className={fieldClass} /></ModalField>
+            <ModalField icon={<MapPin className="h-4 w-4" />} label="Longitude"><input type="number" step="0.000001" min="-180" max="180" value={form.longitude} onChange={(event) => setForm((current) => ({ ...current, longitude: event.target.value }))} placeholder="1.225400" className={fieldClass} /></ModalField>
+            <div className="sm:col-span-2">
+              <button type="button" onClick={useCurrentPosition} disabled={locating} className="inline-flex items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50">
+                <LocateFixed className="h-4 w-4" />
+                {locating ? 'Localisation…' : 'Utiliser ma position actuelle'}
+              </button>
+              <p className="mt-2 text-xs text-slate-500">Placez-vous à la gare lors de la saisie. Ces coordonnées servent à guider les voyageurs.</p>
+            </div>
           </div>
           <div className="flex justify-end gap-3 border-t border-slate-100 pt-5"><button type="button" onClick={onClose} className="rounded-2xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Annuler</button><button type="submit" disabled={saving} className="rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{saving ? 'Enregistrement…' : agency ? 'Enregistrer' : "Créer l'agence"}</button></div>
         </form>

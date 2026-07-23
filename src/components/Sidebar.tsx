@@ -9,6 +9,7 @@ import {
   MapPinned,
   Route,
   Settings,
+  Sparkles,
   Ticket,
   Users,
 } from 'lucide-react';
@@ -26,6 +27,7 @@ const icons = {
   trips: CalendarDays,
   tickets: Ticket,
   revenues: CircleDollarSign,
+  copilot: Sparkles,
   settings: Settings,
 };
 

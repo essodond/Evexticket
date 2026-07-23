@@ -30,6 +30,9 @@ interface TicketItem {
   arrival: string;
   seat_number: string;
   status: string;
+  origin_stop?: number | string | null;
+  destination_stop?: number | string | null;
+  trip_info?: any;
 }
 import { useAuth } from '../contexts/AuthContext';
 
@@ -69,6 +72,9 @@ export default function MyTicketsScreen({ navigation }: Props) {
           arrival: tripDetails.arrival_time || '00:00',
           seat_number: booking.seat_number || '?',
           status: booking.status || 'Confirmé',
+          origin_stop: booking.origin_stop || null,
+          destination_stop: booking.destination_stop || null,
+          trip_info: tripDetails,
         };
       });
       setTickets(transformedTickets);
@@ -207,6 +213,18 @@ export default function MyTicketsScreen({ navigation }: Props) {
                         <Text style={[styles.mainActionText, { marginLeft: 10 }]}>Voir le billet</Text>
                       </TouchableOpacity>
 
+                      <TouchableOpacity
+                        style={styles.aiActionButton}
+                        onPress={() =>
+                          navigation.navigate('TicketAssistant', {
+                            bookingId: ticket.id,
+                            reference: ticket.reference,
+                          })
+                        }
+                      >
+                        <Ionicons name="sparkles" size={19} color={COLORS.primary} />
+                      </TouchableOpacity>
+
                       {/* Suivre le bus — simulation : visible 3h avant le départ */}
                       {(() => {
                         const getMinutesUntilDeparture = (dateStr: string, timeStr: string) => {
@@ -333,6 +351,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   expiredCard: { opacity: 0.8 },
+  aiActionButton: {
+    width: 46,
+    height: 46,
+    marginLeft: 10,
+    borderRadius: 15,
+    backgroundColor: '#E8F1FF',
+    borderWidth: 1,
+    borderColor: '#CFE0FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',

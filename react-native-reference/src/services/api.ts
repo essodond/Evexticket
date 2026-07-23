@@ -56,7 +56,7 @@ const resolveApiBase = () => {
     return clean.endsWith('/api') ? clean : `${clean}/api`;
   }
   // Default to local dev server on your machine IP for testing
-  return 'http://192.168.1.65:8000/api';
+  return 'http://192.168.1.66:8000/api';
 };
 const API_BASE_URL = resolveApiBase();
 console.log('API_BASE_URL utilisée:', API_BASE_URL);
@@ -555,6 +555,52 @@ export interface City {
   name: string;
 }
 
+export interface AISearchCriteria {
+  departure_city: string | null;
+  arrival_city: string | null;
+  travel_date: string | null;
+  time_period: 'morning' | 'afternoon' | 'evening' | 'any' | null;
+  max_price: number | null;
+  passengers: number;
+  sort_by: 'recommended' | 'price' | 'departure' | 'duration';
+  reply: string;
+}
+
+export interface AISearchResponse {
+  criteria: AISearchCriteria;
+  provider: 'openai' | 'fallback';
+  missing: string[];
+  trips: Trip[];
+  count: number;
+}
+
+export interface TicketAssistantResponse {
+  answer: string;
+  suggestions: string[];
+  provider: 'openai' | 'fallback';
+  ticket: {
+    reference: string;
+    status: string;
+    passenger: string;
+    seat: string;
+    company: string;
+    departure_city: string;
+    arrival_city: string;
+    travel_date: string | null;
+    departure_time: string;
+    arrival_time: string;
+    price_fcfa: number;
+  };
+}
+
+export interface SmartNotification {
+  booking_id: number;
+  type: string;
+  title: string;
+  message: string;
+  departure_at: string;
+}
+
 export async function getCities(): Promise<City[]> {
   try {
     const response = await request<any>('/cities/');
@@ -573,4 +619,38 @@ export async function getCities(): Promise<City[]> {
     console.error('Erreur de récupération des villes:', error);
     throw error;
   }
+}
+
+export async function naturalTripSearch(query: string): Promise<AISearchResponse> {
+  return request<AISearchResponse>('/ai/search/', {
+    method: 'POST',
+    body: JSON.stringify({ query }),
+  });
+}
+
+export async function getAIRecommendations(departureCity?: string): Promise<Trip[]> {
+  const query = departureCity
+    ? `?departure_city=${encodeURIComponent(departureCity)}`
+    : '';
+  const response = await request<{ trips: Trip[] }>(`/ai/recommendations/${query}`);
+  return Array.isArray(response?.trips) ? response.trips : [];
+}
+
+export async function askTicketAssistant(
+  bookingId: number,
+  question: string
+): Promise<TicketAssistantResponse> {
+  return request<TicketAssistantResponse>(`/ai/tickets/${bookingId}/assistant/`, {
+    method: 'POST',
+    body: JSON.stringify({ question }),
+  });
+}
+
+export async function getSmartNotifications(
+  persist = false
+): Promise<SmartNotification[]> {
+  const response = await request<{ notifications: SmartNotification[] }>('/ai/notifications/', {
+    method: persist ? 'POST' : 'GET',
+  });
+  return Array.isArray(response?.notifications) ? response.notifications : [];
 }
