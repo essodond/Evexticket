@@ -59,7 +59,7 @@ const CompanyLayout: React.FC = () => {
       <div className="flex min-h-screen">
         <Sidebar />
         <div className="min-w-0 flex-1">
-          <Topbar companyName={company?.name || 'Ma compagnie'} adminName={adminName} onLogout={logout} />
+          <Topbar companyName={company?.name || 'Ma compagnie'} companyLogoUrl={company?.logo || undefined} adminName={adminName} onLogout={logout} />
 
           <details className="border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
             <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-700">

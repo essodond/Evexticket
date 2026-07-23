@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,10 +15,10 @@ export default function TrackBusScreen() {
   const [speedKmh, setSpeedKmh] = useState(70);
   const [distanceRemainingKm, setDistanceRemainingKm] = useState<number | null>(null);
   const [eta, setEta] = useState<string | null>(null);
-  const intervalRef = useRef<number | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Build a simple route (Lomé -> intermediate points -> Kara) as lat/lng pairs
-  const route = useRef(() => {
+  const route = useMemo(() => {
     const from = { lat: 6.1725, lng: 1.2314 };
     const to = { lat: 9.5530, lng: 1.1927 };
     const steps = 120; // number of points to interpolate
@@ -28,7 +28,7 @@ export default function TrackBusScreen() {
       points.push({ lat: from.lat + (to.lat - from.lat) * t, lng: from.lng + (to.lng - from.lng) * t });
     }
     return points;
-  })();
+  }, []);
 
   // Haversine distance
   const haversineKm = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {

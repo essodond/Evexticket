@@ -19,7 +19,12 @@ import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
 import { formatCurrency, formatTime } from '../utils/mockData';
 import Button from '../components/Button';
 import Input from '../components/Input';
-import { initiateQosPayment, verifyQosPayment } from '../services/api';
+import {
+  createBooking,
+  initiateQosPayment,
+  MOBILE_PAYMENTS_ENABLED,
+  verifyQosPayment,
+} from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Payment'>;
@@ -45,7 +50,7 @@ export default function PaymentScreen({ navigation, route }: Props) {
   const departureTimeLabel = formatTime(trip.trip_info.departure_time || '');
   const dateLabel = trip.date || '';
   const companyName = trip.trip_info.company_name || 'Compagnie inconnue';
-  const commission = 300;
+  const commission = MOBILE_PAYMENTS_ENABLED ? 300 : 0;
 
   const bookingPrice = useMemo(() => {
     const value = parseFloat(trip.trip_info.price || '0');
@@ -78,12 +83,65 @@ export default function PaymentScreen({ navigation, route }: Props) {
       Alert.alert('Erreur', 'Utilisateur non connecte.');
       return;
     }
-    if (!phoneNumber) {
+    if (!passengerName.trim() || !passengerPhone.trim()) {
+      Alert.alert('Erreur', 'Le nom et le téléphone du passager sont requis.');
+      return;
+    }
+    if (MOBILE_PAYMENTS_ENABLED && !phoneNumber) {
       Alert.alert('Erreur', 'Veuillez saisir le numero Mobile Money.');
       return;
     }
 
     setProcessing(true);
+
+    if (!MOBILE_PAYMENTS_ENABLED) {
+      setStatusMessage('Création de la réservation de test...');
+      try {
+        const seatNumber = selectedSeat.replace('seat-', '');
+        const booking = await createBooking({
+          scheduled_trip: trip.id,
+          passenger_name: passengerName.trim(),
+          passenger_email: passengerEmail.trim(),
+          passenger_phone: passengerPhone.trim(),
+          seat_number: seatNumber,
+          origin_stop: null,
+          destination_stop: null,
+        });
+
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'EVEX : réservation test confirmée',
+            body: `${fromCity} - ${toCity}\n${dateLabel} à ${departureTimeLabel}\nSiège ${seatNumber} - ${companyName}`,
+            sound: 'default',
+            data: { screen: 'Ticket' },
+          },
+          trigger: null,
+        });
+
+        const tripForTicket = {
+          ...trip,
+          id: booking.id || `TEST-${Date.now()}`,
+          ticket_reference: `EVEX-${String(booking.id || trip.id).padStart(6, '0')}`,
+          payment_status: 'test-sans-paiement',
+          transaction_id: 'MODE-TEST',
+          passenger_name: passengerName.trim(),
+          passenger_full_name: passengerName.trim(),
+          passenger_phone: passengerPhone.trim(),
+          seat_number: seatNumber,
+          trip_info: { ...trip.trip_info },
+        };
+
+        Alert.alert('Réservation confirmée', 'Le billet a été réservé sans paiement en mode test.');
+        navigation.navigate('Ticket', { trip: tripForTicket as any });
+      } catch (error: any) {
+        Alert.alert('Erreur', error.message || 'Impossible de créer la réservation de test.');
+      } finally {
+        setProcessing(false);
+        setStatusMessage(null);
+      }
+      return;
+    }
+
     setStatusMessage('Initialisation du paiement QOS...');
 
     try {
@@ -116,8 +174,12 @@ export default function PaymentScreen({ navigation, route }: Props) {
       const tripForTicket = {
         ...trip,
         id: initiated.reference_evex,
+        ticket_reference: initiated.reference_evex,
         payment_status: confirmed.statut,
         transaction_id: initiated.transaction_id,
+        passenger_name: passengerName.trim(),
+        passenger_full_name: passengerName.trim(),
+        passenger_phone: passengerPhone.trim(),
         seat_number: seatNumber,
         trip_info: {
           ...trip.trip_info,
@@ -141,12 +203,23 @@ export default function PaymentScreen({ navigation, route }: Props) {
           <Ionicons name="arrow-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
         <View style={styles.headerTitles}>
-          <Text style={styles.headerTitle}>Paiement QosPay</Text>
-          <Text style={styles.headerSubtitle}>Sécurisé via QosPay, Flooz ou TMoney</Text>
+          <Text style={styles.headerTitle}>{MOBILE_PAYMENTS_ENABLED ? 'Paiement QosPay' : 'Confirmer le billet'}</Text>
+          <Text style={styles.headerSubtitle}>
+            {MOBILE_PAYMENTS_ENABLED ? 'Sécurisé via QosPay, Flooz ou TMoney' : 'Mode test : aucun paiement ne sera demandé'}
+          </Text>
         </View>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={styles.contentContainer}>
+        {!MOBILE_PAYMENTS_ENABLED && (
+          <View style={styles.testModeBanner}>
+            <View style={styles.testModeIcon}><Ionicons name="flask" size={20} color={COLORS.primary} /></View>
+            <View style={styles.testModeContent}>
+              <Text style={styles.testModeTitle}>Paiement mobile temporairement désactivé</Text>
+              <Text style={styles.testModeText}>La place sera réellement réservée, mais aucun débit Flooz, TMoney ou QOS ne sera lancé.</Text>
+            </View>
+          </View>
+        )}
         <View style={styles.summary}>
           <Text style={styles.summaryTitle}>Recapitulatif</Text>
           <View style={styles.summaryRow}>
@@ -171,10 +244,12 @@ export default function PaymentScreen({ navigation, route }: Props) {
               <Text style={styles.summaryValue}>{selectedSeat.replace('seat-', 'Siege ')}</Text>
             </View>
           )}
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Frais</Text>
-            <Text style={styles.summaryValue}>{formatCurrency(commission)}</Text>
-          </View>
+          {MOBILE_PAYMENTS_ENABLED && (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Frais</Text>
+              <Text style={styles.summaryValue}>{formatCurrency(commission)}</Text>
+            </View>
+          )}
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRow}>
             <Text style={styles.summaryTotalLabel}>Total</Text>
@@ -189,7 +264,7 @@ export default function PaymentScreen({ navigation, route }: Props) {
           <Input label="Telephone passager" placeholder="+228 XX XX XX XX" keyboardType="phone-pad" leftIcon={<Ionicons name="call-outline" size={20} color={COLORS.textSecondary} />} value={passengerPhone} onChangeText={setPassengerPhone} />
         </View>
 
-        <View style={styles.paymentSection}>
+        {MOBILE_PAYMENTS_ENABLED && <View style={styles.paymentSection}>
           <Text style={styles.sectionTitle}>Mode de paiement</Text>
           <Text style={styles.paymentHint}>Choisissez votre opérateur mobile. QosPay traitera la transaction en toute sécurité.</Text>
           <View style={styles.paymentMethods}>
@@ -207,12 +282,12 @@ export default function PaymentScreen({ navigation, route }: Props) {
               </TouchableOpacity>
             ))}
           </View>
-        </View>
+        </View>}
 
-        <View style={styles.phoneSection}>
+        {MOBILE_PAYMENTS_ENABLED && <View style={styles.phoneSection}>
           <Input label="Numero Mobile Money" placeholder="+228 XX XX XX XX" value={phoneNumber} onChangeText={setPhoneNumber} keyboardType="phone-pad" leftIcon={<Ionicons name="call-outline" size={20} color={COLORS.textSecondary} />} />
           <Text style={styles.phoneNote}>Vous recevrez une notification pour confirmer le paiement</Text>
-        </View>
+        </View>}
 
         {statusMessage && (
           <View style={styles.statusBox}>
@@ -222,7 +297,17 @@ export default function PaymentScreen({ navigation, route }: Props) {
       </ScrollView>
 
       <View style={styles.footer}>
-        <Button title={processing ? 'Traitement QOS...' : `Payer ${formatCurrency(totalAmount)}`} onPress={handlePayment} disabled={processing || !phoneNumber} loading={processing} style={styles.payButton} />
+        <Button
+          title={
+            processing
+              ? (MOBILE_PAYMENTS_ENABLED ? 'Traitement QOS...' : 'Réservation en cours...')
+              : (MOBILE_PAYMENTS_ENABLED ? `Payer ${formatCurrency(totalAmount)}` : 'Réserver sans payer')
+          }
+          onPress={handlePayment}
+          disabled={processing || (MOBILE_PAYMENTS_ENABLED && !phoneNumber)}
+          loading={processing}
+          style={styles.payButton}
+        />
       </View>
     </KeyboardAvoidingView>
   );
@@ -252,6 +337,11 @@ const styles = StyleSheet.create({
   contentContainer: { padding: 24, paddingBottom: 120 },
   headerTitles: { flex: 1 },
   headerSubtitle: { fontSize: FONT_SIZES.sm, color: 'rgba(255,255,255,0.85)', marginTop: 4 },
+  testModeBanner: { flexDirection: 'row', backgroundColor: '#EEF6FF', borderWidth: 1, borderColor: '#B8D8FF', borderRadius: 16, padding: 16, marginBottom: 20 },
+  testModeIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  testModeContent: { flex: 1 },
+  testModeTitle: { fontSize: FONT_SIZES.sm, fontWeight: FONT_WEIGHTS.semibold, color: COLORS.text },
+  testModeText: { fontSize: FONT_SIZES.xs, color: COLORS.textSecondary, lineHeight: 18, marginTop: 4 },
   summary: { backgroundColor: `${COLORS.gray}4D`, borderRadius: 16, padding: 20, marginBottom: 24 },
   summaryTitle: { fontSize: FONT_SIZES.base, fontWeight: FONT_WEIGHTS.semibold, color: COLORS.text, marginBottom: 16 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, gap: 12 },

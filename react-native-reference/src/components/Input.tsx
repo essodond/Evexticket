@@ -34,8 +34,8 @@ export default function Input({
         <TextInput
           style={[
             styles.input,
-            leftIcon && styles.input_withLeftIcon,
-            rightIcon && styles.input_withRightIcon,
+            Boolean(leftIcon) && styles.input_withLeftIcon,
+            Boolean(rightIcon) && styles.input_withRightIcon,
           ]}
           placeholderTextColor={COLORS.textMuted}
           {...props}

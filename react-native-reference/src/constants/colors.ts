@@ -10,6 +10,7 @@ export const COLORS = {
   gray: '#E6E6E6',
   grayDark: '#666666',
   grayLight: '#F8F8F8',
+  lightGray: '#E6E6E6',
   
   // Status
   success: '#34C759',
@@ -25,13 +26,17 @@ export const COLORS = {
   // Arrière-plans
   background: '#FFFFFF',
   backgroundSecondary: '#F8F8F8',
+  glass: 'rgba(255, 255, 255, 0.62)',
+  glassDark: 'rgba(8, 26, 58, 0.72)',
   
   // Bordures
   border: 'rgba(0, 0, 0, 0.1)',
   borderLight: 'rgba(0, 0, 0, 0.05)',
+  glassBorder: 'rgba(255, 255, 255, 0.72)',
   
   // Text
   text: '#000000',
+  textPrimary: '#000000',
   textSecondary: '#666666',
   textMuted: '#999999',
   textLight: '#FFFFFF',

@@ -907,6 +907,7 @@ class ScannerQRView(APIView):
         message = 'QR invalide'
         vente_obj = None
         reservation_obj = None
+        booking_obj = None
         voyage_obj = None
         if type_ == 'guichet':
             ref = data.get('reference')
@@ -953,12 +954,36 @@ class ScannerQRView(APIView):
             except Reservation.DoesNotExist:
                 resultat = 'invalide'
                 message = 'Réservation introuvable'
+        elif type_ in ('EVEX_TICKET', 'booking'):
+            booking_id = data.get('booking_id')
+            try:
+                booking_obj = Booking.objects.select_related('scheduled_trip__trip').get(
+                    pk=booking_id,
+                    trip__company=agent.compagnie,
+                )
+                voyage_obj = booking_obj.scheduled_trip
+                if voyage_obj is None:
+                    resultat = 'invalide'
+                    message = 'Voyage programmé introuvable'
+                elif booking_obj.status != 'confirmed':
+                    resultat = 'invalide'
+                    message = 'Réservation non confirmée'
+                elif ControlePassager.objects.filter(booking=booking_obj, resultat='valide').exists():
+                    resultat = 'deja_utilise'
+                    message = 'Billet déjà utilisé'
+                else:
+                    resultat = 'valide'
+                    message = f"Billet valide — {booking_obj.passenger_name} — Siège {booking_obj.seat_number}"
+            except (Booking.DoesNotExist, TypeError, ValueError):
+                resultat = 'invalide'
+                message = 'Réservation introuvable'
 
         if voyage_obj is not None:
             ControlePassager.objects.create(
                 agent=agent,
                 vente=vente_obj,
                 reservation=reservation_obj,
+                booking=booking_obj,
                 voyage=voyage_obj,
                 resultat=resultat,
                 message=message,

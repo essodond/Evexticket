@@ -18,8 +18,11 @@ import { getMyBookings } from '../services/api';
 
 interface TicketItem {
   id: number;
+  reference: string;
+  passenger_name: string;
   date: string;
   company: string;
+  company_logo?: string | null;
   price: number;
   from: string;
   to: string;
@@ -54,8 +57,11 @@ export default function MyTicketsScreen({ navigation }: Props) {
         const tripDetails = booking.trip_details || booking.trip_info || {};
         return {
           id: booking.id,
+          reference: booking.reference || booking.ticket_reference || `EVEX-${String(booking.id).padStart(6, '0')}`,
+          passenger_name: booking.passenger_full_name || booking.passenger_name || `${user?.first_name || ''} ${user?.last_name || ''}`.trim(),
           date: booking.scheduled_trip_date || booking.travel_date || 'Date non disponible',
           company: tripDetails.company_name || 'Compagnie inconnue',
+          company_logo: tripDetails.company_logo || tripDetails.company_logo_url || null,
           price: booking.total_price || tripDetails.price || 0,
           from: tripDetails.departure_city_name || 'Ville de départ',
           to: tripDetails.arrival_city_name || 'Ville d\'arrivée',

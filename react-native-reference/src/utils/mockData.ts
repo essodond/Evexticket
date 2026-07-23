@@ -1,6 +1,16 @@
-import { Trip } from '../types';
+interface LegacyMockTrip {
+  id: string;
+  company: string;
+  from: string;
+  to: string;
+  departure: string;
+  arrival: string;
+  price: number;
+  seatsLeft: number;
+  date: string;
+}
 
-export const mockTrips: Trip[] = [
+export const mockTrips: LegacyMockTrip[] = [
   {
     id: '1',
     company: 'STIF Transport',

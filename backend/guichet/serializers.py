@@ -180,7 +180,7 @@ class VenteGuichetSerializer(serializers.ModelSerializer):
 class ControlePassagerSerializer(serializers.ModelSerializer):
     class Meta:
         model = ControlePassager
-        fields = ['id', 'agent', 'vente', 'reservation', 'voyage', 'resultat', 'message', 'created_at']
+        fields = ['id', 'agent', 'vente', 'reservation', 'booking', 'voyage', 'resultat', 'message', 'created_at']
 
 
 class VoyageDisponibleSerializer(serializers.ModelSerializer):

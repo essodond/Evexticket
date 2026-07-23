@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
-import { Video } from 'expo-av';
+import { ResizeMode, Video } from 'expo-av';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -63,7 +63,7 @@ export default function SplashScreen() {
         <Video
           source={require('../../assets/splash-animation.mp4')}
           style={styles.video}
-          resizeMode={Video.RESIZE_MODE_COVER}
+          resizeMode={ResizeMode.COVER}
           shouldPlay
           isLooping={false}
           useNativeControls={false}

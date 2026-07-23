@@ -42,7 +42,7 @@ const Sidebar: React.FC = () => {
     <aside className="sticky top-0 hidden h-screen w-72 shrink-0 border-r border-slate-200 bg-white lg:block">
       <div className="flex h-full flex-col px-5 py-6">
         <NavLink to="/company/tableau-de-bord" className="mb-8 flex items-center gap-3 px-2">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-500 font-bold text-white">E</div>
+          <img src="/logo.jpg" alt="EvexTicket" className="h-11 w-11 rounded-2xl object-cover" />
           <div>
             <div className="text-lg font-bold text-slate-900">EvexTicket</div>
             <div className="text-xs text-slate-400">Administration compagnie</div>

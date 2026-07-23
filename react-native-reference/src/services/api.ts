@@ -63,9 +63,17 @@ console.log('API_BASE_URL utilisée:', API_BASE_URL);
 console.log('API_BASE_URL utilisée:', API_BASE_URL);
 const TIMEOUT = 60000; // 60s pour gérer les cold starts Render (30s+ de démarrage)
 
-// Toggle pour simulation locale des paiements QoS (ne supprime pas l'implémentation réelle)
-// Mettre à `true` pour désactiver les appels réels vers l'API de paiement pendant les tests.
-export const SIMULATE_QOS_PAYMENTS = true;
+const mobilePaymentsFlag =
+  (Constants.expoConfig?.extra as any)?.EXPO_PUBLIC_MOBILE_PAYMENTS_ENABLED ??
+  (Constants.manifest as any)?.extra?.EXPO_PUBLIC_MOBILE_PAYMENTS_ENABLED ??
+  process.env.EXPO_PUBLIC_MOBILE_PAYMENTS_ENABLED ??
+  'false';
+
+// Mode test réversible : false court-circuite entièrement le paiement dans l'écran mobile.
+export const MOBILE_PAYMENTS_ENABLED = ['1', 'true', 'yes'].includes(
+  String(mobilePaymentsFlag).trim().toLowerCase()
+);
+export const SIMULATE_QOS_PAYMENTS = !MOBILE_PAYMENTS_ENABLED;
 
 async function handleResponse(response: Response) {
   const contentType = response.headers.get('content-type');
@@ -361,15 +369,13 @@ export async function getSegmentPrice(
 }
 
 export interface BookingData {
-  trip: string;
+  scheduled_trip: string | number;
   passenger_name: string;
   passenger_email: string;
   passenger_phone: string;
   seat_number: string;
   origin_stop: string | number | null;
   destination_stop: string | number | null;
-  payment_method: string;
-  price?: number;
 }
 
 export type QosOperator = 'flooz' | 'tmoney';

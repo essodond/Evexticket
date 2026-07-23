@@ -286,6 +286,7 @@ class TripSerializer(serializers.ModelSerializer):
     company = serializers.PrimaryKeyRelatedField(queryset=Company.objects.all(), required=False)
     """Serializer pour les trajets (aligné avec models.base.Trip)"""
     company_name = serializers.CharField(source='company.name', read_only=True)
+    company_logo = serializers.URLField(source='company.logo', read_only=True, allow_null=True)
     departure_city_name = serializers.CharField(source='departure_city.name', read_only=True)
     arrival_city_name = serializers.CharField(source='arrival_city.name', read_only=True)
     bookings_count = serializers.SerializerMethodField()
@@ -297,13 +298,13 @@ class TripSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'company',
-            'company_name', 'departure_city', 'departure_city_name', 'arrival_city', 'arrival_city_name',
+            'company_name', 'company_logo', 'departure_city', 'departure_city_name', 'arrival_city', 'arrival_city_name',
             'price', 'departure_time', 'arrival_time',
             'duration', 'bus_type', 'capacity',
             'bookings_count', 'available_seats', 'stops'
         ]
         read_only_fields = [
-            'id', 'company_name', 'departure_city_name', 'arrival_city_name',
+            'id', 'company_name', 'company_logo', 'departure_city_name', 'arrival_city_name',
             'bookings_count', 'available_seats'
         ]
 

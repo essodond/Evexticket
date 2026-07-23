@@ -145,6 +145,7 @@ class ControlePassager(models.Model):
     agent = models.ForeignKey(AgentGuichet, on_delete=models.SET_NULL, null=True, related_name='controles')
     vente = models.ForeignKey(VenteGuichet, on_delete=models.SET_NULL, null=True, blank=True, related_name='controles')
     reservation = models.ForeignKey(Reservation, on_delete=models.SET_NULL, null=True, blank=True, related_name='controles')
+    booking = models.ForeignKey('transport.Booking', on_delete=models.SET_NULL, null=True, blank=True, related_name='controles_guichet')
     voyage = models.ForeignKey(ScheduledTrip, on_delete=models.PROTECT, related_name='controles')
     resultat = models.CharField(max_length=20, choices=RESULTAT_CHOICES)
     message = models.CharField(max_length=400, blank=True)

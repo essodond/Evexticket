@@ -8,6 +8,8 @@ import {
   Alert,
   Platform,
   ActivityIndicator,
+  Image,
+  useWindowDimensions,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import QRCode from 'react-native-qrcode-svg';
@@ -19,16 +21,56 @@ import * as Sharing from 'expo-sharing';
 import { RootStackParamList } from '../types';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
-import { formatCurrency } from '../utils/mockData';
 import Button from '../components/Button';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Ticket'>;
 
 export default function TicketScreen({ navigation, route }: Props) {
   const { trip } = route.params;
-  const ticketNumber = `EVEX-${trip.trip_info?.id || trip.id}-${Date.now().toString().slice(-6)}`;
   const viewShotRef = useRef<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const { width } = useWindowDimensions();
+
+  const ticketData = trip as any;
+  const tripInfo = ticketData.trip_info || ticketData.trip_details || {};
+  const rawReference =
+    ticketData.ticket_reference ||
+    ticketData.reference ||
+    (ticketData.transaction_id && ticketData.transaction_id !== 'MODE-TEST'
+      ? ticketData.transaction_id
+      : null);
+  const ticketNumber = rawReference || `EVEX-${String(ticketData.booking_id || ticketData.id || '000000').padStart(6, '0')}`;
+  const passengerName =
+    ticketData.passenger_full_name ||
+    ticketData.passenger_name ||
+    ticketData.client_name ||
+    'Voyageur EVEX';
+  const seatNumber = String(ticketData.seat_number || ticketData.seat || '?');
+  const companyName = tripInfo.company_name || ticketData.company_name || ticketData.company || 'Compagnie EVEX';
+  const companyLogo = tripInfo.company_logo || tripInfo.company_logo_url || ticketData.company_logo || null;
+  const fromCity = tripInfo.departure_city_name || ticketData.departure_city_name || ticketData.from || 'Départ';
+  const toCity = tripInfo.arrival_city_name || ticketData.arrival_city_name || ticketData.to || 'Arrivée';
+  const departureTime = tripInfo.departure_time || ticketData.departure_time || ticketData.departure || '';
+  const arrivalTime = tripInfo.arrival_time || ticketData.arrival_time || ticketData.arrival || '';
+  const dateLabel = ticketData.scheduled_trip_date || ticketData.travel_date || ticketData.date || '';
+  const companyInitials = companyName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part: string) => part[0]?.toUpperCase())
+    .join('') || 'EV';
+  const qrSize = Math.min(210, Math.max(164, width - 154));
+  const qrPayload = JSON.stringify({
+    type: 'EVEX_TICKET',
+    reference: ticketNumber,
+    booking_id: ticketData.booking_id || ticketData.id || null,
+    passenger: passengerName,
+    seat: seatNumber,
+    company: companyName,
+    departure: fromCity,
+    arrival: toCity,
+    date: dateLabel,
+  });
 
   // Capturer le ticket en image
   const captureTicket = async (): Promise<string | null> => {
@@ -109,30 +151,6 @@ export default function TicketScreen({ navigation, route }: Props) {
     }
   };
 
-  // Helpers pour afficher correctement selon les champs backend
-  const resolveCompanyName = (company: any) => {
-    if (!company) return 'Compagnie';
-    if (typeof company === 'string') return company;
-    if (typeof company === 'number') return `Compagnie #${company}`;
-    if (company?.name) return company.name;
-    return 'Compagnie';
-  };
-
-  const resolveCityName = (city: any, fallbackName?: string) => {
-    if (!city && fallbackName) return fallbackName;
-    if (typeof city === 'string') return city;
-    if (typeof city === 'number') return `Ville #${city}`;
-    if (city?.name) return city.name;
-    return fallbackName || 'Ville';
-  };
-
-  const fromCity = trip.trip_info?.departure_city_name || 'Ville de départ inconnue';
-  const toCity = trip.trip_info?.arrival_city_name || 'Ville d\'arrivée inconnue';
-  const departureTime = trip.trip_info?.departure_time || '';
-  const arrivalTime = trip.trip_info?.arrival_time || '';
-  const dateLabel = trip.date || '';
-  const companyName = trip.trip_info?.company_name || 'Compagnie inconnue';
-
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -170,22 +188,49 @@ export default function TicketScreen({ navigation, route }: Props) {
             colors={[COLORS.primary, COLORS.primaryDark]}
             style={styles.ticketHeader}
           >
-            <View style={styles.ticketHeaderTop}>
-              <View>
-                <Text style={styles.ticketNumberLabel}>Numéro de billet</Text>
-                <Text style={styles.ticketNumber}>{ticketNumber}</Text>
+            <View style={styles.companyBrandRow}>
+              <View style={styles.companyLogoShell}>
+                {companyLogo ? (
+                  <Image source={{ uri: companyLogo }} style={styles.companyLogo} resizeMode="contain" />
+                ) : (
+                  <Text style={styles.companyInitials}>{companyInitials}</Text>
+                )}
               </View>
-              {trip.seat_number && (
-                <View style={styles.passengerBadge}>
-                  <Text style={styles.passengerBadgeText}>Siège {trip.seat_number}</Text>
-                </View>
-              )}
+              <View style={styles.companyBrandContent}>
+                <Text style={styles.companyEyebrow}>COMPAGNIE</Text>
+                <Text style={styles.companyBrandName} numberOfLines={1} adjustsFontSizeToFit>{companyName}</Text>
+              </View>
+            </View>
+
+            <View style={styles.ticketHeaderTop}>
+              <View style={styles.ticketReferenceBlock}>
+                <Text style={styles.ticketNumberLabel}>RÉFÉRENCE DU BILLET</Text>
+                <Text style={styles.ticketNumber} numberOfLines={1} adjustsFontSizeToFit>{ticketNumber}</Text>
+              </View>
+              <View style={styles.passengerBadge}>
+                <Ionicons name="bus-outline" size={14} color={COLORS.white} />
+                <Text style={styles.passengerBadgeText}>Confirmé</Text>
+              </View>
+            </View>
+
+            <View style={styles.passengerPanel}>
+              <View style={styles.passengerIcon}>
+                <Ionicons name="person" size={20} color={COLORS.primaryDark} />
+              </View>
+              <View style={styles.passengerContent}>
+                <Text style={styles.passengerLabel}>VOYAGEUR</Text>
+                <Text style={styles.passengerName} numberOfLines={1} adjustsFontSizeToFit>{passengerName}</Text>
+              </View>
+              <View style={styles.seatPill}>
+                <Text style={styles.seatPillLabel}>SIÈGE</Text>
+                <Text style={styles.seatPillValue}>{seatNumber}</Text>
+              </View>
             </View>
 
             <View style={styles.ticketRoute}>
               <View style={styles.ticketRouteItem}>
                 <Text style={styles.ticketRouteLabel}>Départ</Text>
-                <Text style={styles.ticketRouteCity}>{fromCity}</Text>
+                <Text style={styles.ticketRouteCity} numberOfLines={2}>{fromCity}</Text>
                 <Text style={styles.ticketRouteTime}>{departureTime}</Text>
               </View>
 
@@ -197,7 +242,7 @@ export default function TicketScreen({ navigation, route }: Props) {
 
               <View style={[styles.ticketRouteItem, styles.ticketRouteItem_end]}>
                 <Text style={styles.ticketRouteLabel}>Arrivée</Text>
-                <Text style={styles.ticketRouteCity}>{toCity}</Text>
+                <Text style={styles.ticketRouteCity} numberOfLines={2}>{toCity}</Text>
                 <Text style={styles.ticketRouteTime}>{arrivalTime}</Text>
               </View>
             </View>
@@ -208,8 +253,8 @@ export default function TicketScreen({ navigation, route }: Props) {
                   <Text style={styles.ticketInfoValue}>{dateLabel}</Text>
                 </View>
                 <View style={styles.ticketInfoRight}>
-                  <Text style={styles.ticketInfoLabel}>Compagnie</Text>
-                  <Text style={styles.ticketInfoValue}>{companyName}</Text>
+                  <Text style={styles.ticketInfoLabel}>Siège</Text>
+                  <Text style={styles.ticketInfoValue}>{seatNumber}</Text>
                 </View>
               </View>
           </LinearGradient>
@@ -224,12 +269,13 @@ export default function TicketScreen({ navigation, route }: Props) {
             <Text style={styles.qrLabel}>Scannez ce code à la gare</Text>
             <View style={styles.qrCodeContainer}>
               <QRCode
-                value={ticketNumber}
-                size={200}
+                value={qrPayload}
+                size={qrSize}
                 backgroundColor={COLORS.white}
                 color={COLORS.black}
               />
             </View>
+            <Text style={styles.qrReference}>{ticketNumber}</Text>
             <Text style={styles.qrNote}>
               Présentez ce QR code au chauffeur ou à l'agent de la compagnie avant l'embarquement
             </Text>
@@ -349,42 +395,147 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   ticketHeader: {
-    padding: 24,
+    padding: 20,
+  },
+  companyBrandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 22,
+  },
+  companyLogoShell: {
+    width: 52,
+    height: 52,
+    borderRadius: 18,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.55)',
+  },
+  companyLogo: {
+    width: 42,
+    height: 42,
+  },
+  companyInitials: {
+    color: COLORS.primaryDark,
+    fontSize: FONT_SIZES.lg,
+    fontWeight: FONT_WEIGHTS.bold,
+  },
+  companyBrandContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  companyEyebrow: {
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 10,
+    fontWeight: FONT_WEIGHTS.bold,
+    letterSpacing: 1.2,
+  },
+  companyBrandName: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.xl,
+    fontWeight: FONT_WEIGHTS.bold,
+    marginTop: 2,
   },
   ticketHeaderTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 32,
+    marginBottom: 16,
+  },
+  ticketReferenceBlock: {
+    flex: 1,
+    paddingRight: 12,
   },
   ticketNumberLabel: {
-    fontSize: FONT_SIZES.sm,
-    color: 'rgba(255,255,255,0.9)',
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.72)',
     marginBottom: 4,
+    fontWeight: FONT_WEIGHTS.bold,
+    letterSpacing: 0.8,
   },
   ticketNumber: {
-    fontSize: FONT_SIZES.base,
-    fontWeight: FONT_WEIGHTS.semibold,
+    fontSize: FONT_SIZES.lg,
+    fontWeight: FONT_WEIGHTS.bold,
     color: COLORS.white,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   passengerBadge: {
     backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 16,
+    paddingHorizontal: 11,
     paddingVertical: 8,
     borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   passengerBadgeText: {
     fontSize: FONT_SIZES.xs,
     color: COLORS.white,
+    fontWeight: FONT_WEIGHTS.semibold,
+  },
+  passengerPanel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.20)',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 24,
+  },
+  passengerIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  passengerContent: {
+    flex: 1,
+    marginHorizontal: 10,
+  },
+  passengerLabel: {
+    color: 'rgba(255,255,255,0.66)',
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.bold,
+    letterSpacing: 0.9,
+  },
+  passengerName: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.base,
+    fontWeight: FONT_WEIGHTS.bold,
+    marginTop: 2,
+  },
+  seatPill: {
+    minWidth: 52,
+    backgroundColor: COLORS.white,
+    borderRadius: 13,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    alignItems: 'center',
+  },
+  seatPillLabel: {
+    color: COLORS.textMuted,
+    fontSize: 8,
+    fontWeight: FONT_WEIGHTS.bold,
+    letterSpacing: 0.6,
+  },
+  seatPillValue: {
+    color: COLORS.primaryDark,
+    fontSize: FONT_SIZES.lg,
+    fontWeight: FONT_WEIGHTS.bold,
   },
   ticketRoute: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 26,
   },
   ticketRouteItem: {
     flex: 1,
+    minWidth: 0,
   },
   ticketRouteItem_end: {
     alignItems: 'flex-end',
@@ -395,10 +546,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   ticketRouteCity: {
-    fontSize: FONT_SIZES['2xl'],
-    fontWeight: FONT_WEIGHTS.semibold,
+    fontSize: 24,
+    lineHeight: 29,
+    fontWeight: FONT_WEIGHTS.bold,
     color: COLORS.white,
-    marginBottom: 4,
+    marginTop: 5,
+    marginBottom: 6,
+    minHeight: 29,
+    flexShrink: 1,
   },
   ticketRouteTime: {
     fontSize: FONT_SIZES.sm,
@@ -406,10 +561,10 @@ const styles = StyleSheet.create({
   },
   ticketRouteLine: {
     alignItems: 'center',
-    marginHorizontal: 16,
+    marginHorizontal: 8,
   },
   ticketRouteLineDot: {
-    width: 48,
+    width: 28,
     height: 2,
     backgroundColor: 'rgba(255,255,255,0.5)',
     marginVertical: 4,
@@ -473,10 +628,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   qrCodeContainer: {
-    padding: 16,
+    padding: 14,
     backgroundColor: COLORS.white,
     borderRadius: 16,
-    borderWidth: 4,
+    borderWidth: 2,
     borderColor: COLORS.border,
   },
   qrNote: {
@@ -486,6 +641,14 @@ const styles = StyleSheet.create({
     marginTop: 16,
     maxWidth: 280,
     lineHeight: 18,
+  },
+  qrReference: {
+    marginTop: 14,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: FONT_SIZES.sm,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: COLORS.text,
+    letterSpacing: 0.4,
   },
   notice: {
     backgroundColor: '#E3F2FD',

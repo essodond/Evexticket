@@ -46,6 +46,7 @@ export interface Trip {
     bus_type: string;
     capacity: number;
     company_name: string;
+    company_logo?: string | null;
     departure_city_name: string;
     departure_time: string;
     duration: number;
@@ -84,6 +85,8 @@ export type RootStackParamList = {
   TripDetails: { trip: Trip };
   Payment: { trip: Trip; selectedSeat?: string | null };
   Ticket: { trip: Trip };
+  TrackBus: { tripId?: string | number };
+  StartTracking: { tripId?: string | number };
   PaymentSuccess: undefined;
   PaymentFailed: undefined;
 };

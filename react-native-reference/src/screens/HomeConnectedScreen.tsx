@@ -144,12 +144,16 @@ export default function HomeConnectedScreen({ navigation }: Props) {
       const depName = trip?.trip_info?.departure_city_name ||
         (typeof trip?.trip_info?.departure_city === 'string'
           ? trip.trip_info.departure_city
-          : trip?.trip_info?.departure_city?.name) ||
+          : typeof trip?.trip_info?.departure_city === 'object' && trip.trip_info.departure_city
+            ? trip.trip_info.departure_city.name
+            : '') ||
         '';
       const arrName = trip?.trip_info?.arrival_city_name ||
         (typeof trip?.trip_info?.arrival_city === 'string'
           ? trip.trip_info.arrival_city
-          : trip?.trip_info?.arrival_city?.name) ||
+          : typeof trip?.trip_info?.arrival_city === 'object' && trip.trip_info.arrival_city
+            ? trip.trip_info.arrival_city.name
+            : '') ||
         '';
       const companyName = trip?.trip_info?.company_name || '';
       const fromName = depName.toLowerCase?.() || '';

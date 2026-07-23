@@ -66,9 +66,9 @@ function MainTabs() {
       })}
     >
       {/* Tes écrans restent les mêmes */}
-      <Tab.Screen name="Home" component={HomeConnectedScreen} options={{ tabBarLabel: 'Accueil' }} />
-      <Tab.Screen name="MyTickets" component={MyTicketsScreen} options={{ tabBarLabel: 'Tickets' }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Profil' }} />
+      <Tab.Screen name="Home" component={HomeConnectedScreen as React.ComponentType<any>} options={{ tabBarLabel: 'Accueil' }} />
+      <Tab.Screen name="MyTickets" component={MyTicketsScreen as React.ComponentType<any>} options={{ tabBarLabel: 'Tickets' }} />
+      <Tab.Screen name="Profile" component={ProfileScreen as React.ComponentType<any>} options={{ tabBarLabel: 'Profil' }} />
     </Tab.Navigator>
   );
 }

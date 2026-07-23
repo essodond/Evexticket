@@ -22,7 +22,9 @@ export const FONTS = {
 
 export const FONT_SIZES = {
   xs: 12,
+  small: 14,
   sm: 14,
+  medium: 16,
   base: 16,
   lg: 18,
   xl: 20,

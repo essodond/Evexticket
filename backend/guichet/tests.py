@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from transport.models import AuditLog, City, Company, ScheduledTrip, Trip
+from transport.models import AuditLog, Booking, City, Company, ScheduledTrip, Trip
 
 from .models import Agence, AgentGuichet, ControlePassager, Guichet, VenteGuichet
 
@@ -573,6 +573,45 @@ class GuichetApiTests(APITestCase):
         self.assertEqual(history_response.status_code, status.HTTP_200_OK)
         self.assertEqual(history_response.data['valides'], 1)
         self.assertEqual(history_response.data['deja_utilises'], 1)
+
+    def test_scanner_accepts_enriched_mobile_booking_qr(self):
+        booking = Booking.objects.create(
+            trip=self.trip,
+            scheduled_trip=self.voyage,
+            passenger_name='Voyageur Mobile',
+            passenger_email='mobile@example.com',
+            passenger_phone='90000015',
+            seat_number='7',
+            status='confirmed',
+            payment_method='cash',
+            total_price=self.trip.price,
+            user=self.admin,
+        )
+        qr_data = {
+            'type': 'EVEX_TICKET',
+            'reference': f'EVEX-{booking.id:06d}',
+            'booking_id': booking.id,
+            'passenger': booking.passenger_name,
+            'seat': booking.seat_number,
+        }
+        self.authenticate_agent()
+
+        first_scan = self.client.post(
+            '/api/guichet/controle/scanner/',
+            {'qr_code_data': qr_data},
+            format='json',
+        )
+        second_scan = self.client.post(
+            '/api/guichet/controle/scanner/',
+            {'qr_code_data': qr_data},
+            format='json',
+        )
+
+        self.assertEqual(first_scan.status_code, status.HTTP_200_OK)
+        self.assertEqual(first_scan.data['resultat'], 'valide')
+        self.assertIn('Voyageur Mobile', first_scan.data['message'])
+        self.assertEqual(second_scan.data['resultat'], 'deja_utilise')
+        self.assertEqual(ControlePassager.objects.filter(booking=booking).count(), 2)
 
     def test_company_stats_include_guichet_sales_and_agent_performance(self):
         self.authenticate_agent()
