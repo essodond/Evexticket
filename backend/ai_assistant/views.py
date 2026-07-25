@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -23,7 +24,13 @@ from .services import (
 
 
 class AIUserRateThrottle(UserRateThrottle):
-    rate = "20/min"
+    def __init__(self):
+        raw_rate = getattr(settings, "EVEX_AI_RATE_LIMIT", "20/min")
+        if raw_rate in {None, "", "none", "off", "disabled"}:
+            self.rate = None
+        else:
+            self.rate = raw_rate
+        super().__init__()
 
 
 class AIAPIView(APIView):

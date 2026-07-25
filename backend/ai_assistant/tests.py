@@ -163,6 +163,13 @@ class AIAssistantApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("2", response.data["answer"])
 
+    @override_settings(EVEX_AI_RATE_LIMIT="1000/min")
+    def test_ai_rate_limit_is_configurable(self):
+        self.authenticate(self.company_admin)
+        for _ in range(25):
+            response = self.client.get(f"/api/ai/trips/{self.scheduled_trip.id}/insights/")
+            self.assertEqual(response.status_code, 200, response.data)
+
     def test_company_admin_can_forecast_own_trip(self):
         self.authenticate(self.company_admin)
         response = self.client.get(f"/api/ai/trips/{self.scheduled_trip.id}/insights/")

@@ -148,6 +148,8 @@ AUTH_PASSWORD_VALIDATORS = [
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 
+EVEX_AI_RATE_LIMIT = config('EVEX_AI_RATE_LIMIT', default='20/min')
+
 # Configuration de la journalisation
 LOGGING = {
     'version': 1,
