@@ -37,6 +37,7 @@ export interface Trip {
   payment_status?: string;
   transaction_id?: string;
   trip_info: {
+    company?: number;
     departure_city?: City | number | string;
     arrival_city?: City | number | string;
     arrival_city_name: string;
@@ -106,6 +107,7 @@ export type RootStackParamList = {
   TrackBus: { tripId?: string | number };
   StartTracking: { tripId?: string | number };
   StationMap: { station: StationDestination };
+  CompanyDetails: { companyId: number; preferredCityName?: string };
   TicketAssistant: { bookingId: number; reference?: string };
   PaymentSuccess: undefined;
   PaymentFailed: undefined;
@@ -113,6 +115,7 @@ export type RootStackParamList = {
 
 export type MainTabParamList = {
   Home: undefined;
+  Companies: undefined;
   MyTickets: undefined;
   Profile: undefined;
   Notifications: undefined;

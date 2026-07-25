@@ -62,6 +62,11 @@ export default function TicketScreen({ navigation, route }: Props) {
     .join('') || 'EV';
   const qrSize = Math.min(210, Math.max(164, width - 154));
   const departureStation = findDepartureStation(ticketData);
+  const rawCompanyId =
+    tripInfo.company || ticketData.company_id || ticketData.trip_company_id;
+  const companyId = Number.isFinite(Number(rawCompanyId))
+    ? Number(rawCompanyId)
+    : null;
   const qrPayload = JSON.stringify({
     type: 'EVEX_TICKET',
     reference: ticketNumber,
@@ -151,6 +156,24 @@ export default function TicketScreen({ navigation, route }: Props) {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleOpenStation = () => {
+    if (departureStation) {
+      navigation.navigate('StationMap', { station: departureStation });
+      return;
+    }
+    if (companyId) {
+      navigation.navigate('CompanyDetails', {
+        companyId,
+        preferredCityName: fromCity,
+      });
+      return;
+    }
+    Alert.alert(
+      'Gare indisponible',
+      'Les informations de gare ne sont pas encore renseignées pour ce billet.',
+    );
   };
 
   return (
@@ -298,24 +321,26 @@ export default function TicketScreen({ navigation, route }: Props) {
           </Text>
         </View>
 
-        {departureStation && (
-          <TouchableOpacity
-            style={styles.stationButton}
-            onPress={() => navigation.navigate('StationMap', { station: departureStation })}
-          >
-            <View style={styles.stationButtonIcon}>
-              <Ionicons name="map" size={22} color={COLORS.primary} />
-            </View>
-            <View style={styles.stationButtonContent}>
-              <Text style={styles.stationButtonEyebrow}>REJOINDRE LA GARE</Text>
-              <Text style={styles.stationButtonTitle}>{departureStation.name}</Text>
-              <Text style={styles.stationButtonAddress} numberOfLines={1}>
-                {departureStation.address || departureStation.city_name}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={22} color={COLORS.primary} />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={styles.stationButton}
+          onPress={handleOpenStation}
+        >
+          <View style={styles.stationButtonIcon}>
+            <Ionicons name="map" size={22} color={COLORS.primary} />
+          </View>
+          <View style={styles.stationButtonContent}>
+            <Text style={styles.stationButtonEyebrow}>REJOINDRE LA GARE</Text>
+            <Text style={styles.stationButtonTitle}>
+              {departureStation?.name || 'Voir les gares de la compagnie'}
+            </Text>
+            <Text style={styles.stationButtonAddress} numberOfLines={1}>
+              {departureStation
+                ? departureStation.address || departureStation.city_name
+                : `Gares disponibles à ${fromCity}`}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={COLORS.primary} />
+        </TouchableOpacity>
 
         <View style={styles.actions}>
           <Button

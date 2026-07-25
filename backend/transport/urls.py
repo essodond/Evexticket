@@ -2,6 +2,11 @@ from django.urls import path, include
 from . import views
 from rest_framework.authtoken.views import obtain_auth_token
 from rest_framework.routers import DefaultRouter
+from .partner_views import (
+    PartnerCompanyDetailView,
+    PartnerCompanyListView,
+    PartnerCompanyReviewView,
+)
 
 # Créer un routeur
 router = DefaultRouter()
@@ -12,6 +17,9 @@ router.register(r'scheduled_trips', views.ScheduledTripViewSet, basename='schedu
 router.register(r'users', views.UserViewSet, basename='user')
 
 urlpatterns = [
+    path('partners/', PartnerCompanyListView.as_view(), name='partner-company-list'),
+    path('partners/<int:company_id>/', PartnerCompanyDetailView.as_view(), name='partner-company-detail'),
+    path('partners/<int:company_id>/reviews/', PartnerCompanyReviewView.as_view(), name='partner-company-review'),
     path('platform-admin/', include('transport.platform_admin_urls')),
     path('companies/<int:company_id>/bookings/', views.CompanyBookingsView.as_view(), name='company-bookings'),
     path('dashboard/stats/', views.DashboardStatsView.as_view(), name='dashboard-stats'),

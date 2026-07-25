@@ -141,6 +141,8 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
   const arrivalTimeLabel = formatTime(arrivalTime);
   const seatsLeft = (trip as any).seats_left ?? (trip as any).seatsLeft ?? '';
   const departureStation = findDepartureStation(trip);
+  const companyId = Number((trip as any).trip_info?.company);
+  const canOpenCompany = Number.isFinite(companyId);
 
   return (
     <View style={styles.container}>
@@ -243,13 +245,24 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
               </Text>
             </View>
           </View>
-          {departureStation && (
+          {(departureStation || canOpenCompany) && (
             <TouchableOpacity
               style={styles.stationMapButton}
-              onPress={() => navigation.navigate('StationMap', { station: departureStation })}
+              onPress={() => {
+                if (departureStation) {
+                  navigation.navigate('StationMap', { station: departureStation });
+                } else {
+                  navigation.navigate('CompanyDetails', {
+                    companyId,
+                    preferredCityName: trip.trip_info.departure_city_name,
+                  });
+                }
+              }}
             >
               <Ionicons name="navigate-outline" size={19} color={COLORS.white} />
-              <Text style={styles.stationMapButtonText}>Carte et itinéraire</Text>
+              <Text style={styles.stationMapButtonText}>
+                {departureStation ? 'Carte et itinéraire' : 'Voir les gares'}
+              </Text>
             </TouchableOpacity>
           )}
         </View>

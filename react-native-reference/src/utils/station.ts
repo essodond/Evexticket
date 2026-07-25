@@ -5,6 +5,24 @@ const finiteCoordinate = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+export function distanceBetweenCoordinatesKm(
+  from: { latitude: number; longitude: number },
+  to: { latitude: number; longitude: number },
+) {
+  const earthRadius = 6371;
+  const radians = (value: number) => (value * Math.PI) / 180;
+  const latitudeDelta = radians(to.latitude - from.latitude);
+  const longitudeDelta = radians(to.longitude - from.longitude);
+  const firstLatitude = radians(from.latitude);
+  const secondLatitude = radians(to.latitude);
+  const value =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(firstLatitude) *
+      Math.cos(secondLatitude) *
+      Math.sin(longitudeDelta / 2) ** 2;
+  return earthRadius * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+}
+
 const stationFromZone = (
   zone: BoardingZone | undefined,
   fallbackCity: string,

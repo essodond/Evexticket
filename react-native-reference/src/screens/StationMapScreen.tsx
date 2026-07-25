@@ -16,27 +16,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
 import { RootStackParamList } from '../types';
+import { distanceBetweenCoordinatesKm } from '../utils/station';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'StationMap'>;
 
 type Coordinate = {
   latitude: number;
   longitude: number;
-};
-
-const distanceInKm = (from: Coordinate, to: Coordinate) => {
-  const earthRadius = 6371;
-  const toRadians = (value: number) => (value * Math.PI) / 180;
-  const latitudeDelta = toRadians(to.latitude - from.latitude);
-  const longitudeDelta = toRadians(to.longitude - from.longitude);
-  const firstLatitude = toRadians(from.latitude);
-  const secondLatitude = toRadians(to.latitude);
-  const value =
-    Math.sin(latitudeDelta / 2) ** 2 +
-    Math.cos(firstLatitude) *
-      Math.cos(secondLatitude) *
-      Math.sin(longitudeDelta / 2) ** 2;
-  return earthRadius * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 };
 
 export default function StationMapScreen({ navigation, route }: Props) {
@@ -122,7 +108,7 @@ export default function StationMapScreen({ navigation, route }: Props) {
   }, [position, stationCoordinate]);
 
   const distance = position
-    ? distanceInKm(position, stationCoordinate)
+    ? distanceBetweenCoordinatesKm(position, stationCoordinate)
     : null;
 
   const centerMap = () => {

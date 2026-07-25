@@ -24,6 +24,8 @@ import StartTrackingScreen from '../screens/StartTrackingScreen';
 import StationMapScreen from '../screens/StationMapScreen';
 import TicketAssistantScreen from '../screens/TicketAssistantScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
+import CompaniesScreen from '../screens/CompaniesScreen';
+import CompanyDetailsScreen from '../screens/CompanyDetailsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -59,6 +61,8 @@ function MainTabs() {
           let iconName: any;
           if (route.name === 'Home') {
             iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'Companies') {
+            iconName = focused ? 'business' : 'business-outline';
           } else if (route.name === 'MyTickets') {
             iconName = focused ? 'ticket' : 'ticket-outline';
           } else if (route.name === 'Profile') {
@@ -72,6 +76,7 @@ function MainTabs() {
     >
       {/* Tes écrans restent les mêmes */}
       <Tab.Screen name="Home" component={HomeConnectedScreen as React.ComponentType<any>} options={{ tabBarLabel: 'Accueil' }} />
+      <Tab.Screen name="Companies" component={CompaniesScreen as React.ComponentType<any>} options={{ tabBarLabel: 'Compagnies' }} />
       <Tab.Screen name="MyTickets" component={MyTicketsScreen as React.ComponentType<any>} options={{ tabBarLabel: 'Tickets' }} />
       <Tab.Screen name="Notifications" component={NotificationsScreen as React.ComponentType<any>} options={{ tabBarLabel: 'Alertes' }} />
       <Tab.Screen name="Profile" component={ProfileScreen as React.ComponentType<any>} options={{ tabBarLabel: 'Profil' }} />
@@ -154,6 +159,11 @@ export default function AppNavigator() {
         name="StationMap"
         component={StationMapScreen}
         options={{ animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="CompanyDetails"
+        component={CompanyDetailsScreen}
+        options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen 
         name="Payment" 

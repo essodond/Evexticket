@@ -555,6 +555,57 @@ export interface City {
   name: string;
 }
 
+export interface PartnerStation {
+  id: string;
+  name: string;
+  city_id: number;
+  city_name: string;
+  region: string;
+  address: string;
+  phone: string;
+  latitude: string | number | null;
+  longitude: string | number | null;
+  has_coordinates: boolean;
+}
+
+export interface PartnerReview {
+  id: number;
+  rating: number;
+  comment: string;
+  created_at: string;
+  passenger_name: string;
+  route: string;
+}
+
+export interface PartnerEligibleBooking {
+  id: number;
+  reference: string;
+  route: string;
+  travel_date: string | null;
+  existing_rating: number | null;
+  existing_comment: string;
+}
+
+export interface PartnerCompany {
+  id: number;
+  name: string;
+  description: string;
+  address: string;
+  phone: string;
+  email: string;
+  website: string | null;
+  logo: string | null;
+  rating_average: number;
+  review_count: number;
+  stations_count: number;
+  cities: string[];
+  active_trips_count: number;
+  stations: PartnerStation[];
+  rating_distribution?: Record<string, number>;
+  reviews?: PartnerReview[];
+  eligible_bookings?: PartnerEligibleBooking[];
+}
+
 export interface AISearchCriteria {
   departure_city: string | null;
   arrival_city: string | null;
@@ -619,6 +670,38 @@ export async function getCities(): Promise<City[]> {
     console.error('Erreur de récupération des villes:', error);
     throw error;
   }
+}
+
+export async function getPartnerCompanies(): Promise<PartnerCompany[]> {
+  const response = await request<any>('/partners/');
+  if (Array.isArray(response)) return response as PartnerCompany[];
+  if (response && Array.isArray(response.results)) {
+    return response.results as PartnerCompany[];
+  }
+  return [];
+}
+
+export async function getPartnerCompany(
+  companyId: number | string,
+): Promise<PartnerCompany> {
+  return request<PartnerCompany>(`/partners/${companyId}/`);
+}
+
+export async function ratePartnerCompany(
+  companyId: number | string,
+  payload: { booking_id: number; rating: number; comment: string },
+): Promise<{
+  id: number;
+  booking_id: number;
+  rating: number;
+  comment: string;
+  rating_average: number;
+  review_count: number;
+}> {
+  return request(`/partners/${companyId}/reviews/`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function naturalTripSearch(query: string): Promise<AISearchResponse> {
