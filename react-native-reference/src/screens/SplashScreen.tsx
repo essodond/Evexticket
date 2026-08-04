@@ -1,11 +1,10 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { ResizeMode, Video } from 'expo-av';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withSequence,
   withTiming,
   withDelay,
 } from 'react-native-reanimated';
@@ -13,9 +12,9 @@ import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
 
 export default function SplashScreen() {
-  const videoScale = useSharedValue(0.8);
+  const videoScale = useSharedValue(0.94);
   const videoOpacity = useSharedValue(0);
-  const logoRotate = useSharedValue(-8);
+  const logoRotate = useSharedValue(-3);
   const textOpacity = useSharedValue(0);
   const textTranslateY = useSharedValue(20);
 
@@ -34,14 +33,6 @@ export default function SplashScreen() {
     // Texte : apparition avec slide up
     textOpacity.value = withDelay(800, withTiming(1, { duration: 600 }));
     textTranslateY.value = withDelay(800, withSpring(0, { damping: 14, stiffness: 80 }));
-
-    // Ajout d'une petite pulsation après l'entrée
-    setTimeout(() => {
-      videoScale.value = withSequence(
-        withTiming(1.06, { duration: 300 }),
-        withTiming(1, { duration: 300 })
-      );
-    }, 1100);
   }, []);
 
   const videoAnimatedStyle = useAnimatedStyle(() => ({
@@ -63,7 +54,7 @@ export default function SplashScreen() {
         <Video
           source={require('../../assets/splash-animation.mp4')}
           style={styles.video}
-          resizeMode={ResizeMode.COVER}
+          resizeMode={ResizeMode.CONTAIN}
           shouldPlay
           isLooping={false}
           useNativeControls={false}
@@ -83,18 +74,18 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundSecondary,
+    backgroundColor: COLORS.white,
     justifyContent: 'center',
     alignItems: 'center',
   },
   videoContainer: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.backgroundSecondary,
+    backgroundColor: COLORS.white,
     overflow: 'hidden',
   },
   video: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.backgroundSecondary,
+    backgroundColor: COLORS.white,
   },
   textContainer: {
     position: 'absolute',
