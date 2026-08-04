@@ -6,7 +6,16 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from transport.models import AuditLog, Booking, City, Company, ScheduledTrip, Trip
+from transport.models import (
+    AuditLog,
+    Booking,
+    City,
+    Company,
+    Reservation,
+    ScheduledTrip,
+    Siege,
+    Trip,
+)
 
 from .models import Agence, AgentGuichet, ControlePassager, Guichet, VenteGuichet
 
@@ -669,3 +678,184 @@ class GuichetApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['resultat'], 'invalide')
         self.assertEqual(ControlePassager.objects.count(), 0)
+
+    def test_unified_ticket_and_passenger_lists_include_all_sales_channels(self):
+        booking = Booking.objects.create(
+            trip=self.trip,
+            scheduled_trip=self.voyage,
+            passenger_name='Passager réservation',
+            passenger_email='reservation@example.com',
+            passenger_phone='90000021',
+            seat_number='1',
+            status='confirmed',
+            payment_method='mobile_money',
+            total_price=self.trip.price,
+            user=self.client_user,
+        )
+        mobile_seat = Siege.objects.create(
+            voyage=self.voyage,
+            numero=2,
+            statut=Siege.STATUT_OCCUPE,
+        )
+        Reservation.objects.create(
+            voyage=self.voyage,
+            siege=mobile_seat,
+            client_nom='Passager paiement',
+            client_telephone='90000022',
+            montant_billet=5000,
+            frais_evex=300,
+            montant_total=5300,
+            frais_qos=90,
+            revenu_net_evex=210,
+            montant_reverse_compagnie=5000,
+            operateur=Reservation.OPERATEUR_FLOOZ,
+            reference_evex='EVEX-UNIFIED-001',
+            statut_paiement=Reservation.STATUT_PAYE,
+        )
+        self.authenticate_agent()
+        sale_response = self.client.post(
+            '/api/guichet/ventes/creer/',
+            {
+                'voyage_id': self.voyage.id,
+                'numero_siege': 3,
+                'client_nom': 'Passager guichet',
+                'client_telephone': '90000023',
+                'mode_paiement': 'cash',
+            },
+            format='json',
+        )
+        self.assertEqual(sale_response.status_code, status.HTTP_201_CREATED)
+
+        tickets_response = self.client.get('/api/guichet/billets/')
+        passengers_response = self.client.get(
+            f'/api/guichet/voyages/{self.voyage.id}/passagers/',
+        )
+
+        self.assertEqual(tickets_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(passengers_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            {item['source'] for item in tickets_response.data},
+            {'booking', 'mobile', 'guichet'},
+        )
+        self.assertEqual(
+            {item['source'] for item in passengers_response.data},
+            {'booking', 'mobile', 'guichet'},
+        )
+        booking_payload = next(
+            item for item in tickets_response.data
+            if item['source'] == 'booking' and item['id'] == str(booking.id)
+        )
+        self.assertEqual(booking_payload['channel'], 'application')
+        self.assertTrue(booking_payload['can_cancel'])
+
+        self.client.force_authenticate(user=self.admin)
+        stats_response = self.client.get(f'/api/companies/{self.company.id}/stats/')
+        self.assertEqual(stats_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(stats_response.data['mobile_bookings'], 2)
+        self.assertEqual(stats_response.data['guichet_sales'], 1)
+        self.assertEqual(stats_response.data['total_bookings'], 3)
+
+    def test_agent_and_company_admin_manage_own_tickets_with_audit(self):
+        booking = Booking.objects.create(
+            trip=self.trip,
+            scheduled_trip=self.voyage,
+            passenger_name='Nom initial',
+            passenger_email='initial@example.com',
+            passenger_phone='90000031',
+            seat_number='4',
+            status='confirmed',
+            payment_method='cash',
+            total_price=self.trip.price,
+            user=self.client_user,
+        )
+        other_booking = Booking.objects.create(
+            trip=self.other_trip,
+            scheduled_trip=self.other_voyage,
+            passenger_name='Autre compagnie',
+            passenger_email='other@example.com',
+            passenger_phone='90000032',
+            seat_number='1',
+            status='confirmed',
+            payment_method='cash',
+            total_price=self.other_trip.price,
+        )
+        self.authenticate_agent()
+
+        update_response = self.client.post(
+            f'/api/guichet/billets/booking/{booking.id}/action/',
+            {
+                'action': 'update',
+                'changes': {
+                    'client_name': 'Nom corrigé',
+                    'client_phone': '90000999',
+                    'client_email': 'initial@example.com',
+                },
+            },
+            format='json',
+        )
+        forbidden_response = self.client.post(
+            f'/api/guichet/billets/booking/{other_booking.id}/action/',
+            {'action': 'cancel', 'reason': 'Tentative interdite'},
+            format='json',
+        )
+
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(forbidden_response.status_code, status.HTTP_404_NOT_FOUND)
+        booking.refresh_from_db()
+        self.assertEqual(booking.passenger_name, 'Nom corrigé')
+        self.assertTrue(AuditLog.objects.filter(
+            user=self.agent_user,
+            model_name='Booking',
+            object_id=str(booking.id),
+            new_values__operation='update',
+        ).exists())
+
+        self.client.force_authenticate(user=self.admin)
+        cancel_response = self.client.post(
+            f'/api/guichet/billets/booking/{booking.id}/action/',
+            {'action': 'cancel', 'reason': 'Demande confirmée par le voyageur'},
+            format='json',
+        )
+        self.assertEqual(cancel_response.status_code, status.HTTP_200_OK)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, 'cancelled')
+        self.assertTrue(booking.is_deleted)
+
+        operations_response = self.client.get('/api/guichet/billets/operations/')
+        self.assertEqual(operations_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            {item['operation'] for item in operations_response.data},
+            {'update', 'cancel'},
+        )
+
+    def test_agent_can_record_refund_for_company_counter_ticket(self):
+        self.authenticate_agent()
+        sale_response = self.client.post(
+            '/api/guichet/ventes/creer/',
+            {
+                'voyage_id': self.voyage.id,
+                'numero_siege': 6,
+                'client_nom': 'Client remboursé',
+                'client_telephone': '90000041',
+                'mode_paiement': 'cash',
+            },
+            format='json',
+        )
+        reference = sale_response.data['reference_vente']
+        sale = VenteGuichet.objects.get(reference_vente=reference)
+
+        refund_response = self.client.post(
+            f'/api/guichet/billets/guichet/{sale.id}/action/',
+            {'action': 'refund', 'reason': 'Départ annulé par la compagnie'},
+            format='json',
+        )
+
+        self.assertEqual(refund_response.status_code, status.HTTP_200_OK)
+        sale.refresh_from_db()
+        self.assertEqual(sale.statut, 'rembourse')
+        self.assertTrue(AuditLog.objects.filter(
+            user=self.agent_user,
+            model_name='VenteGuichet',
+            object_id=str(sale.id),
+            new_values__operation='refund',
+        ).exists())

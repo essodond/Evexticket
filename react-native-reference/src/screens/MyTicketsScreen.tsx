@@ -171,23 +171,23 @@ export default function MyTicketsScreen({ navigation }: Props) {
 
                     {/* Trajet Visuel */}
                     <View style={styles.routeContainer}>
-                      <View style={styles.routeItem}>
+                      <View style={styles.routeSegment}>
                         <Text style={styles.timeText}>{ticket.departure.substring(0, 5)}</Text>
                         <Text style={styles.cityText} numberOfLines={1}>{ticket.from}</Text>
                       </View>
 
                       <View style={styles.routeVisual}>
                         <View style={styles.routeIconsRow}>
-                          <Ionicons name="location-outline" size={18} color={COLORS.primary} />
-                          <View style={styles.segmentLine} />
-                          <Ionicons name="bus" size={18} color={COLORS.primary} />
-                          <View style={styles.segmentLine} />
-                          <Ionicons name="flag-outline" size={18} color={COLORS.primary} />
+                          <Ionicons name="location-outline" size={16} color={COLORS.primary} />
+                          <View style={styles.routeLine} />
+                          <Ionicons name="bus" size={16} color={COLORS.primary} />
+                          <View style={styles.routeLine} />
+                          <Ionicons name="flag-outline" size={16} color={COLORS.primary} />
                         </View>
-                        <Text style={styles.routeIconText}>Direct</Text>
+                        <Text style={styles.routeLabel}>Direct</Text>
                       </View>
 
-                      <View style={[styles.routeItem, { alignItems: 'flex-end' }]}> 
+                      <View style={[styles.routeSegment, { alignItems: 'flex-end' }]}> 
                         <Text style={styles.timeText}>{ticket.arrival.substring(0, 5)}</Text>
                         <Text style={styles.cityText} numberOfLines={1}>{ticket.to}</Text>
                       </View>
@@ -199,11 +199,10 @@ export default function MyTicketsScreen({ navigation }: Props) {
                         <Text style={styles.seatText}>{ticket.seat_number}</Text>
                       </View>
                       <View style={styles.qrPlaceholder}>
-                        <Ionicons name="qr-code-outline" size={36} color="#1E293B" />
+                        <Ionicons name="qr-code-outline" size={30} color="#1E293B" />
                       </View>
                     </View>
 
-                    {/* Boutons d'actions */}
                     <View style={styles.actionsRow}>
                       <TouchableOpacity 
                         style={styles.mainActionButton}
@@ -214,7 +213,7 @@ export default function MyTicketsScreen({ navigation }: Props) {
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={styles.aiActionButton}
+                        style={styles.iconActionButton}
                         onPress={() =>
                           navigation.navigate('TicketAssistant', {
                             bookingId: ticket.id,
@@ -222,38 +221,11 @@ export default function MyTicketsScreen({ navigation }: Props) {
                           })
                         }
                       >
-                        <Ionicons name="sparkles" size={19} color={COLORS.primary} />
+                        <Ionicons name="sparkles" size={20} color={COLORS.primary} />
                       </TouchableOpacity>
 
-                      {/* Suivre le bus — simulation : visible 3h avant le départ */}
-                      {(() => {
-                        const getMinutesUntilDeparture = (dateStr: string, timeStr: string) => {
-                          try {
-                            if (!dateStr || !timeStr) return Infinity;
-                            const parts = dateStr.split('-').map((p: string) => parseInt(p, 10));
-                            const [year, month, day] = parts;
-                            const [h, m] = timeStr.split(':').map((s: string) => parseInt(s || '0', 10));
-                            const dep = new Date(year, (month || 1) - 1, day, h || 0, m || 0);
-                            return Math.round((dep.getTime() - Date.now()) / 60000);
-                          } catch { return Infinity; }
-                        };
-
-                        const minutes = getMinutesUntilDeparture(ticket.date, ticket.departure);
-                        const showTrack = minutes <= 180 && minutes > 0;
-                        if (!showTrack) return null;
-                        return (
-                          <TouchableOpacity
-                            style={[styles.mainActionButton, { marginLeft: 10, backgroundColor: '#06b6d4' }]}
-                            onPress={() => navigation.navigate('TrackBus' as any, { tripId: String(ticket.id) })}
-                          >
-                            <Ionicons name="navigate" size={20} color={COLORS.white} />
-                            <Text style={[styles.mainActionText, { marginLeft: 10 }]}>Suivre le bus</Text>
-                          </TouchableOpacity>
-                        );
-                      })()}
-
                       <TouchableOpacity 
-                        style={[styles.deleteIconButton, { marginLeft: 10 }]}
+                        style={styles.iconActionButton}
                         onPress={() => setHiddenTickets(prev => new Set(prev).add(ticket.id))}
                       >
                         <Ionicons name="trash-outline" size={20} color="#64748B" />
@@ -347,38 +319,39 @@ const styles = StyleSheet.create({
   },
   ticketCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 24,
+    borderRadius: 32,
     overflow: 'hidden',
   },
-  expiredCard: { opacity: 0.8 },
+  expiredCard: { opacity: 0.75 },
   aiActionButton: {
     width: 46,
     height: 46,
     marginLeft: 10,
-    borderRadius: 15,
-    backgroundColor: '#E8F1FF',
+    borderRadius: 16,
+    backgroundColor: '#EFF6FF',
     borderWidth: 1,
-    borderColor: '#CFE0FA',
+    borderColor: '#BFDBFE',
     alignItems: 'center',
     justifyContent: 'center',
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingVertical: 18,
   },
   activeHeader: { backgroundColor: COLORS.primary },
   expiredHeader: { backgroundColor: '#94A3B8' },
-  headerRow: { flexDirection: 'row', alignItems: 'center' },
-  cardDateText: { color: COLORS.white, fontWeight: '600', fontSize: 13 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cardDateText: { color: COLORS.white, fontWeight: '700', fontSize: 14 },
   statusBadge: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
   },
-  statusBadgeText: { color: COLORS.white, fontSize: 10, fontWeight: '800' },
+  statusBadgeText: { color: COLORS.white, fontSize: 11, fontWeight: '800' },
   perforationRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -386,32 +359,32 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
   },
   leftNotch: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: '#F1F5F9',
-    marginLeft: -10,
+    marginLeft: -11,
   },
   rightNotch: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: '#F1F5F9',
-    marginRight: -10,
+    marginRight: -11,
   },
   dashedLine: {
     flex: 1,
     height: 1,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
     borderStyle: 'dashed',
     marginHorizontal: 10,
   },
   cardBody: { padding: 20 },
   topInfo: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
-  label: { fontSize: 10, fontWeight: '700', color: '#94A3B8', marginBottom: 2 },
-  companyName: { fontSize: 17, fontWeight: '700', color: '#1E293B' },
-  priceText: { fontSize: 17, fontWeight: '800', color: COLORS.primary },
+  label: { fontSize: 10, fontWeight: '700', color: '#94A3B8', marginBottom: 6 },
+  companyName: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
+  priceText: { fontSize: 16, fontWeight: '900', color: COLORS.primary },
   routeContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -421,9 +394,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     marginBottom: 15,
   },
-  routeItem: { flex: 2 },
-  timeText: { fontSize: 20, fontWeight: '900', color: '#1E293B' },
-  cityText: { fontSize: 11, fontWeight: '600', color: '#64748B' },
+  routeItem: { flex: 2, paddingHorizontal: 4 },
+  timeText: { fontSize: 20, fontWeight: '900', color: '#0F172A' },
+  cityText: { fontSize: 11, fontWeight: '700', color: '#475569', marginTop: 4 },
   routeVisual: {
     flex: 1,
     flexDirection: 'column',
@@ -431,7 +404,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 10,
   },
-  line: { width: '100%', height: 2, backgroundColor: COLORS.primary, opacity: 0.3, marginVertical: 8 },
+  routeLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#BFDBFE',
+    marginHorizontal: 6,
+  },
+  routeLabel: {
+    marginTop: 8,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
   busIconCircle: {
     width: 36,
     height: 36,
@@ -465,24 +449,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  seatText: { fontSize: 26, fontWeight: '900', color: '#1E293B' },
-  qrPlaceholder: { padding: 6, backgroundColor: '#F1F5F9', borderRadius: 10 },
-  actionsRow: { flexDirection: 'row' },
+  seatText: { fontSize: 26, fontWeight: '900', color: '#0F172A' },
+  qrPlaceholder: {
+    width: 62,
+    height: 62,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionsRow: { flexDirection: 'row', alignItems: 'center' },
   mainActionButton: {
     flex: 1,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0F172A',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 14,
+    paddingVertical: 14,
+    borderRadius: 18,
     paddingHorizontal: 16,
   },
-  mainActionText: { color: COLORS.white, fontWeight: '700', fontSize: 15 },
+  mainActionText: { color: COLORS.white, fontWeight: '800', fontSize: 15 },
+  iconActionButton: {
+    width: 46,
+    height: 46,
+    marginLeft: 12,
+    borderRadius: 16,
+    backgroundColor: '#F8FAFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
   deleteIconButton: {
-    backgroundColor: '#F1F5F9',
-    padding: 12,
-    borderRadius: 14,
+    width: 46,
+    height: 46,
+    marginLeft: 12,
+    borderRadius: 16,
+    backgroundColor: '#F8FAFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyCard: {

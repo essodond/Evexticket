@@ -14,6 +14,66 @@ class CityModelTest(TestCase):
         self.assertTrue(city.is_active)
 
 
+class ScheduledTripListFilterTest(TestCase):
+    def setUp(self):
+        departure = City.objects.create(name="Lome", region="Maritime", is_active=True)
+        arrival = City.objects.create(name="Kara", region="Kara", is_active=True)
+        company = Company.objects.create(
+            name="Date Filter Transport",
+            description="Test company",
+            address="1 Avenue",
+            phone="90000001",
+            email="date-filter@example.com",
+            is_active=True,
+        )
+        trip = Trip.objects.create(
+            company=company,
+            departure_city=departure,
+            arrival_city=arrival,
+            departure_time="08:00",
+            arrival_time="14:00",
+            price=5000,
+            duration=360,
+            bus_type="Standard",
+            capacity=50,
+            is_active=True,
+        )
+        self.first_date = date(2030, 7, 29)
+        self.second_date = date(2030, 7, 30)
+        self.first_scheduled_trip = ScheduledTrip.objects.create(
+            trip=trip,
+            date=self.first_date,
+            is_active=True,
+            available_seats=50,
+        )
+        ScheduledTrip.objects.create(
+            trip=trip,
+            date=self.second_date,
+            is_active=True,
+            available_seats=50,
+        )
+        self.client = APIClient()
+
+    def test_list_filters_each_supported_date_parameter(self):
+        for parameter in ("departure_date", "travel_date", "date"):
+            with self.subTest(parameter=parameter):
+                response = self.client.get(
+                    "/api/scheduled_trips/",
+                    {parameter: self.first_date.isoformat()},
+                )
+
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                payload = response.data.get("results", response.data)
+                self.assertEqual(
+                    [item["id"] for item in payload],
+                    [self.first_scheduled_trip.id],
+                )
+                self.assertEqual(
+                    {item["date"] for item in payload},
+                    {self.first_date.isoformat()},
+                )
+
+
 class BookingCancelEndpointTest(TestCase):
     def setUp(self):
         User = get_user_model()

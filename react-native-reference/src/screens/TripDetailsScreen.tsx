@@ -7,12 +7,13 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { RootStackParamList, Trip, Seat } from '../types';
+import { RootStackParamList, Trip } from '../types';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
 import { formatCurrency, calculateDuration, formatTime } from '../utils/mockData';
@@ -44,12 +45,22 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
   const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
   const scheduledTripId = initialTrip?.id ?? initialTrip?.trip_info?.id;
 
-  const handleSelectSeat = (seatId: string | null) => {
-    setSelectedSeat(seatId);
-  };
-
   const handleSeatPress = (seatId: string) => {
     setSelectedSeat(prevSelectedSeat => (prevSelectedSeat === seatId ? null : seatId));
+  };
+
+  const handleBookingPress = () => {
+    if (!selectedSeat) {
+      Alert.alert(
+        'Sélection requise',
+        'Touchez un siège disponible avant de continuer la réservation.',
+      );
+      return;
+    }
+
+    if (trip) {
+      navigation.navigate('Payment', { trip, selectedSeat });
+    }
   };
 
   // Utiliser les sièges réels de l'API, avec gestion du statut "occupied"
@@ -283,54 +294,60 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
           onSeatPress={handleSeatPress}
           selectedSeatId={selectedSeat}
         />
-
-        <View style={[styles.footer, { paddingBottom: Math.max(10, insets.bottom), paddingTop: 10 }]}>
-          <View style={styles.footerPrice}>
-            <Text style={styles.footerPriceLabel}>Prix total</Text>
-            <Text style={styles.footerPriceValue}>{formatCurrency(parseFloat(trip.trip_info.price || '0'))}</Text>
-          </View>
-          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-            {/* Suivre le bus — visible en simulation 3h avant le départ */}
-            {(() => {
-              const getMinutesUntilDeparture = () => {
-                try {
-                  const dateStr = (trip as any).departure_date || (trip as any).date || (trip as any).trip_info?.departure_date || (trip as any).trip_info?.date || '';
-                  const timeStr = (trip as any).departure_time || (trip as any).trip_info?.departure_time || (trip as any).trip_info?.departure || '';
-                  if (!dateStr || !timeStr) return Infinity;
-                  const parts = dateStr.split('-').map((p: string) => parseInt(p, 10));
-                  const [year, month, day] = parts;
-                  const [hourStr, minuteStr] = timeStr.split(':');
-                  const hour = parseInt(hourStr || '0', 10);
-                  const minute = parseInt(minuteStr || '0', 10);
-                  const dep = new Date(year, (month || 1) - 1, day, hour, minute);
-                  return Math.round((dep.getTime() - Date.now()) / 60000);
-                } catch {
-                  return Infinity;
-                }
-              };
-              const minutes = getMinutesUntilDeparture();
-              const isTrackingSoon = minutes <= 180 && minutes > 0; // visible 3h before
-              if (isTrackingSoon) {
-                return (
-                  <Button
-                    title="Suivre le bus"
-                    onPress={() => navigation.navigate('TrackBus', { tripId: trip.id })}
-                    style={{ marginRight: 8, backgroundColor: '#06b6d4' }}
-                  />
-                );
-              }
-              return null;
-            })()}
-
-            <Button
-              title="Réserver maintenant"
-              onPress={() => navigation.navigate('Payment', { trip, selectedSeat })}
-              style={styles.bookButton}
-              disabled={!selectedSeat}
-            />
-          </View>
-        </View>
       </ScrollView>
+
+      <View style={[styles.footer, { paddingBottom: Math.max(12, insets.bottom) }]}>
+        <View style={styles.footerPrice}>
+          <Text style={styles.footerPriceLabel}>Prix total</Text>
+          <Text style={styles.footerPriceValue}>{formatCurrency(parseFloat(trip.trip_info.price || '0'))}</Text>
+          <Text style={selectedSeat ? styles.selectedSeatLabel : styles.seatPrompt}>
+            {selectedSeat
+              ? `Siège ${selectedSeat.replace('seat-', '')} sélectionné`
+              : 'Sélectionnez un siège'}
+          </Text>
+        </View>
+        <View style={styles.footerActions}>
+          {/* Suivre le bus — visible en simulation 3h avant le départ */}
+          {(() => {
+            const getMinutesUntilDeparture = () => {
+              try {
+                const dateStr = (trip as any).departure_date || (trip as any).date || (trip as any).trip_info?.departure_date || (trip as any).trip_info?.date || '';
+                const timeStr = (trip as any).departure_time || (trip as any).trip_info?.departure_time || (trip as any).trip_info?.departure || '';
+                if (!dateStr || !timeStr) return Infinity;
+                const parts = dateStr.split('-').map((p: string) => parseInt(p, 10));
+                const [year, month, day] = parts;
+                const [hourStr, minuteStr] = timeStr.split(':');
+                const hour = parseInt(hourStr || '0', 10);
+                const minute = parseInt(minuteStr || '0', 10);
+                const dep = new Date(year, (month || 1) - 1, day, hour, minute);
+                return Math.round((dep.getTime() - Date.now()) / 60000);
+              } catch {
+                return Infinity;
+              }
+            };
+            const minutes = getMinutesUntilDeparture();
+            const isTrackingSoon = minutes <= 180 && minutes > 0; // visible 3h before
+            if (isTrackingSoon) {
+              return (
+                <Button
+                  title="Suivre le bus"
+                  onPress={() => navigation.navigate('TrackBus', { tripId: trip.id })}
+                  style={styles.trackButton}
+                  size="sm"
+                />
+              );
+            }
+            return null;
+          })()}
+
+          <Button
+            title="Réserver maintenant"
+            onPress={handleBookingPress}
+            style={styles.bookButton}
+            textStyle={styles.bookButtonText}
+          />
+        </View>
+      </View>
     </View>
   );
 }
@@ -373,7 +390,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 24,
-    paddingBottom: 150, // Increased padding to avoid content hiding under fixed footer
+    paddingBottom: 24,
   },
   header: {
     flexDirection: 'row',
@@ -558,20 +575,16 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    padding: 10,
-    paddingBottom: 10, // Further reduced padding
+    paddingTop: 12,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     shadowColor: COLORS.black,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 8,
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
   },
   footerPrice: {
     flex: 1,
@@ -585,10 +598,39 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHTS.semibold,
     color: COLORS.primary,
   },
-  bookButton: {
+  seatPrompt: {
+    marginTop: 2,
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textSecondary,
+  },
+  selectedSeatLabel: {
+    marginTop: 2,
+    fontSize: FONT_SIZES.xs,
+    color: '#2E7D32',
+    fontWeight: FONT_WEIGHTS.semibold,
+  },
+  footerActions: {
     flex: 2,
-    height: 40, // Further reduced height
-    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  trackButton: {
+    minHeight: 48,
+    paddingHorizontal: 12,
+    backgroundColor: '#06b6d4',
+  },
+  bookButton: {
+    flex: 1,
+    minHeight: 52,
+    paddingVertical: 0,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+  },
+  bookButtonText: {
+    lineHeight: 22,
+    textAlign: 'center',
+    includeFontPadding: false,
   },
   centered: {
     flex: 1,

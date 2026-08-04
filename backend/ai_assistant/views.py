@@ -34,6 +34,12 @@ class AIUserRateThrottle(UserRateThrottle):
 
 
 class AIAPIView(APIView):
+    """Base des analyses EVEX locales, sans consommation du quota fournisseur."""
+
+
+class AIProviderAPIView(AIAPIView):
+    """Limite uniquement les endpoints susceptibles d'appeler le fournisseur IA."""
+
     throttle_classes = [AIUserRateThrottle]
 
 
@@ -71,7 +77,7 @@ class AIStatusView(APIView):
         )
 
 
-class NaturalTripSearchView(AIAPIView):
+class NaturalTripSearchView(AIProviderAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
@@ -117,7 +123,7 @@ class RecommendationsView(AIAPIView):
         })
 
 
-class TicketAssistantView(AIAPIView):
+class TicketAssistantView(AIProviderAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, booking_id):
@@ -214,7 +220,7 @@ class ReviewAnalysisView(AIAPIView):
         return Response({"summary": summary, "reviews": results})
 
 
-class ManagementCopilotView(AIAPIView):
+class ManagementCopilotView(AIProviderAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
@@ -225,7 +231,7 @@ class ManagementCopilotView(AIAPIView):
         return Response(copilot_answer(question[:600], request.user, company=company))
 
 
-class VoiceCommandView(AIAPIView):
+class VoiceCommandView(AIProviderAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):

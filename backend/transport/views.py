@@ -24,7 +24,7 @@ from .models import ScheduledTrip
 from .serializers import ScheduledTripSerializer
 from .serializers import RegisterSerializer, UserSerializer, CompanySerializer, TripSerializer, BookingSerializer, PaymentSerializer, ReviewSerializer, NotificationSerializer, ScheduledTripSerializer, CompanyStatsSerializer, TripStopSerializer, BoardingZoneSerializer, CitySerializer, TripSearchSerializer, BookingCreateSerializer, DashboardStatsSerializer
 from django.http import Http404
-from .models import Company, City, Trip, Booking, Payment, Review, Notification, ScheduledTrip, UserProfile, TripStop, BoardingZone
+from .models import Company, City, Trip, Booking, Payment, Review, Notification, Reservation, ScheduledTrip, UserProfile, TripStop, BoardingZone
 from .models.audit import log_action
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import check_password, make_password
@@ -469,7 +469,20 @@ class ScheduledTripViewSet(viewsets.ModelViewSet):
         company_id = self.request.query_params.get('company_id')
         if company_id:
             queryset = queryset.filter(trip__company_id=company_id)
-        return queryset.select_related('trip__company', 'trip__departure_city', 'trip__arrival_city')
+
+        requested_date = (
+            self.request.query_params.get('departure_date')
+            or self.request.query_params.get('travel_date')
+            or self.request.query_params.get('date')
+        )
+        if requested_date:
+            queryset = queryset.filter(date=requested_date)
+
+        return queryset.select_related(
+            'trip__company',
+            'trip__departure_city',
+            'trip__arrival_city',
+        ).order_by('date', 'trip__departure_time', 'pk')
 
     def perform_create(self, serializer):
         # Logic to ensure only company admins or staff can create scheduled trips
@@ -771,14 +784,24 @@ class CompanyStatsView(APIView):
             trip__company=company,
             status='confirmed',
         )
+        paid_reservations_qs = Reservation.objects.filter(
+            voyage__trip__company=company,
+            statut_paiement=Reservation.STATUT_PAYE,
+        )
         guichet_sales_qs = VenteGuichet.objects.filter(
             voyage__trip__company=company,
             statut__in=valid_sale_statuses,
         )
 
-        mobile_bookings = confirmed_bookings_qs.count()
+        mobile_bookings = confirmed_bookings_qs.count() + paid_reservations_qs.count()
         guichet_sales = guichet_sales_qs.count()
-        mobile_revenue = confirmed_bookings_qs.aggregate(total=Sum('total_price'))['total'] or Decimal('0')
+        mobile_revenue = (
+            confirmed_bookings_qs.aggregate(total=Sum('total_price'))['total']
+            or Decimal('0')
+        ) + Decimal(
+            paid_reservations_qs.aggregate(total=Sum('montant_billet'))['total']
+            or 0
+        )
         guichet_revenue = guichet_sales_qs.aggregate(total=Sum('montant_billet'))['total'] or 0
         total_bookings = mobile_bookings + guichet_sales
         total_revenue = mobile_revenue + Decimal(guichet_revenue)
@@ -786,6 +809,10 @@ class CompanyStatsView(APIView):
         mobile_clients = Booking.objects.filter(
             trip__company=company,
         ).exclude(passenger_email='').values('passenger_email').distinct().count()
+        mobile_clients += Reservation.objects.filter(
+            voyage__trip__company=company,
+            statut_paiement=Reservation.STATUT_PAYE,
+        ).exclude(client_telephone='').values('client_telephone').distinct().count()
         guichet_clients = VenteGuichet.objects.filter(
             voyage__trip__company=company,
             statut__in=valid_sale_statuses,
@@ -802,6 +829,9 @@ class CompanyStatsView(APIView):
         occupied_upcoming = Booking.objects.filter(
             scheduled_trip__in=upcoming_trips,
             status='confirmed',
+        ).count() + Reservation.objects.filter(
+            voyage__in=upcoming_trips,
+            statut_paiement=Reservation.STATUT_PAYE,
         ).count() + VenteGuichet.objects.filter(
             voyage__in=upcoming_trips,
             statut__in=valid_sale_statuses,
@@ -833,12 +863,19 @@ class CompanyStatsView(APIView):
         for offset in range(6, -1, -1):
             day = today - timedelta(days=offset)
             day_bookings = confirmed_bookings_qs.filter(booking_date__date=day)
+            day_reservations = paid_reservations_qs.filter(created_at__date=day)
             day_guichet_sales = guichet_sales_qs.filter(created_at__date=day)
-            day_mobile_revenue = day_bookings.aggregate(total=Sum('total_price'))['total'] or Decimal('0')
+            day_mobile_revenue = (
+                day_bookings.aggregate(total=Sum('total_price'))['total']
+                or Decimal('0')
+            ) + Decimal(
+                day_reservations.aggregate(total=Sum('montant_billet'))['total']
+                or 0
+            )
             day_guichet_revenue = day_guichet_sales.aggregate(total=Sum('montant_billet'))['total'] or 0
             sales_analytics.append({
                 'date': day.isoformat(),
-                'tickets': day_bookings.count() + day_guichet_sales.count(),
+                'tickets': day_bookings.count() + day_reservations.count() + day_guichet_sales.count(),
                 'revenue': day_mobile_revenue + Decimal(day_guichet_revenue),
             })
 

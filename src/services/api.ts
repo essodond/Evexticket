@@ -230,18 +230,49 @@ export interface PlatformAdminVoyage {
 export interface PlatformAdminTicket {
   id: string;
   source: 'booking' | 'mobile' | 'guichet';
+  channel: 'application' | 'guichet';
   reference: string;
   client_name: string;
+  client_email?: string | null;
   client_phone: string;
   company_id: number;
   company_name: string;
   route: string;
   travel_date?: string | null;
+  departure_time?: string | null;
+  voyage_id?: number | null;
   seat: string | number;
   amount: number;
   payment_method: string;
   status: string;
+  payment_status?: string | null;
+  control_status?: string;
+  sale_location?: string | null;
+  can_cancel: boolean;
+  can_refund: boolean;
+  can_edit: boolean;
   created_at: string;
+  numero_siege?: string | number;
+  client_nom?: string;
+  client_telephone?: string;
+  statut_controle?: string;
+}
+
+export type UnifiedTicket = PlatformAdminTicket;
+
+export interface TicketOperation {
+  id: number;
+  action: string;
+  operation?: 'sale' | 'cancel' | 'refund' | 'update' | null;
+  reason?: string | null;
+  source?: string | null;
+  object_id: string;
+  object: string;
+  user: string;
+  old_values?: Record<string, unknown> | null;
+  new_values?: Record<string, unknown> | null;
+  ip_address?: string | null;
+  timestamp: string;
 }
 
 export interface PlatformAdminDashboard {
@@ -626,10 +657,25 @@ class ApiService {
           }
         }
 
-        const message = (errorData && (errorData.detail || errorData.error || JSON.stringify(errorData))) || `HTTP error! status: ${response.status}`;
+        let message = (errorData && (errorData.detail || errorData.error || JSON.stringify(errorData))) || `HTTP error! status: ${response.status}`;
+        let retryAfterSeconds: number | undefined;
+        if (response.status === 429) {
+          const headerWait = Number(response.headers.get('Retry-After'));
+          const detailWait = Number(String(message).match(/(\d+)\s*seconds?/i)?.[1]);
+          retryAfterSeconds = Math.max(
+            1,
+            Number.isFinite(headerWait) && headerWait > 0
+              ? Math.ceil(headerWait)
+              : Number.isFinite(detailWait) && detailWait > 0
+                ? Math.ceil(detailWait)
+                : 60,
+          );
+          message = `Trop de demandes ont été envoyées. Réessayez dans ${retryAfterSeconds} seconde${retryAfterSeconds > 1 ? 's' : ''}.`;
+        }
         const err: any = new Error(message);
         err.status = response.status;
         err.data = errorData;
+        err.retryAfterSeconds = retryAfterSeconds;
         throw err;
       }
 
@@ -1064,14 +1110,10 @@ class ApiService {
     return this.request<PlatformAdminVoyage>(`/platform-admin/voyages/${id}/status/`, { method: 'PATCH', body: JSON.stringify({ is_active: isActive, reason }) });
   }
 
-  async getPlatformAdminTickets(filters?: { q?: string; source?: string; status?: string; company?: string }): Promise<PlatformAdminTicket[]> {
+  async getPlatformAdminTickets(filters?: { q?: string; source?: string; status?: string; company?: string; date?: string }): Promise<PlatformAdminTicket[]> {
     const params = new URLSearchParams();
     Object.entries(filters || {}).forEach(([key, value]) => { if (value) params.set(key, value); });
     return this.request<PlatformAdminTicket[]>(`/platform-admin/tickets/${params.size ? `?${params}` : ''}`);
-  }
-
-  async actionPlatformAdminTicket(source: string, id: string, action: 'cancel' | 'refund', reason: string): Promise<{ detail: string }> {
-    return this.request<{ detail: string }>(`/platform-admin/tickets/${encodeURIComponent(source)}/${encodeURIComponent(id)}/action/`, { method: 'POST', body: JSON.stringify({ action, reason }) });
   }
 
   async getPlatformAdminFinance(): Promise<PlatformAdminFinance> {
@@ -1158,8 +1200,33 @@ class ApiService {
     return this.request<GuichetControlsHistory>(`/guichet/controle/historique/${query ? `?${query}` : ''}`);
   }
 
-  async passagersVoyage(voyageId: string): Promise<any[]> {
-    return this.request<any[]>(`/guichet/voyages/${voyageId}/passagers/`);
+  async getCompanyTickets(filters?: { q?: string; source?: string; status?: string; date?: string; voyage?: string }): Promise<UnifiedTicket[]> {
+    const params = new URLSearchParams();
+    Object.entries(filters || {}).forEach(([key, value]) => { if (value) params.set(key, value); });
+    return this.request<UnifiedTicket[]>(`/guichet/billets/${params.size ? `?${params}` : ''}`);
+  }
+
+  async actionCompanyTicket(
+    source: UnifiedTicket['source'],
+    id: string,
+    action: 'cancel' | 'refund' | 'update',
+    reason = '',
+    changes?: { client_name: string; client_phone: string; client_email?: string },
+  ): Promise<{ detail: string; ticket: UnifiedTicket }> {
+    return this.request<{ detail: string; ticket: UnifiedTicket }>(
+      `/guichet/billets/${encodeURIComponent(source)}/${encodeURIComponent(id)}/action/`,
+      { method: 'POST', body: JSON.stringify({ action, reason, changes }) },
+    );
+  }
+
+  async getCompanyTicketOperations(filters?: { operation?: string }): Promise<TicketOperation[]> {
+    const params = new URLSearchParams();
+    if (filters?.operation) params.set('operation', filters.operation);
+    return this.request<TicketOperation[]>(`/guichet/billets/operations/${params.size ? `?${params}` : ''}`);
+  }
+
+  async passagersVoyage(voyageId: string): Promise<UnifiedTicket[]> {
+    return this.request<UnifiedTicket[]>(`/guichet/voyages/${voyageId}/passagers/`);
   }
 
   // Agents guichet (company admin)

@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   BarChart3,
   Bot,
   Bus,
+  CheckCircle2,
   Clock3,
   Loader2,
   MessageSquareText,
@@ -59,22 +60,29 @@ const ManagementCopilotPage: React.FC<Props> = ({ scope }) => {
   const [loading, setLoading] = useState(true);
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [lastAnalyzedQuestion, setLastAnalyzedQuestion] = useState<string | null>(null);
   const [delayInputs, setDelayInputs] = useState<Record<number, string>>({});
+  const loadedScopeRef = useRef('');
 
   const ask = useCallback(async (value = question) => {
     const clean = value.trim();
-    if (!clean) return;
+    if (!clean || cooldownSeconds > 0 || asking) return;
+    setQuestion(clean);
     setAsking(true);
     setError(null);
     try {
       setCopilot(await apiService.askManagementCopilot(clean));
-      setQuestion(clean);
+      setLastAnalyzedQuestion(clean);
     } catch (askError: any) {
+      if (askError?.status === 429) {
+        setCooldownSeconds(Number(askError.retryAfterSeconds || 60));
+      }
       setError(askError?.message || 'Le copilote ne répond pas pour le moment.');
     } finally {
       setAsking(false);
     }
-  }, [question]);
+  }, [asking, cooldownSeconds, question]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,10 +96,16 @@ const ManagementCopilotPage: React.FC<Props> = ({ scope }) => {
         scope === 'admin'
           ? apiService.getPlatformAdminTickets({ source: 'booking' })
           : apiService.getCompanyBookings(companyId),
-        apiService.askManagementCopilot('Résume la situation et les priorités du jour.'),
+        apiService.askManagementCopilot('Résume la situation et les priorités du jour.').catch((copilotError: any) => {
+          if (copilotError?.status === 429) {
+            setCooldownSeconds(Number(copilotError.retryAfterSeconds || 60));
+          }
+          setError(copilotError?.message || 'Le copilote ne répond pas pour le moment.');
+          return null;
+        }),
       ]);
       setReviews(reviewResult);
-      setCopilot(initialCopilot);
+      if (initialCopilot) setCopilot(initialCopilot);
 
       const tripRows = rawTrips
         .filter((trip: any) => !trip.is_past && (!trip.date || trip.date >= new Date().toISOString().slice(0, 10)))
@@ -133,8 +147,19 @@ const ManagementCopilotPage: React.FC<Props> = ({ scope }) => {
   }, [companyId, scope]);
 
   useEffect(() => {
+    const scopeKey = `${scope}:${companyId || 'platform'}`;
+    if (loadedScopeRef.current === scopeKey) return;
+    loadedScopeRef.current = scopeKey;
     void load();
-  }, [load]);
+  }, [companyId, load, scope]);
+
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return;
+    const timer = window.setInterval(() => {
+      setCooldownSeconds((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldownSeconds]);
 
   const reportDelay = async (tripId: number) => {
     const value = Number(delayInputs[tripId] || 0);
@@ -175,7 +200,7 @@ const ManagementCopilotPage: React.FC<Props> = ({ scope }) => {
         </div>
       </section>
 
-      {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</div>}
+      {error && <div className={`rounded-2xl border px-4 py-3 text-sm font-medium ${cooldownSeconds > 0 ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-red-200 bg-red-50 text-red-700'}`}>{error}</div>}
 
       {loading ? (
         <div className="flex min-h-64 items-center justify-center rounded-3xl border border-slate-200 bg-white">
@@ -198,17 +223,23 @@ const ManagementCopilotPage: React.FC<Props> = ({ scope }) => {
               </div>
               <form onSubmit={(event) => { event.preventDefault(); void ask(); }} className="mt-5">
                 <textarea value={question} onChange={(event) => setQuestion(event.target.value)} rows={3} maxLength={600} className="w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Ex. Quelles sont mes priorités aujourd’hui ?" />
-                <button type="submit" disabled={asking || !question.trim()} className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">
+                <button type="submit" disabled={asking || cooldownSeconds > 0 || !question.trim()} className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
                   {asking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  Analyser
+                  {asking ? 'Analyse…' : cooldownSeconds > 0 ? `Réessayer dans ${cooldownSeconds}s` : 'Analyser'}
                 </button>
               </form>
               {copilot && (
                 <div className="mt-5 rounded-2xl bg-slate-50 p-5">
+                  {lastAnalyzedQuestion && (
+                    <div className="mb-4 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>Analyse terminée : {lastAnalyzedQuestion}</span>
+                    </div>
+                  )}
                   <p className="whitespace-pre-line text-sm leading-6 text-slate-700">{copilot.answer}</p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     {copilot.suggestions.map((suggestion) => (
-                      <button key={suggestion} type="button" onClick={() => void ask(suggestion)} className="rounded-full border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700">{suggestion}</button>
+                      <button key={suggestion} type="button" disabled={asking || cooldownSeconds > 0} onClick={() => void ask(suggestion)} className="rounded-full border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 disabled:cursor-not-allowed disabled:opacity-40">{suggestion}</button>
                     ))}
                   </div>
                   <p className="mt-4 text-[11px] text-slate-400">{copilot.provider === 'openai' ? 'Analyse IA sécurisée' : 'Analyse EVEX hors ligne'}</p>

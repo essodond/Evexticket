@@ -14,7 +14,7 @@ import {
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import apiService from '../../services/api';
-import type { Agency, AgencyCounter, Booking, City, Company, CompanyStats, GuichetAgent, ScheduledTrip, Trip } from '../../services/api';
+import type { Agency, AgencyCounter, Booking, City, Company, CompanyStats, GuichetAgent, ScheduledTrip, TicketOperation, Trip, UnifiedTicket } from '../../services/api';
 import AddTripModal from '../AddTripModal';
 import AgencyPerformance from '../AgencyPerformance';
 import CreateGuichetModal from '../CreateGuichetModal';
@@ -569,31 +569,109 @@ export const CompanyVoyageDetailPage: React.FC = () => {
 
 export const CompanyTicketsPage: React.FC = () => {
   const { companyId } = useCompanyPortal();
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [tickets, setTickets] = useState<UnifiedTicket[]>([]);
   const [stats, setStats] = useState<CompanyStats>(emptyStats);
-  const [source, setSource] = useState<'all' | 'mobile' | 'guichet'>('all');
+  const [operations, setOperations] = useState<TicketOperation[]>([]);
+  const [filters, setFilters] = useState({ q: '', source: '', status: '', date: '' });
+  const [groupBy, setGroupBy] = useState<'date' | 'none'>('date');
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const loadTickets = useCallback(async () => {
+    setLoading(true);
+    try {
+      setTickets(await apiService.getCompanyTickets(filters));
+      setError(null);
+    } catch (loadError: any) {
+      setError(loadError?.message || 'Impossible de charger les billets.');
+    } finally {
+      setLoading(false);
+    }
+  }, [filters]);
+
+  const loadOperations = useCallback(async () => {
+    try {
+      setOperations(await apiService.getCompanyTicketOperations());
+    } catch {
+      // La liste des billets reste utilisable si l’historique est indisponible.
+    }
+  }, []);
 
   useEffect(() => {
     if (!companyId) return;
-    Promise.all([apiService.getCompanyBookings(companyId), apiService.getCompanyStats(companyId)])
-      .then(([bookingData, statsData]) => { setBookings(bookingData); setStats(statsData); })
-      .catch((loadError: any) => setError(loadError?.message || 'Impossible de charger les billets.'));
-  }, [companyId]);
+    apiService.getCompanyStats(companyId).then(setStats).catch(() => undefined);
+    const id = window.setTimeout(() => void loadTickets(), 150);
+    void loadOperations();
+    return () => window.clearTimeout(id);
+  }, [companyId, loadOperations, loadTickets]);
 
-  const tickets = useMemo(() => {
-    const mobile = bookings.map((booking) => ({ ...booking, source: 'mobile' as const }));
-    const guichet = (stats.recent_guichet_sales || []).map((sale: any) => ({ ...sale, source: 'guichet' as const }));
-    const all = [...mobile, ...guichet];
-    return source === 'all' ? all : all.filter((ticket) => ticket.source === source);
-  }, [bookings, source, stats.recent_guichet_sales]);
+  const groups = useMemo(() => {
+    const grouped = new Map<string, UnifiedTicket[]>();
+    tickets.forEach((ticket) => {
+      const key = groupBy === 'date' ? ticket.travel_date || 'sans-date' : 'all';
+      grouped.set(key, [...(grouped.get(key) || []), ticket]);
+    });
+    return Array.from(grouped.entries());
+  }, [groupBy, tickets]);
+
+  const act = async (ticket: UnifiedTicket, action: 'cancel' | 'refund' | 'update') => {
+    let reason = '';
+    let changes: { client_name: string; client_phone: string; client_email?: string } | undefined;
+    if (action === 'update') {
+      const clientName = window.prompt('Nom complet du passager :', ticket.client_name)?.trim();
+      if (!clientName) return;
+      const clientPhone = window.prompt('Téléphone du passager :', ticket.client_phone)?.trim();
+      if (!clientPhone) return;
+      changes = { client_name: clientName, client_phone: clientPhone };
+      if (ticket.client_email) changes.client_email = ticket.client_email;
+    } else {
+      reason = window.prompt(
+        `Justification obligatoire pour ${action === 'refund' ? 'le remboursement' : 'l’annulation'} de ${ticket.reference} :`,
+        '',
+      )?.trim() || '';
+      if (!reason) return;
+    }
+    try {
+      const result = await apiService.actionCompanyTicket(ticket.source, ticket.id, action, reason, changes);
+      await Promise.all([loadTickets(), loadOperations()]);
+      window.alert(result.detail);
+    } catch (actionError: any) {
+      setError(actionError?.message || 'Opération impossible sur ce billet.');
+    }
+  };
 
   return (
-    <CompanyPageShell title="Billets" description="Retrouvez séparément les réservations mobiles et les ventes réalisées au guichet.">
+    <CompanyPageShell title="Billets" description="Consultez tous les billets de la compagnie, par jour de voyage, puis modifiez, annulez ou enregistrez un remboursement avec traçabilité.">
       <PageError message={error} />
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><KPICard title="Total billets" value={stats.total_bookings} note="Tous les canaux" /><KPICard title="Application" value={stats.mobile_bookings} note="Réservations mobiles" /><KPICard title="Guichet" value={stats.guichet_sales} note="Ventes physiques" /><KPICard title="Revenu" value={formatCurrency(stats.total_revenue)} note="Part compagnie" /></section>
-      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex flex-wrap gap-2">{(['all', 'mobile', 'guichet'] as const).map((value) => <button key={value} type="button" onClick={() => setSource(value)} className={`rounded-xl px-4 py-2 text-sm font-semibold ${source === value ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>{value === 'all' ? 'Tous' : value === 'mobile' ? 'Application' : 'Guichet'}</button>)}</div></section>
-      <section className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm"><table className="min-w-full divide-y divide-slate-200 text-sm"><thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Client</th><th className="px-5 py-3">Trajet</th><th className="px-5 py-3">Siège</th><th className="px-5 py-3">Canal</th><th className="px-5 py-3">Montant</th><th className="px-5 py-3">Statut</th></tr></thead><tbody className="divide-y divide-slate-100">{tickets.length === 0 && <tr><td colSpan={6} className="px-5 py-12 text-center text-slate-500">Aucun billet pour ce filtre.</td></tr>}{tickets.map((ticket: any, index) => <tr key={`${ticket.source}-${ticket.id || ticket.reference || index}`}><td className="px-5 py-4 font-semibold text-slate-900">{ticket.passenger_name || ticket.name || ticket.client_nom || 'Client'}</td><td className="px-5 py-4 text-slate-600">{ticket.trip_details ? `${ticket.trip_details.departure_city_name} → ${ticket.trip_details.arrival_city_name}` : ticket.route || '—'}</td><td className="px-5 py-4 text-slate-700">{ticket.seat_number || ticket.numero_siege || '—'}</td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${ticket.source === 'guichet' ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>{ticket.source === 'guichet' ? 'Guichet' : 'Application'}</span></td><td className="px-5 py-4 text-slate-700">{formatCurrency(ticket.total_price || ticket.amount || ticket.montant_billet)}</td><td className="px-5 py-4 capitalize text-slate-600">{ticket.status || ticket.statut || 'valide'}</td></tr>)}</tbody></table></section>
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><KPICard title="Billets valides" value={stats.total_bookings} note="Tous les canaux" /><KPICard title="Application" value={stats.mobile_bookings} note="Réservations mobiles" /><KPICard title="Guichet" value={stats.guichet_sales} note="Ventes physiques" /><KPICard title="Revenu" value={formatCurrency(stats.total_revenue)} note="Part compagnie" /></section>
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <input value={filters.q} onChange={(event) => setFilters({ ...filters, q: event.target.value })} placeholder="Référence, passager, téléphone" className="h-11 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-blue-500" />
+          <select value={filters.source} onChange={(event) => setFilters({ ...filters, source: event.target.value })} className="h-11 rounded-xl border border-slate-200 px-3 text-sm outline-none"><option value="">Tous les canaux</option><option value="booking">Application (réservation)</option><option value="mobile">Application (paiement mobile)</option><option value="guichet">Guichet</option></select>
+          <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })} className="h-11 rounded-xl border border-slate-200 px-3 text-sm outline-none"><option value="">Tous les statuts</option><option value="confirmed">Confirmé</option><option value="paye">Payé</option><option value="valide">Valide</option><option value="utilise">Utilisé</option><option value="cancelled">Annulé (application)</option><option value="annule">Annulé (guichet)</option><option value="rembourse">Remboursé</option></select>
+          <input type="date" value={filters.date} onChange={(event) => setFilters({ ...filters, date: event.target.value })} className="h-11 rounded-xl border border-slate-200 px-3 text-sm outline-none" aria-label="Date du voyage" />
+          <select value={groupBy} onChange={(event) => setGroupBy(event.target.value as typeof groupBy)} className="h-11 rounded-xl border border-slate-200 px-3 text-sm outline-none"><option value="date">Regrouper par jour</option><option value="none">Tous les billets</option></select>
+        </div>
+      </section>
+      {loading ? <div className="rounded-3xl border border-slate-200 bg-white px-6 py-14 text-center text-slate-500">Chargement des billets…</div> : tickets.length === 0 ? <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center text-slate-500">Aucun billet pour ces filtres.</div> : (
+        <div className="space-y-5">
+          {groups.map(([date, items]) => (
+            <section key={date} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+              <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4"><div><h2 className="font-bold text-slate-900">{groupBy === 'date' ? formatDate(date === 'sans-date' ? undefined : date) : 'Tous les billets'}</h2><p className="text-xs text-slate-500">{items.length} passager(s)</p></div><p className="text-sm font-semibold text-slate-700">{formatCurrency(items.reduce((sum, ticket) => sum + Number(ticket.amount), 0))}</p></header>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Référence</th><th className="px-5 py-3">Passager</th><th className="px-5 py-3">Voyage</th><th className="px-5 py-3">Canal</th><th className="px-5 py-3">Siège</th><th className="px-5 py-3">Montant</th><th className="px-5 py-3">Statut</th><th className="px-5 py-3 text-right">Actions</th></tr></thead>
+                  <tbody className="divide-y divide-slate-100">{items.map((ticket) => <tr key={`${ticket.source}-${ticket.id}`}><td className="px-5 py-4"><p className="font-semibold text-slate-900">{ticket.reference}</p><p className="text-xs text-slate-400">{formatDate(ticket.created_at)}</p></td><td className="px-5 py-4"><p className="font-semibold text-slate-900">{ticket.client_name}</p><p className="text-xs text-slate-500">{ticket.client_phone}</p></td><td className="px-5 py-4"><p className="font-medium text-slate-700">{ticket.route}</p><p className="text-xs text-slate-500">{formatDate(ticket.travel_date || undefined)} · {ticket.departure_time || '—'}</p></td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${ticket.channel === 'guichet' ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>{ticket.channel === 'guichet' ? 'Guichet' : 'Application'}</span></td><td className="px-5 py-4 font-bold text-blue-700">{ticket.seat}</td><td className="px-5 py-4 font-semibold text-slate-800">{formatCurrency(ticket.amount)}</td><td className="px-5 py-4 capitalize text-slate-600">{ticket.status.replace('_', ' ')}</td><td className="px-5 py-4"><div className="flex justify-end gap-2"><button type="button" disabled={!ticket.can_edit} onClick={() => void act(ticket, 'update')} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs font-semibold text-slate-600 disabled:opacity-30">Modifier</button><button type="button" disabled={!ticket.can_cancel} onClick={() => void act(ticket, 'cancel')} className="rounded-lg bg-red-50 px-2.5 py-2 text-xs font-semibold text-red-700 disabled:opacity-30">Annuler</button><button type="button" disabled={!ticket.can_refund} onClick={() => void act(ticket, 'refund')} className="rounded-lg bg-amber-50 px-2.5 py-2 text-xs font-semibold text-amber-700 disabled:opacity-30">Rembourser</button></div></td></tr>)}</tbody>
+                </table>
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
+      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <header className="border-b border-slate-100 px-5 py-4"><h2 className="font-bold text-slate-900">Historique des opérations</h2><p className="text-xs text-slate-500">Utilisateur, justification, date et état avant/après.</p></header>
+        <div className="divide-y divide-slate-100">{operations.slice(0, 12).map((operation) => <article key={operation.id} className="grid gap-2 px-5 py-4 text-sm md:grid-cols-[1fr_1fr_auto]"><div><p className="font-semibold text-slate-900">{operation.operation || operation.action} · {operation.object}</p><p className="text-xs text-slate-500">{operation.reason || 'Sans justification complémentaire'}</p></div><div><p className="text-slate-700">{operation.user}</p><p className="text-xs text-slate-400">{operation.ip_address || 'IP non disponible'}</p></div><p className="whitespace-nowrap text-xs text-slate-500">{new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(operation.timestamp))}</p></article>)}{operations.length === 0 && <p className="px-5 py-10 text-center text-sm text-slate-500">Aucune opération enregistrée.</p>}</div>
+      </section>
     </CompanyPageShell>
   );
 };

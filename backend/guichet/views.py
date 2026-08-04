@@ -10,9 +10,20 @@ from django.utils import timezone
 from transport.models import ScheduledTrip, Siege, Reservation, Booking, PlatformConfiguration
 from .models import Agence, AgentGuichet, Guichet, VenteGuichet, ControlePassager
 from .serializers import AgenceSerializer, AgentGuichetSerializer, GuichetSerializer, VenteGuichetSerializer, ControlePassagerSerializer, VoyageDisponibleSerializer, PassagerSerializer
-from .permissions import IsAgentGuichet, IsAdminCompagnie, get_admin_company
+from .permissions import (
+    IsAdminCompagnie,
+    IsAdminCompagnieOrAgentGuichet,
+    IsAgentGuichet,
+    get_admin_company,
+)
 from .utils_qr import generer_qr_code_base64
 from transport.models.audit import log_action
+from transport.ticketing import (
+    filter_ticket_collection,
+    perform_ticket_action,
+    ticket_audit_queryset,
+    ticket_collection,
+)
 import uuid
 import json
 
@@ -20,6 +31,12 @@ import json
 def get_client_ip(request):
     forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
     return forwarded.split(',')[0].strip() if forwarded else request.META.get('REMOTE_ADDR')
+
+
+def request_company(request):
+    if hasattr(request.user, 'agentguichet'):
+        return request.user.agentguichet.compagnie
+    return get_admin_company(request.user)
 
 
 def agence_snapshot(agence):
@@ -832,6 +849,21 @@ class CreerVenteView(APIView):
                     reference_vente=ref,
                     qr_code_data=json.dumps(qr_payload),
                 )
+                log_action(
+                    user=request.user,
+                    action='CREATE',
+                    instance=vente,
+                    new_values={
+                        'operation': 'sale',
+                        'source': 'guichet',
+                        'client_name': vente.client_nom,
+                        'client_phone': vente.client_telephone,
+                        'voyage_id': voyage.id,
+                        'seat': siege.numero,
+                        'amount': vente.montant_total,
+                    },
+                    ip_address=get_client_ip(request),
+                )
                 voyage.available_seats = max(0, voyage.available_seats - 1)
                 voyage.save(update_fields=['available_seats'])
                 return Response({
@@ -886,6 +918,20 @@ class AnnulerVenteView(APIView):
                 vente.voyage.available_seats + 1,
             )
             vente.voyage.save(update_fields=['available_seats'])
+            log_action(
+                user=request.user,
+                action='UPDATE',
+                instance=vente,
+                old_values={'status': 'valide'},
+                new_values={
+                    'operation': 'cancel',
+                    'reason': str(request.data.get('reason') or 'Annulation depuis l’historique du guichet'),
+                    'actor_role': 'AGENT_GUICHET',
+                    'source': 'guichet',
+                    'status': 'annule',
+                },
+                ip_address=get_client_ip(request),
+            )
         return Response({'status':'ok'})
 
 
@@ -1076,6 +1122,68 @@ class HistoriqueControlesView(APIView):
         })
 
 
+class BilletsCompagnieView(APIView):
+    permission_classes = [IsAdminCompagnieOrAgentGuichet]
+
+    def get(self, request):
+        company = request_company(request)
+        items = filter_ticket_collection(
+            ticket_collection(company=company),
+            request.query_params,
+        )
+        return Response(items[:500])
+
+
+class ActionBilletView(APIView):
+    permission_classes = [IsAdminCompagnieOrAgentGuichet]
+
+    def post(self, request, source=None, pk=None):
+        company = request_company(request)
+        ticket = perform_ticket_action(
+            user=request.user,
+            company=company,
+            source=source,
+            pk=pk,
+            action=str(request.data.get('action') or '').strip(),
+            reason=request.data.get('reason'),
+            changes=request.data.get('changes'),
+            ip_address=get_client_ip(request),
+        )
+        detail = {
+            'cancel': 'Billet annulé et siège libéré.',
+            'refund': (
+                'Remboursement enregistré et siège libéré. '
+                'La restitution monétaire doit être confirmée par le moyen de paiement concerné.'
+            ),
+            'update': 'Informations du passager mises à jour.',
+        }.get(request.data.get('action'), 'Opération enregistrée.')
+        return Response({'detail': detail, 'ticket': ticket})
+
+
+class OperationsBilletsView(APIView):
+    permission_classes = [IsAdminCompagnieOrAgentGuichet]
+
+    def get(self, request):
+        queryset = ticket_audit_queryset(request_company(request))
+        operation = str(request.query_params.get('operation') or '').strip()
+        if operation:
+            queryset = queryset.filter(new_values__operation=operation)
+        return Response([{
+            'id': item.id,
+            'action': item.action,
+            'operation': (item.new_values or {}).get('operation'),
+            'reason': (item.new_values or {}).get('reason'),
+            'source': (item.new_values or {}).get('source'),
+            'object_id': item.object_id,
+            'object': item.object_repr,
+            'user': item.user.email if item.user else 'Système',
+            'old_values': item.old_values,
+            'new_values': item.new_values,
+            'ip_address': item.ip_address,
+            'timestamp': item.timestamp,
+        } for item in queryset[:200]])
+
+
 class PassagersVoyageView(APIView):
     permission_classes = [IsAgentGuichet | IsAdminCompagnie]
 
@@ -1088,20 +1196,28 @@ class PassagersVoyageView(APIView):
             voyage = ScheduledTrip.objects.get(id=vid, trip__company=company)
         except ScheduledTrip.DoesNotExist:
             return Response({'detail':'Voyage introuvable'}, status=404)
-        # ventes guichet
-        ventes = VenteGuichet.objects.filter(voyage=voyage).exclude(statut='annule')
-        bookings = Booking.objects.filter(scheduled_trip=voyage, status__in=['confirmed','pending'])
         passengers = []
-        for v in ventes:
-            passengers.append({'numero_siege': v.siege.numero, 'client_nom': v.client_nom, 'client_telephone': v.client_telephone, 'source': 'guichet', 'reference': v.reference_vente, 'statut_controle': 'en_attente'})
-        for b in bookings:
-            passengers.append({'numero_siege': b.seat_number, 'client_nom': b.passenger_name, 'client_telephone': b.passenger_phone, 'source': 'mobile', 'reference': getattr(b, 'reference_evex', ''), 'statut_controle': 'en_attente'})
-        # sort by seat number (numeric if possible)
-        def seat_key(x):
+        for ticket in ticket_collection(company=company, voyage=voyage, limit=None):
+            if ticket['status'] in {
+                'annule',
+                'cancelled',
+                'expire',
+                'echoue',
+                'rembourse',
+            }:
+                continue
+            passengers.append({
+                **ticket,
+                'numero_siege': ticket['seat'],
+                'client_nom': ticket['client_name'],
+                'client_telephone': ticket['client_phone'],
+                'statut_controle': ticket['control_status'],
+            })
+
+        def seat_key(item):
             try:
-                return int(x['numero_siege'])
-            except Exception:
-                return x['numero_siege']
-        passengers_sorted = sorted(passengers, key=seat_key)
-        serializer = PassagerSerializer(passengers_sorted, many=True)
-        return Response(serializer.data)
+                return (0, int(item['numero_siege']))
+            except (TypeError, ValueError):
+                return (1, str(item['numero_siege']))
+
+        return Response(sorted(passengers, key=seat_key))

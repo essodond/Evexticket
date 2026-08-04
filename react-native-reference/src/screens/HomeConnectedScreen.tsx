@@ -33,6 +33,13 @@ import { detectCurrentDepartureCity } from '../services/location';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MainTabs'>;
 
+const formatLocalDate = (value: Date) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function HomeConnectedScreen({ navigation }: Props) {
   const { user } = useAuth();
   const [searchFrom, setSearchFrom] = useState('');
@@ -130,7 +137,7 @@ export default function HomeConnectedScreen({ navigation }: Props) {
     try {
       setLoading(true);
       setError(null);
-      const formattedDate = displayDate.toISOString().split('T')[0];
+      const formattedDate = formatLocalDate(displayDate);
       const fetchedTrips = await getTrips({ departure_date: formattedDate });
 
       // Extraire les compagnies uniques des trajets récupérés
@@ -171,6 +178,7 @@ export default function HomeConnectedScreen({ navigation }: Props) {
       if (isDisplayDateToday && currentlyDisplayableTrips.length === 0) {
         const nextDay = new Date(displayDate);
         nextDay.setDate(displayDate.getDate() + 1);
+        setDate(nextDay);
         setDisplayDate(nextDay);
       } else {
         setTrips(currentlyDisplayableTrips);

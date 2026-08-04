@@ -2,6 +2,7 @@ from datetime import time, timedelta
 from decimal import Decimal
 
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.test import override_settings
 from django.utils import timezone
 from rest_framework.authtoken.models import Token
@@ -163,12 +164,25 @@ class AIAssistantApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("2", response.data["answer"])
 
-    @override_settings(EVEX_AI_RATE_LIMIT="1000/min")
-    def test_ai_rate_limit_is_configurable(self):
+    @override_settings(EVEX_AI_RATE_LIMIT="2/min")
+    def test_local_ai_analytics_do_not_consume_provider_rate_limit(self):
         self.authenticate(self.company_admin)
         for _ in range(25):
             response = self.client.get(f"/api/ai/trips/{self.scheduled_trip.id}/insights/")
             self.assertEqual(response.status_code, 200, response.data)
+
+    @override_settings(EVEX_AI_RATE_LIMIT="2/min")
+    def test_provider_ai_rate_limit_is_configurable(self):
+        cache.clear()
+        self.authenticate(self.company_admin)
+        first = self.client.post("/api/ai/copilot/", {"question": "Résumé 1"}, format="json")
+        second = self.client.post("/api/ai/copilot/", {"question": "Résumé 2"}, format="json")
+        throttled = self.client.post("/api/ai/copilot/", {"question": "Résumé 3"}, format="json")
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(throttled.status_code, 429)
+        self.assertGreaterEqual(int(throttled.headers["Retry-After"]), 1)
+        cache.clear()
 
     def test_company_admin_can_forecast_own_trip(self):
         self.authenticate(self.company_admin)
@@ -192,6 +206,24 @@ class AIAssistantApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["provider"], "fallback")
         self.assertIn("metrics", response.data)
+
+    def test_fallback_copilot_analyzes_the_selected_topic(self):
+        self.authenticate(self.company_admin)
+        summary = self.client.post(
+            "/api/ai/copilot/",
+            {"question": "Résume la situation"},
+            format="json",
+        )
+        occupancy = self.client.post(
+            "/api/ai/copilot/",
+            {"question": "Examiner les voyages au remplissage faible"},
+            format="json",
+        )
+        self.assertEqual(summary.status_code, 200)
+        self.assertEqual(occupancy.status_code, 200)
+        self.assertNotEqual(summary.data["answer"], occupancy.data["answer"])
+        self.assertIn("remplissage", occupancy.data["answer"].lower())
+        self.assertIn("Kara IA", occupancy.data["answer"])
 
     def test_super_admin_can_assess_booking_risk(self):
         self.authenticate(self.super_admin)

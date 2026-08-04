@@ -85,11 +85,15 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({ seats, onSeatPress, selec
 
       {/* First Row after driver (Seats 1, 2, 3, 4) */}
       <View style={styles.seatRow}>
-        {renderSeat(frontRowSeats[0] || emptySeat)} {/* Seat 1 */}
-        {renderSeat(frontRowSeats[1] || emptySeat)} {/* Seat 2 */}
+        {/* Seat 1 */}
+        {renderSeat(frontRowSeats[0] || emptySeat)}
+        {/* Seat 2 */}
+        {renderSeat(frontRowSeats[1] || emptySeat)}
         <View style={styles.aisleSpacer} />
-        {renderSeat(frontRowSeats[2] || emptySeat)} {/* Seat 3 */}
-        {renderSeat(frontRowSeats[3] || emptySeat)} {/* Seat 4 */}
+        {/* Seat 3 */}
+        {renderSeat(frontRowSeats[2] || emptySeat)}
+        {/* Seat 4 */}
+        {renderSeat(frontRowSeats[3] || emptySeat)}
       </View>
 
       {/* Main Body Seating first section (2-2 configuration) */}
@@ -105,9 +109,12 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({ seats, onSeatPress, selec
 
       {/* Seats 25-26 and the Middle Door */}
       <View style={styles.seatRow}>
-        {renderSeat(middleDoorSeatsRow[0] || emptySeat)} {/* Seat 25 */}
-        {renderSeat(middleDoorSeatsRow[1] || emptySeat)} {/* Seat 26 */}
-        <View style={styles.aisleSpacer} /> {/* Aisle spacer */}
+        {/* Seat 25 */}
+        {renderSeat(middleDoorSeatsRow[0] || emptySeat)}
+        {/* Seat 26 */}
+        {renderSeat(middleDoorSeatsRow[1] || emptySeat)}
+        {/* Aisle spacer */}
+        <View style={styles.aisleSpacer} />
         <View style={styles.middleDoorAisle}><Text style={styles.doorText}>Middle Door</Text></View>
       </View>
 
@@ -123,7 +130,8 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({ seats, onSeatPress, selec
       ))}
 
       {/* Rear Seats (Seats 47, 48, 49, 50) - single row without aisle */}
-      <View style={styles.rearSectionFullWidth}> {/* New style for full width rear section */}
+      {/* New style for full width rear section */}
+      <View style={styles.rearSectionFullWidth}>
         {renderSeat(rearSeats[0] || emptySeat)}
         {renderSeat(rearSeats[1] || emptySeat)}
         {renderSeat(rearSeats[2] || emptySeat)}

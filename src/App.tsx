@@ -40,8 +40,8 @@ import {
   GuichetHomePage,
   GuichetSalePage,
   GuichetScannerPage,
-  GuichetTripsPage,
 } from './components/guichet/GuichetPages';
+import GuichetPassengersPage from './components/guichet/GuichetPassengersPage';
 import GuichetVoiceAssistantPage from './components/guichet/GuichetVoiceAssistantPage';
 import ManagementCopilotPage from './components/ai/ManagementCopilotPage';
 import { getAuthenticatedHomePath, getPortalFromHostname } from './utils/portal';
@@ -319,7 +319,7 @@ function App() {
             <Route index element={<Navigate replace to="tableau-de-bord" />} />
             <Route path="tableau-de-bord" element={<GuichetHomePage />} />
             <Route path="vente" element={<GuichetSalePage />} />
-            <Route path="voyages" element={<GuichetTripsPage />} />
+            <Route path="voyages" element={<GuichetPassengersPage />} />
             <Route path="scanner" element={<GuichetScannerPage />} />
             <Route path="historique" element={<GuichetHistoryPage />} />
             <Route path="assistant" element={<GuichetVoiceAssistantPage />} />

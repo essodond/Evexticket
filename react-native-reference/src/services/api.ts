@@ -56,7 +56,7 @@ const resolveApiBase = () => {
     return clean.endsWith('/api') ? clean : `${clean}/api`;
   }
   // Default to local dev server on your machine IP for testing
-  return 'http://192.168.1.66:8000/api';
+  return 'http://172.20.10.2:8000/api';
 };
 const API_BASE_URL = resolveApiBase();
 console.log('API_BASE_URL utilisée:', API_BASE_URL);

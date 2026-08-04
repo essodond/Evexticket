@@ -683,14 +683,157 @@ def platform_metrics(company=None):
     }
 
 
+def _fallback_copilot_answer(question, company, metrics):
+    """Produit une analyse locale utile lorsque le fournisseur IA est indisponible."""
+
+    normalized_question = _normalize(question)
+    scope = f"la compagnie {company.name}" if company else "la plateforme EVEX"
+
+    upcoming_trips = ScheduledTrip.objects.filter(
+        date__gte=timezone.localdate(),
+        is_active=True,
+    ).select_related(
+        "trip__departure_city",
+        "trip__arrival_city",
+    )
+    if company:
+        upcoming_trips = upcoming_trips.filter(trip__company=company)
+
+    occupancy_rows = []
+    for scheduled_trip in upcoming_trips[:100]:
+        capacity = max(scheduled_trip.trip.capacity, 1)
+        available = (
+            scheduled_trip.available_seats
+            if scheduled_trip.available_seats is not None
+            else capacity
+        )
+        booked = max(0, min(capacity, capacity - available))
+        occupancy_rows.append(
+            {
+                "route": (
+                    f"{scheduled_trip.trip.departure_city.name} → "
+                    f"{scheduled_trip.trip.arrival_city.name}"
+                ),
+                "date": scheduled_trip.date,
+                "time": scheduled_trip.trip.departure_time,
+                "booked": booked,
+                "capacity": capacity,
+                "rate": round(booked * 100 / capacity),
+            }
+        )
+
+    review_filter = Q()
+    risk_filter = Q()
+    booking_filter = Q()
+    if company:
+        review_filter &= Q(booking__trip__company=company)
+        risk_filter &= Q(booking__trip__company=company)
+        booking_filter &= Q(trip__company=company)
+
+    negative_reviews = Review.objects.filter(review_filter, rating__lte=2).count()
+    urgent_reviews = ReviewInsight.objects.filter(
+        review__in=Review.objects.filter(review_filter),
+        urgency__gte=60,
+    ).count()
+    urgent_reviews = max(negative_reviews, urgent_reviews)
+    high_risks = BookingRiskAssessment.objects.filter(
+        risk_filter,
+        level="high",
+        reviewed=False,
+    ).count()
+    pending_bookings = Booking.objects.filter(booking_filter, status="pending").count()
+    low_occupancy = sorted(
+        (row for row in occupancy_rows if row["rate"] < 40),
+        key=lambda row: (row["rate"], row["date"], row["time"]),
+    )
+
+    suggestions = [
+        "Examiner les voyages au remplissage faible",
+        "Traiter les avis urgents",
+        "Contrôler les alertes de risque élevé",
+    ]
+
+    if any(term in normalized_question for term in ("remplissage", "occupation", "voyage faible", "trajet faible")):
+        if not occupancy_rows:
+            answer = f"Aucun voyage à venir n’est disponible pour analyser le remplissage de {scope}."
+        elif not low_occupancy:
+            answer = (
+                f"Analyse du remplissage de {scope} : aucun des {len(occupancy_rows)} voyages à venir "
+                "n’est sous le seuil d’alerte de 40 %. Aucune action urgente n’est requise."
+            )
+        else:
+            details = "\n".join(
+                (
+                    f"• {row['route']} — {row['date'].strftime('%d/%m/%Y')} à "
+                    f"{row['time'].strftime('%H:%M')} : {row['booked']}/{row['capacity']} places "
+                    f"({row['rate']} %)."
+                )
+                for row in low_occupancy[:5]
+            )
+            answer = (
+                f"Analyse du remplissage de {scope} : {len(low_occupancy)} voyage(s) sur "
+                f"{len(occupancy_rows)} sont sous 40 %.\n{details}\n"
+                "Priorité : renforcer la visibilité des départs les moins remplis avant leur date de voyage."
+            )
+        return {"answer": answer, "suggestions": suggestions}
+
+    if any(term in normalized_question for term in ("avis", "client", "satisfaction", "urgent")):
+        answer = (
+            f"Analyse des avis de {scope} : {urgent_reviews} avis nécessitent une attention prioritaire "
+            f"et la note moyenne actuelle est de {metrics['average_rating']}/5. "
+            + (
+                "Commencez par les avis les plus récents notés 1 ou 2 étoiles, puis retracez la réponse apportée."
+                if urgent_reviews
+                else "Aucun avis urgent n’est actuellement détecté."
+            )
+        )
+        return {"answer": answer, "suggestions": suggestions}
+
+    if any(term in normalized_question for term in ("risque", "fraude", "alerte", "suspect")):
+        answer = (
+            f"Analyse des risques de {scope} : {high_risks} réservation(s) à risque élevé restent à contrôler. "
+            + (
+                "Vérifiez les signaux enregistrés avant le départ et documentez chaque décision."
+                if high_risks
+                else "Aucune intervention prioritaire n’est requise."
+            )
+        )
+        return {"answer": answer, "suggestions": suggestions}
+
+    if any(term in normalized_question for term in ("revenu", "recette", "finance", "vente", "billet")):
+        answer = (
+            f"Analyse commerciale de {scope} : {metrics['confirmed_bookings']} billets confirmés représentent "
+            f"{metrics['revenue_fcfa']:,} FCFA de revenus suivis, avec {pending_bookings} réservation(s) "
+            "encore en attente. Priorité : vérifier les paiements en attente avant d’interpréter le revenu final."
+        ).replace(",", " ")
+        return {"answer": answer, "suggestions": suggestions}
+
+    priorities = []
+    if low_occupancy:
+        priorities.append(f"{len(low_occupancy)} voyage(s) sous 40 % de remplissage")
+    if urgent_reviews:
+        priorities.append(f"{urgent_reviews} avis urgent(s)")
+    if high_risks:
+        priorities.append(f"{high_risks} alerte(s) à risque élevé")
+    if pending_bookings:
+        priorities.append(f"{pending_bookings} réservation(s) en attente")
+
+    priority_text = (
+        "Priorités détectées : " + ", ".join(priorities) + "."
+        if priorities
+        else "Aucune priorité urgente n’est détectée dans les données disponibles."
+    )
+    answer = (
+        f"Résumé de {scope} : {metrics['confirmed_bookings']} billets confirmés, "
+        f"{metrics['revenue_fcfa']:,} FCFA de revenus et {metrics['upcoming_trips']} voyages à venir. "
+        f"{priority_text}"
+    ).replace(",", " ")
+    return {"answer": answer, "suggestions": suggestions}
+
+
 def copilot_answer(question, user, company=None):
     metrics = platform_metrics(company=company)
     scope = f"la compagnie {company.name}" if company else "la plateforme EVEX"
-    fallback = (
-        f"Résumé de {scope} : {metrics['confirmed_bookings']} billets confirmés, "
-        f"{metrics['revenue_fcfa']:,} FCFA de revenus, {metrics['upcoming_trips']} voyages à venir, "
-        f"note moyenne {metrics['average_rating']}/5 et {metrics['high_risk_bookings']} alerte(s) à risque élevé."
-    ).replace(",", " ")
     result, provider = call_structured_openai(
         feature="copilot",
         instructions=(
@@ -706,12 +849,7 @@ def copilot_answer(question, user, company=None):
     if result:
         return {**result, "provider": provider, "metrics": metrics}
     return {
-        "answer": fallback,
-        "suggestions": [
-            "Examiner les voyages au remplissage faible",
-            "Traiter les avis urgents",
-            "Contrôler les alertes de risque élevé",
-        ],
+        **_fallback_copilot_answer(question, company, metrics),
         "provider": "fallback",
         "metrics": metrics,
     }

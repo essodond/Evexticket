@@ -112,6 +112,7 @@ class VenteGuichet(models.Model):
     STATUT_CHOICES = [
         ('valide', 'Valide'),
         ('annule', 'Annule'),
+        ('rembourse', 'Rembourse'),
         ('utilise', 'Utilise'),
     ]
 

@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from .models import City, Company, PlatformConfiguration, ScheduledTrip, Trip
+from .models import Booking, City, Company, PlatformConfiguration, ScheduledTrip, Trip
 
 
 class PlatformAdminApiTest(TestCase):
@@ -31,7 +31,7 @@ class PlatformAdminApiTest(TestCase):
             phone='90000000',
             email='company-admin@test.local',
         )
-        trip = Trip.objects.create(
+        self.trip = Trip.objects.create(
             company=self.company,
             departure_city=departure,
             arrival_city=arrival,
@@ -41,8 +41,8 @@ class PlatformAdminApiTest(TestCase):
             duration=360,
             capacity=50,
         )
-        ScheduledTrip.objects.create(
-            trip=trip,
+        self.voyage = ScheduledTrip.objects.create(
+            trip=self.trip,
             date=timezone.localdate() + timedelta(days=30),
             available_seats=50,
         )
@@ -121,3 +121,30 @@ class PlatformAdminApiTest(TestCase):
             with self.subTest(endpoint=endpoint):
                 response = self.client.get(endpoint)
                 self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+
+    def test_platform_admin_ticket_access_is_read_only(self):
+        booking = Booking.objects.create(
+            trip=self.trip,
+            scheduled_trip=self.voyage,
+            passenger_name='Passager lecture seule',
+            passenger_email='readonly@example.com',
+            passenger_phone='90000051',
+            seat_number='1',
+            status='confirmed',
+            payment_method='mobile_money',
+            total_price=self.trip.price,
+            user=self.regular_user,
+        )
+
+        list_response = self.client.get('/api/platform-admin/tickets/')
+        mutation_response = self.client.post(
+            f'/api/platform-admin/tickets/booking/{booking.id}/action/',
+            {'action': 'cancel', 'reason': 'Action interdite'},
+            format='json',
+        )
+
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertIn(str(booking.id), [item['id'] for item in list_response.data])
+        self.assertEqual(mutation_response.status_code, status.HTTP_404_NOT_FOUND)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, 'confirmed')

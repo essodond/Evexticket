@@ -30,6 +30,10 @@ from .models import (
     Trip,
 )
 from .models.audit import log_action
+from .ticketing import (
+    filter_ticket_collection,
+    ticket_collection as collect_tickets,
+)
 
 
 class IsPlatformAdmin(permissions.BasePermission):
@@ -243,19 +247,7 @@ def serialize_counter_ticket(item):
 
 
 def ticket_collection(limit=250):
-    bookings = Booking.objects.select_related(
-        'trip__company', 'trip__departure_city', 'trip__arrival_city', 'scheduled_trip'
-    ).order_by('-booking_date')[:limit]
-    reservations = Reservation.objects.select_related(
-        'voyage__trip__company', 'voyage__trip__departure_city', 'voyage__trip__arrival_city', 'siege'
-    ).order_by('-created_at')[:limit]
-    counter_sales = VenteGuichet.objects.select_related(
-        'voyage__trip__company', 'voyage__trip__departure_city', 'voyage__trip__arrival_city', 'siege'
-    ).order_by('-created_at')[:limit]
-    items = [serialize_booking_ticket(item) for item in bookings]
-    items += [serialize_reservation_ticket(item) for item in reservations]
-    items += [serialize_counter_ticket(item) for item in counter_sales]
-    return sorted(items, key=lambda item: item['created_at'], reverse=True)
+    return collect_tickets(limit=limit)
 
 
 def revenue_totals(start=None):
@@ -704,73 +696,8 @@ class PlatformTicketsView(APIView):
     permission_classes = [IsPlatformAdmin]
 
     def get(self, request):
-        items = ticket_collection()
-        query = request.query_params.get('q', '').strip().lower()
-        source = request.query_params.get('source', '')
-        state = request.query_params.get('status', '')
-        company_id = request.query_params.get('company', '')
-        if query:
-            items = [item for item in items if query in ' '.join([item['reference'], item['client_name'], item['client_phone'], item['company_name']]).lower()]
-        if source:
-            items = [item for item in items if item['source'] == source]
-        if state:
-            items = [item for item in items if item['status'] == state]
-        if company_id:
-            items = [item for item in items if str(item['company_id']) == str(company_id)]
+        items = filter_ticket_collection(ticket_collection(), request.query_params)
         return Response(items[:300])
-
-
-class PlatformTicketActionView(APIView):
-    permission_classes = [IsPlatformAdmin]
-
-    def post(self, request, source, pk):
-        action = str(request.data.get('action', 'cancel')).strip()
-        reason = str(request.data.get('reason', '')).strip()
-        if action not in ['cancel', 'refund'] or not reason:
-            return Response({'detail': 'Action valide et justification requises.'}, status=status.HTTP_400_BAD_REQUEST)
-        with transaction.atomic():
-            if source == 'booking':
-                item = Booking.all_objects.select_related('scheduled_trip').filter(pk=pk).first()
-                if not item:
-                    return Response({'detail': 'Billet introuvable.'}, status=status.HTTP_404_NOT_FOUND)
-                old = item.status
-                item.status = 'cancelled'
-                item.save(update_fields=['status'])
-                if action == 'refund':
-                    item.payments.filter(status='completed').update(status='refunded')
-                instance = item
-            elif source == 'mobile':
-                item = Reservation.objects.select_related('siege', 'voyage__trip').filter(pk=pk).first()
-                if not item:
-                    return Response({'detail': 'Billet introuvable.'}, status=status.HTTP_404_NOT_FOUND)
-                old = item.statut_paiement
-                if action == 'refund' and old != Reservation.STATUT_PAYE:
-                    return Response({'detail': 'Seul un paiement confirmé peut être remboursé.'}, status=status.HTTP_400_BAD_REQUEST)
-                item.statut_paiement = Reservation.STATUT_REMBOURSE if action == 'refund' else Reservation.STATUT_EXPIRE
-                item.save(update_fields=['statut_paiement'])
-                item.siege.statut = Siege.STATUT_LIBRE
-                item.siege.reserve_at = None
-                item.siege.save(update_fields=['statut', 'reserve_at'])
-                instance = item
-            elif source == 'guichet':
-                item = VenteGuichet.objects.select_related('siege', 'voyage__trip').filter(pk=pk).first()
-                if not item:
-                    return Response({'detail': 'Billet introuvable.'}, status=status.HTTP_404_NOT_FOUND)
-                if item.statut == 'utilise':
-                    return Response({'detail': 'Un billet utilisé ne peut plus être annulé.'}, status=status.HTTP_400_BAD_REQUEST)
-                old = item.statut
-                item.statut = 'annule'
-                item.save(update_fields=['statut'])
-                item.siege.statut = Siege.STATUT_LIBRE
-                item.siege.save(update_fields=['statut'])
-                item.voyage.available_seats = min(item.voyage.trip.capacity, item.voyage.available_seats + 1)
-                item.voyage.save(update_fields=['available_seats'])
-                instance = item
-            else:
-                return Response({'detail': 'Source inconnue.'}, status=status.HTTP_400_BAD_REQUEST)
-            log_action(request.user, 'UPDATE', instance, old_values={'status': old}, new_values={'action': action, 'reason': reason}, ip_address=client_ip(request))
-        detail = 'Statut de remboursement enregistré ; le remboursement monétaire opérateur reste à exécuter.' if action == 'refund' else 'Annulation enregistrée.'
-        return Response({'detail': detail})
 
 
 class PlatformFinanceView(APIView):
