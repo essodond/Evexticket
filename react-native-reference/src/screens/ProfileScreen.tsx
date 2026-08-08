@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,17 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { RootStackParamList } from '../types';
+import { LoyaltySummary, RootStackParamList } from '../types';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
 import Button from '../components/Button';
 import { useAuth } from '../contexts/AuthContext';
+import { getLoyaltySummary } from '../services/api';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MainTabs'>;
 
@@ -25,6 +28,30 @@ const menuItems = [
 
 export default function ProfileScreen({ navigation }: Props) {
   const { user, logout } = useAuth();
+  const [loyalty, setLoyalty] = useState<LoyaltySummary | null>(user?.loyalty ?? null);
+  const [loyaltyLoading, setLoyaltyLoading] = useState(!user?.loyalty);
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      const loadLoyalty = async () => {
+        try {
+          const summary = await getLoyaltySummary();
+          if (isActive) setLoyalty(summary);
+        } catch {
+          // Conserver les dernières données connues si le réseau est indisponible.
+        } finally {
+          if (isActive) setLoyaltyLoading(false);
+        }
+      };
+
+      loadLoyalty();
+      return () => {
+        isActive = false;
+      };
+    }, [])
+  );
 
   const handleLogout = () => {
     Alert.alert(
@@ -65,6 +92,62 @@ export default function ProfileScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.contentContainer}
       >
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>EVEX XP</Text>
+          <View style={styles.xpCard}>
+            <View style={styles.xpHeader}>
+              <View style={styles.xpIcon}>
+                <Ionicons name="sparkles" size={24} color="#6B4F00" />
+              </View>
+              <View style={styles.xpHeaderText}>
+                <Text style={styles.xpLevel}>
+                  {loyalty?.level.label ?? 'Explorateur'}
+                </Text>
+                <Text style={styles.xpRule}>
+                  +{loyalty?.xp_per_completed_trip ?? 100} XP par voyage terminé
+                </Text>
+              </View>
+              {loyaltyLoading && !loyalty ? (
+                <ActivityIndicator color="#6B4F00" />
+              ) : (
+                <Text style={styles.xpTotal}>{loyalty?.total_xp ?? 0} XP</Text>
+              )}
+            </View>
+
+            <View style={styles.xpProgressTrack}>
+              <View
+                style={[
+                  styles.xpProgressFill,
+                  { width: `${loyalty?.level.progress_percent ?? 0}%` as any },
+                ]}
+              />
+            </View>
+            <Text style={styles.xpProgressLabel}>
+              {loyalty?.level.next_level
+                ? `${loyalty.level.xp_to_next_level} XP avant ${loyalty.level.next_level.label}`
+                : 'Niveau maximum atteint'}
+            </Text>
+
+            {loyalty?.history?.slice(0, 3).map((item) => (
+              <View key={item.id} style={styles.xpHistoryItem}>
+                <View style={styles.xpHistoryIcon}>
+                  <Ionicons
+                    name={item.points >= 0 ? 'bus-outline' : 'return-down-back-outline'}
+                    size={17}
+                    color={item.points >= 0 ? COLORS.success : COLORS.error}
+                  />
+                </View>
+                <Text style={styles.xpHistoryDescription} numberOfLines={1}>
+                  {item.description}
+                </Text>
+                <Text style={item.points >= 0 ? styles.xpGain : styles.xpLoss}>
+                  {item.points > 0 ? '+' : ''}{item.points} XP
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>INFORMATIONS DE CONTACT</Text>
           <View style={styles.contactCard}>
@@ -118,12 +201,12 @@ export default function ProfileScreen({ navigation }: Props) {
             <Text style={styles.statsTitle}>Statistiques</Text>
             <View style={styles.statsGrid}>
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>3</Text>
-                <Text style={styles.statLabel}>Voyages</Text>
+                <Text style={styles.statValue}>{loyalty?.completed_trips_count ?? 0}</Text>
+                <Text style={styles.statLabel}>Voyages récompensés</Text>
               </View>
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>21000 XOF</Text>
-                <Text style={styles.statLabel}>Dépensés</Text>
+                <Text style={styles.statValue}>{loyalty?.total_xp ?? 0}</Text>
+                <Text style={styles.statLabel}>XP cumulés</Text>
               </View>
             </View>
           </View>
@@ -194,6 +277,92 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     color: COLORS.textSecondary,
     marginBottom: 12,
+  },
+  xpCard: {
+    backgroundColor: '#FFF7D6',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#F4D86B',
+  },
+  xpHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  xpIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#FFE58A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  xpHeaderText: {
+    flex: 1,
+  },
+  xpLevel: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: '#3D2B00',
+  },
+  xpRule: {
+    marginTop: 2,
+    fontSize: FONT_SIZES.xs,
+    color: '#765E1A',
+  },
+  xpTotal: {
+    fontSize: FONT_SIZES.xl,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: '#6B4F00',
+    marginLeft: 10,
+  },
+  xpProgressTrack: {
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: '#F1E3AE',
+    overflow: 'hidden',
+    marginTop: 18,
+  },
+  xpProgressFill: {
+    height: '100%',
+    borderRadius: 5,
+    backgroundColor: '#E8B900',
+  },
+  xpProgressLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: '#765E1A',
+    marginTop: 7,
+    marginBottom: 8,
+  },
+  xpHistoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(107, 79, 0, 0.12)',
+    paddingTop: 10,
+    marginTop: 6,
+  },
+  xpHistoryIcon: {
+    width: 28,
+    alignItems: 'flex-start',
+  },
+  xpHistoryDescription: {
+    flex: 1,
+    fontSize: FONT_SIZES.sm,
+    color: '#3D2B00',
+  },
+  xpGain: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: COLORS.success,
+    marginLeft: 8,
+  },
+  xpLoss: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: COLORS.error,
+    marginLeft: 8,
   },
   contactCard: {
     backgroundColor: `${COLORS.gray}4D`,

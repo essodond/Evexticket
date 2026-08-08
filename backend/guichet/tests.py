@@ -15,6 +15,7 @@ from transport.models import (
     ScheduledTrip,
     Siege,
     Trip,
+    XPTransaction,
 )
 
 from .models import Agence, AgentGuichet, ControlePassager, Guichet, VenteGuichet
@@ -621,6 +622,11 @@ class GuichetApiTests(APITestCase):
         self.assertIn('Voyageur Mobile', first_scan.data['message'])
         self.assertEqual(second_scan.data['resultat'], 'deja_utilise')
         self.assertEqual(ControlePassager.objects.filter(booking=booking).count(), 2)
+        booking.refresh_from_db()
+        self.admin.profile.refresh_from_db()
+        self.assertEqual(booking.status, 'completed')
+        self.assertEqual(self.admin.profile.xp_total, 100)
+        self.assertEqual(XPTransaction.objects.filter(booking=booking).count(), 1)
 
     def test_company_stats_include_guichet_sales_and_agent_performance(self):
         self.authenticate_agent()

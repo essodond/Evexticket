@@ -9,6 +9,107 @@ export interface User {
   last_name: string;
   phone_number: string | null;
   date_joined?: string;
+  loyalty?: LoyaltySummary;
+  role?: 'CLIENT' | 'AGENT_GUICHET' | 'ADMIN_COMPAGNIE' | 'SUPER_ADMIN';
+  company_id?: number | null;
+}
+
+export interface LoyaltyLevelPreview {
+  key: string;
+  label: string;
+  minimum_xp: number;
+}
+
+export interface LoyaltyLevel extends LoyaltyLevelPreview {
+  progress_percent: number;
+  xp_to_next_level: number;
+  next_level: LoyaltyLevelPreview | null;
+}
+
+export interface LoyaltyTransaction {
+  id: number;
+  points: number;
+  event_type: 'trip_completed' | 'trip_reversed' | 'adjustment';
+  description: string;
+  booking_id: number | null;
+  created_at: string;
+}
+
+export interface LoyaltySummary {
+  total_xp: number;
+  xp_per_completed_trip: number;
+  completed_trips_count: number;
+  level: LoyaltyLevel;
+  history?: LoyaltyTransaction[];
+}
+
+export type TrackingStatus = 'not_started' | 'live' | 'offline' | 'stopped';
+
+export interface TrackingPosition {
+  id?: number;
+  latitude: number;
+  longitude: number;
+  accuracy_m: number | null;
+  speed_kmh: number | null;
+  heading: number | null;
+  recorded_at: string;
+}
+
+export interface TrackingStop {
+  id: string;
+  trip_stop_id: number | null;
+  sequence: number;
+  city_name: string;
+  station_name: string;
+  latitude: number | null;
+  longitude: number | null;
+  status: 'passed' | 'next' | 'upcoming';
+}
+
+export interface TrackingSnapshot {
+  scheduled_trip_id: number;
+  status: TrackingStatus;
+  is_active: boolean;
+  is_stale: boolean;
+  route: {
+    departure_city: string;
+    arrival_city: string;
+    departure_time: string;
+    planned_arrival_at: string;
+  };
+  current_position: TrackingPosition | null;
+  estimated_arrival_at: string | null;
+  eta_minutes: number | null;
+  delay_minutes: number;
+  distance_remaining_km: number | null;
+  stops: TrackingStop[];
+  approach_alert: {
+    active: boolean;
+    stop_name: string | null;
+    distance_km: number | null;
+  };
+  history: TrackingPosition[];
+  updated_at: string | null;
+  server_time: string;
+}
+
+export interface ManageableTrackingTrip {
+  id: number;
+  date: string;
+  departure_time: string;
+  departure_city: string;
+  arrival_city: string;
+  company_name: string;
+  tracking_active: boolean;
+}
+
+export interface DriverLocationPayload {
+  latitude: number;
+  longitude: number;
+  accuracy_m?: number | null;
+  speed_mps?: number | null;
+  heading?: number | null;
+  recorded_at: string;
 }
 
 export interface City {

@@ -26,8 +26,17 @@ from .serializers import RegisterSerializer, UserSerializer, CompanySerializer, 
 from django.http import Http404
 from .models import Company, City, Trip, Booking, Payment, Review, Notification, Reservation, ScheduledTrip, UserProfile, TripStop, BoardingZone
 from .models.audit import log_action
+from .services.loyalty import get_loyalty_summary
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import check_password, make_password
+from django.utils.dateparse import parse_datetime
+from .models import TripTrackingSession
+from .services.tracking import (
+    record_position,
+    serialize_tracking,
+    start_tracking,
+    stop_tracking,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -616,6 +625,217 @@ class CurrentUserView(APIView):
     def get(self, request, *args, **kwargs):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
+
+
+class LoyaltySummaryView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        return Response(get_loyalty_summary(request.user, include_history=True))
+
+
+def _tracking_company_for_user(user):
+    if user.is_superuser:
+        return None
+    company = user.admin_companies.filter(is_active=True).first()
+    if company:
+        return company
+    if hasattr(user, 'company_admin') and user.company_admin.is_active:
+        return user.company_admin
+    if hasattr(user, 'agentguichet') and user.agentguichet.actif:
+        return user.agentguichet.compagnie
+    return False
+
+
+def _can_manage_tracking(user, scheduled_trip):
+    if user.is_superuser:
+        return True
+    company = _tracking_company_for_user(user)
+    return bool(company and scheduled_trip.trip.company_id == company.id)
+
+
+def _can_view_tracking(user, scheduled_trip):
+    if _can_manage_tracking(user, scheduled_trip):
+        return True
+    return Booking.objects.filter(
+        user=user,
+        scheduled_trip=scheduled_trip,
+        status__in=['confirmed', 'completed'],
+    ).exists()
+
+
+def _tracking_trip(pk):
+    try:
+        return ScheduledTrip.objects.select_related(
+            'trip__company',
+            'trip__departure_city',
+            'trip__arrival_city',
+        ).get(pk=pk)
+    except ScheduledTrip.DoesNotExist:
+        raise Http404
+
+
+class ManageableTrackingTripsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        company = _tracking_company_for_user(request.user)
+        if company is False:
+            return Response({'detail': 'Accès réservé à la compagnie.'}, status=status.HTTP_403_FORBIDDEN)
+        today = timezone.localdate()
+        trips = ScheduledTrip.objects.filter(
+            date__gte=today - timedelta(days=1),
+            date__lte=today + timedelta(days=7),
+            is_active=True,
+        ).select_related(
+            'trip__company',
+            'trip__departure_city',
+            'trip__arrival_city',
+            'tracking_session',
+        )
+        if company is not None:
+            trips = trips.filter(trip__company=company)
+
+        return Response([
+            {
+                'id': item.id,
+                'date': item.date,
+                'departure_time': item.trip.departure_time,
+                'departure_city': item.trip.departure_city.name,
+                'arrival_city': item.trip.arrival_city.name,
+                'company_name': item.trip.company.name,
+                'tracking_active': bool(
+                    hasattr(item, 'tracking_session') and item.tracking_session.is_active
+                ),
+            }
+            for item in trips.order_by('date', 'trip__departure_time')
+        ])
+
+
+class TripTrackingView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        scheduled_trip = _tracking_trip(pk)
+        if not _can_view_tracking(request.user, scheduled_trip):
+            return Response(
+                {'detail': 'Le suivi est réservé aux voyageurs ayant un billet pour ce voyage.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        session = TripTrackingSession.objects.filter(scheduled_trip=scheduled_trip).first()
+        return Response(serialize_tracking(
+            scheduled_trip,
+            session,
+            user=request.user,
+            include_history=_can_manage_tracking(request.user, scheduled_trip),
+        ))
+
+
+class StartTripTrackingView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        scheduled_trip = _tracking_trip(pk)
+        if not _can_manage_tracking(request.user, scheduled_trip):
+            return Response({'detail': 'Accès non autorisé.'}, status=status.HTTP_403_FORBIDDEN)
+        session = start_tracking(scheduled_trip, request.user)
+        payload = serialize_tracking(
+            scheduled_trip,
+            session,
+            user=request.user,
+            include_history=True,
+        )
+        if session.delay_minutes != payload['delay_minutes']:
+            session.delay_minutes = payload['delay_minutes']
+            session.save(update_fields=['delay_minutes', 'updated_at'])
+        return Response(payload)
+
+
+class TripTrackingPositionView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        scheduled_trip = _tracking_trip(pk)
+        if not _can_manage_tracking(request.user, scheduled_trip):
+            return Response({'detail': 'Accès non autorisé.'}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            latitude = float(request.data.get('latitude'))
+            longitude = float(request.data.get('longitude'))
+        except (TypeError, ValueError):
+            return Response({'detail': 'Coordonnées GPS invalides.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
+            return Response({'detail': 'Coordonnées GPS hors limites.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        def optional_number(name, minimum=None, maximum=None):
+            raw_value = request.data.get(name)
+            if raw_value is None:
+                return None
+            value = float(raw_value)
+            if minimum is not None and value < minimum:
+                raise ValueError
+            if maximum is not None and value > maximum:
+                raise ValueError
+            return value
+
+        try:
+            accuracy_m = optional_number('accuracy_m', 0)
+            speed_mps = optional_number('speed_mps', 0, 80)
+            heading = optional_number('heading', 0, 360)
+        except (TypeError, ValueError):
+            return Response({'detail': 'Précision, vitesse ou direction invalide.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        recorded_at = timezone.now()
+        if request.data.get('recorded_at'):
+            parsed = parse_datetime(str(request.data['recorded_at']))
+            if parsed:
+                recorded_at = parsed if timezone.is_aware(parsed) else timezone.make_aware(parsed)
+
+        try:
+            session, _ = record_position(scheduled_trip, request.user, {
+                'latitude': latitude,
+                'longitude': longitude,
+                'accuracy_m': accuracy_m,
+                'speed_mps': speed_mps,
+                'heading': heading,
+                'recorded_at': recorded_at,
+            })
+        except TripTrackingSession.DoesNotExist:
+            return Response(
+                {'detail': 'Démarrez d’abord le suivi GPS.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_409_CONFLICT)
+        payload = serialize_tracking(
+            scheduled_trip,
+            session,
+            user=request.user,
+            include_history=True,
+        )
+        if session.delay_minutes != payload['delay_minutes']:
+            session.delay_minutes = payload['delay_minutes']
+            session.save(update_fields=['delay_minutes', 'updated_at'])
+        return Response(payload)
+
+
+class StopTripTrackingView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        scheduled_trip = _tracking_trip(pk)
+        if not _can_manage_tracking(request.user, scheduled_trip):
+            return Response({'detail': 'Accès non autorisé.'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            session = stop_tracking(scheduled_trip, request.user)
+        except TripTrackingSession.DoesNotExist:
+            return Response({'detail': 'Aucun suivi à arrêter.'}, status=status.HTTP_409_CONFLICT)
+        return Response(serialize_tracking(
+            scheduled_trip,
+            session,
+            user=request.user,
+            include_history=True,
+        ))
 
 
 class UserViewSet(viewsets.ModelViewSet):

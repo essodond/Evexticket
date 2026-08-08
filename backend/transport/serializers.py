@@ -145,6 +145,7 @@ class UserSerializer(serializers.ModelSerializer):
     phone_number = serializers.SerializerMethodField()
     company_id = serializers.SerializerMethodField()
     role = serializers.SerializerMethodField()
+    loyalty = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -153,11 +154,11 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
             'is_active', 'is_staff', 'is_superuser', 'date_joined', 'is_company_admin',
-            'is_guichet_agent', 'phone_number', 'company_id', 'role'
+            'is_guichet_agent', 'phone_number', 'company_id', 'role', 'loyalty'
         ]
         read_only_fields = [
             'id', 'date_joined', 'is_company_admin', 'is_guichet_agent',
-            'phone_number', 'company_id', 'role'
+            'phone_number', 'company_id', 'role', 'loyalty'
         ]
 
     def get_is_company_admin(self, obj):
@@ -193,6 +194,11 @@ class UserSerializer(serializers.ModelSerializer):
         if hasattr(obj, 'agentguichet') and obj.agentguichet.actif:
             return 'AGENT_GUICHET'
         return 'CLIENT'
+
+    def get_loyalty(self, obj):
+        from .services.loyalty import get_loyalty_summary
+
+        return get_loyalty_summary(obj)
 
 
 class CitySerializer(serializers.ModelSerializer):
@@ -470,7 +476,7 @@ class BookingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Booking
         fields = [
-            'id', 'trip', 'trip_details', 'scheduled_trip_date', 'passenger_name', 'passenger_email',
+            'id', 'trip', 'trip_details', 'scheduled_trip', 'scheduled_trip_date', 'passenger_name', 'passenger_email',
             'passenger_phone', 'seat_number', 'origin_stop', 'destination_stop', 'status', 'payment_method',
             'total_price', 'booking_date', 'user',
             'passenger_full_name'

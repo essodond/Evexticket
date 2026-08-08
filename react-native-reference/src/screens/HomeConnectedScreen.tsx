@@ -42,6 +42,9 @@ const formatLocalDate = (value: Date) => {
 
 export default function HomeConnectedScreen({ navigation }: Props) {
   const { user } = useAuth();
+  const canManageTracking = ['AGENT_GUICHET', 'ADMIN_COMPAGNIE', 'SUPER_ADMIN'].includes(
+    user?.role ?? '',
+  );
   const [searchFrom, setSearchFrom] = useState('');
   const [searchTo, setSearchTo] = useState('');
   const [selectedCompany, setSelectedCompany] = useState('');
@@ -384,6 +387,23 @@ export default function HomeConnectedScreen({ navigation }: Props) {
           />
         }
       >
+        {canManageTracking && (
+          <TouchableOpacity
+            style={styles.driverTrackingCard}
+            onPress={() => navigation.navigate('StartTracking', {})}
+          >
+            <View style={styles.driverTrackingIcon}>
+              <Ionicons name="navigate" size={24} color={COLORS.white} />
+            </View>
+            <View style={styles.driverTrackingCopy}>
+              <Text style={styles.driverTrackingEyebrow}>ESPACE CHAUFFEUR</Text>
+              <Text style={styles.driverTrackingTitle}>Transmettre la position du bus</Text>
+              <Text style={styles.driverTrackingText}>Démarrer ou reprendre un suivi GPS réel</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color={COLORS.white} />
+          </TouchableOpacity>
+        )}
+
         {!aiResultsActive && (
           <View style={styles.locationCard}>
             <View style={styles.locationIcon}>
@@ -918,6 +938,40 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHTS.semibold,
   },
   recommendationSection: { marginBottom: 22 },
+  driverTrackingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 18,
+    backgroundColor: '#123D73',
+  },
+  driverTrackingIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  driverTrackingCopy: { flex: 1, marginHorizontal: 12 },
+  driverTrackingEyebrow: {
+    color: '#9DC7FF',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+  },
+  driverTrackingTitle: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.base,
+    fontWeight: FONT_WEIGHTS.bold,
+    marginTop: 3,
+  },
+  driverTrackingText: {
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: FONT_SIZES.xs,
+    marginTop: 3,
+  },
   locationCard: {
     flexDirection: 'row',
     alignItems: 'center',

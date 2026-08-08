@@ -938,6 +938,7 @@ class AnnulerVenteView(APIView):
 class ScannerQRView(APIView):
     permission_classes = [IsAgentGuichet]
 
+    @transaction.atomic
     def post(self, request):
         agent = request.user.agentguichet
         raw = request.data.get('qr_code_data')
@@ -1011,12 +1012,12 @@ class ScannerQRView(APIView):
                 if voyage_obj is None:
                     resultat = 'invalide'
                     message = 'Voyage programmé introuvable'
-                elif booking_obj.status != 'confirmed':
-                    resultat = 'invalide'
-                    message = 'Réservation non confirmée'
                 elif ControlePassager.objects.filter(booking=booking_obj, resultat='valide').exists():
                     resultat = 'deja_utilise'
                     message = 'Billet déjà utilisé'
+                elif booking_obj.status != 'confirmed':
+                    resultat = 'invalide'
+                    message = 'Réservation non confirmée'
                 else:
                     resultat = 'valide'
                     message = f"Billet valide — {booking_obj.passenger_name} — Siège {booking_obj.seat_number}"
@@ -1034,6 +1035,9 @@ class ScannerQRView(APIView):
                 resultat=resultat,
                 message=message,
             )
+            if booking_obj is not None and resultat == 'valide':
+                booking_obj.status = 'completed'
+                booking_obj.save(update_fields=['status'])
 
         return Response({
             'resultat': resultat,

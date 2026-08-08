@@ -6,6 +6,8 @@ from .base import (
 )
 from .base import ScheduledTrip
 from .mixins import SoftDeleteModel
+from .loyalty import XPTransaction
+from .tracking import BusPosition, TripTrackingSession
 
 __all__ = [
     'UserProfile',
@@ -26,4 +28,7 @@ __all__ = [
     'CompteCagnotte',
     'HistoriqueReversement',
     'PlatformConfiguration',
+    'XPTransaction',
+    'TripTrackingSession',
+    'BusPosition',
 ]

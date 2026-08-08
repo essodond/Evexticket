@@ -30,6 +30,7 @@ interface TicketItem {
   arrival: string;
   seat_number: string;
   status: string;
+  scheduled_trip?: number | null;
   origin_stop?: number | string | null;
   destination_stop?: number | string | null;
   trip_info?: any;
@@ -72,6 +73,7 @@ export default function MyTicketsScreen({ navigation }: Props) {
           arrival: tripDetails.arrival_time || '00:00',
           seat_number: booking.seat_number || '?',
           status: booking.status || 'Confirmé',
+          scheduled_trip: booking.scheduled_trip || null,
           origin_stop: booking.origin_stop || null,
           destination_stop: booking.destination_stop || null,
           trip_info: tripDetails,
@@ -211,6 +213,15 @@ export default function MyTicketsScreen({ navigation }: Props) {
                         <Ionicons name="ticket-outline" size={20} color={COLORS.white} />
                         <Text style={[styles.mainActionText, { marginLeft: 10 }]}>Voir le billet</Text>
                       </TouchableOpacity>
+
+                      {!isExpired && ticket.scheduled_trip && (
+                        <TouchableOpacity
+                          style={styles.iconActionButton}
+                          onPress={() => navigation.navigate('TrackBus', { tripId: ticket.scheduled_trip! })}
+                        >
+                          <Ionicons name="navigate-circle-outline" size={22} color={COLORS.primary} />
+                        </TouchableOpacity>
+                      )}
 
                       <TouchableOpacity
                         style={styles.iconActionButton}
@@ -393,6 +404,10 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 18,
     marginBottom: 15,
+  },
+  routeSegment: {
+    flex: 1,
+    minWidth: 0,
   },
   routeItem: { flex: 2, paddingHorizontal: 4 },
   timeText: { fontSize: 20, fontWeight: '900', color: '#0F172A' },

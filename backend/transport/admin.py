@@ -14,6 +14,9 @@ from .models import (
     Reservation,
     CompteCagnotte,
     HistoriqueReversement,
+    XPTransaction,
+    BusPosition,
+    TripTrackingSession,
 )
 
 
@@ -66,6 +69,31 @@ class BookingAdmin(admin.ModelAdmin):
     list_filter = ['status', 'payment_method', 'booking_date']
     search_fields = ['passenger_name', 'passenger_email', 'passenger_phone']
     readonly_fields = ['booking_date']
+
+
+@admin.register(XPTransaction)
+class XPTransactionAdmin(admin.ModelAdmin):
+    list_display = ['user', 'points', 'event_type', 'booking', 'created_at']
+    list_filter = ['event_type', 'created_at']
+    search_fields = ['user__username', 'user__email', 'event_key', 'description']
+    readonly_fields = [
+        'user', 'booking', 'event_key', 'event_type', 'points', 'description', 'created_at'
+    ]
+
+
+@admin.register(TripTrackingSession)
+class TripTrackingSessionAdmin(admin.ModelAdmin):
+    list_display = ['scheduled_trip', 'driver', 'is_active', 'speed_kmh', 'delay_minutes', 'last_position_at']
+    list_filter = ['is_active', 'started_at', 'last_position_at']
+    search_fields = ['scheduled_trip__trip__company__name', 'driver__username']
+    readonly_fields = ['started_at', 'stopped_at', 'last_position_at', 'updated_at']
+
+
+@admin.register(BusPosition)
+class BusPositionAdmin(admin.ModelAdmin):
+    list_display = ['session', 'latitude', 'longitude', 'speed_kmh', 'accuracy_m', 'recorded_at']
+    list_filter = ['recorded_at']
+    readonly_fields = ['session', 'latitude', 'longitude', 'speed_kmh', 'accuracy_m', 'heading', 'recorded_at', 'created_at']
 
 
 @admin.register(Payment)

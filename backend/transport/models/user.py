@@ -18,6 +18,8 @@ class UserProfile(models.Model):
     )
     pin = models.CharField(max_length=128, null=True, blank=True, verbose_name='PIN haché')
 
+    xp_total = models.PositiveIntegerField(default=0, verbose_name='XP cumulés')
+
     class Meta:
         verbose_name = "Profil utilisateur"
         verbose_name_plural = "Profils utilisateurs"
@@ -43,4 +45,3 @@ def save_user_profile(sender, instance, **kwargs):
     if not hasattr(instance, 'profile'):
         UserProfile.objects.create(user=instance)
     # Do not call instance.profile.save() here to avoid potential recursion
-    

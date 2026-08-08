@@ -1,6 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-import { User, Trip, TripStop, BoardingZone } from '../types';
+import {
+  User,
+  Trip,
+  TripStop,
+  BoardingZone,
+  LoyaltySummary,
+  TrackingSnapshot,
+  ManageableTrackingTrip,
+  DriverLocationPayload,
+} from '../types';
 import { Platform, NativeModules } from 'react-native';
 
 export interface LoginData {
@@ -278,6 +287,47 @@ export async function getCurrentUser(): Promise<User> {
     console.error('Erreur de récupération du profil:', error);
     throw error;
   }
+}
+
+export async function getLoyaltySummary(): Promise<LoyaltySummary> {
+  try {
+    return await request<LoyaltySummary>('/loyalty/');
+  } catch (error) {
+    console.error('Erreur de récupération des XP:', error);
+    throw error;
+  }
+}
+
+export async function getManageableTrackingTrips(): Promise<ManageableTrackingTrip[]> {
+  return request<ManageableTrackingTrip[]>('/tracking/trips/');
+}
+
+export async function getTripTracking(tripId: string | number): Promise<TrackingSnapshot> {
+  return request<TrackingSnapshot>(`/scheduled_trips/${tripId}/tracking/`);
+}
+
+export async function startTripTracking(tripId: string | number): Promise<TrackingSnapshot> {
+  return request<TrackingSnapshot>(`/scheduled_trips/${tripId}/tracking/start/`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+export async function sendTripPosition(
+  tripId: string | number,
+  location: DriverLocationPayload,
+): Promise<TrackingSnapshot> {
+  return request<TrackingSnapshot>(`/scheduled_trips/${tripId}/tracking/position/`, {
+    method: 'POST',
+    body: JSON.stringify(location),
+  });
+}
+
+export async function stopTripTracking(tripId: string | number): Promise<TrackingSnapshot> {
+  return request<TrackingSnapshot>(`/scheduled_trips/${tripId}/tracking/stop/`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
 }
 
 export async function getTrips(params?: SearchTripsParams): Promise<Trip[]> {
