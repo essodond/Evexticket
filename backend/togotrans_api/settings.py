@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+import certifi
 import dj_database_url
 from decouple import Csv, config
 
@@ -112,13 +113,34 @@ WSGI_APPLICATION = 'togotrans_api.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': dj_database_url.config(
-        default=config('DATABASE_URL', default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
-        conn_max_age=600,
-        conn_health_checks=True,
-    )
-}
+DATABASE_URL = config(
+    'DATABASE_URL',
+    default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+)
+DATABASE_CONFIG = dj_database_url.parse(
+    DATABASE_URL,
+    conn_max_age=600,
+    conn_health_checks=True,
+)
+
+# CockroachDB exposes a PostgreSQL-compatible URL, so dj-database-url cannot
+# distinguish it from PostgreSQL on its own. Allow an explicit override and
+# auto-detect CockroachDB Cloud URLs to select the correct Django backend.
+DATABASE_ENGINE = config('DATABASE_ENGINE', default='').strip()
+IS_COCKROACHDB = (
+    DATABASE_ENGINE == 'django_cockroachdb'
+    or DATABASE_CONFIG.get('HOST', '').endswith('.cockroachlabs.cloud')
+)
+
+if IS_COCKROACHDB:
+    DATABASE_CONFIG['ENGINE'] = 'django_cockroachdb'
+    database_options = DATABASE_CONFIG.setdefault('OPTIONS', {})
+    database_options.setdefault('sslmode', 'verify-full')
+    database_options.setdefault('sslrootcert', certifi.where())
+elif DATABASE_ENGINE:
+    DATABASE_CONFIG['ENGINE'] = DATABASE_ENGINE
+
+DATABASES = {'default': DATABASE_CONFIG}
 
 
 # Password validation

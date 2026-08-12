@@ -1,10 +1,3 @@
-databases:
-  - name: evexticket-db
-    databaseName: evexticket
-    user: evexticket
-    plan: free
-    region: frankfurt
-
 services:
   - type: web
     name: evexticket-api
@@ -15,9 +8,9 @@ services:
     startCommand: "bash start.sh"
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: evexticket-db
-          property: connectionString
+        sync: false
+      - key: DATABASE_ENGINE
+        value: "django_cockroachdb"
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG

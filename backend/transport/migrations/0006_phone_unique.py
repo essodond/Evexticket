@@ -1,4 +1,4 @@
-from django.db import migrations, models
+from django.db import migrations
 
 
 def normalize_and_cleanup(apps, schema_editor):
@@ -33,6 +33,29 @@ def normalize_and_cleanup(apps, schema_editor):
                 dup.save()
 
 
+def create_postgresql_phone_index(apps, schema_editor):
+    """Use PostgreSQL's concurrent index only on native PostgreSQL.
+
+    CockroachDB creates indexes online without the CONCURRENTLY keyword, and
+    migration 0008 adds the model-level unique constraint for every backend.
+    """
+    if schema_editor.connection.vendor == 'postgresql':
+        schema_editor.execute(
+            """
+            CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS
+            transport_userprofile_phone_uniq_idx
+            ON transport_userprofile (phone);
+            """
+        )
+
+
+def drop_postgresql_phone_index(apps, schema_editor):
+    if schema_editor.connection.vendor == 'postgresql':
+        schema_editor.execute(
+            "DROP INDEX IF EXISTS transport_userprofile_phone_uniq_idx;"
+        )
+
+
 class Migration(migrations.Migration):
     # Need non-transactional migration because we create index CONCURRENTLY
     atomic = False
@@ -43,14 +66,8 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunPython(normalize_and_cleanup, reverse_code=migrations.RunPython.noop),
-        # Create a unique index concurrently to enforce uniqueness without locking triggers
-        migrations.RunSQL(
-            sql="""
-            CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS transport_userprofile_phone_uniq_idx
-            ON transport_userprofile (phone);
-            """,
-            reverse_sql="""
-            DROP INDEX IF EXISTS transport_userprofile_phone_uniq_idx;
-            """,
+        migrations.RunPython(
+            create_postgresql_phone_index,
+            reverse_code=drop_postgresql_phone_index,
         ),
     ]
