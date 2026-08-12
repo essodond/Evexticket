@@ -3,13 +3,13 @@ import { Menu } from 'lucide-react';
 import { NavLink, Outlet, useNavigate, useOutletContext } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import apiService from '../services/api';
-import type { Company } from '../services/api';
+import type { ApiId, Company } from '../services/api';
 import { companyNavigationItems } from '../utils/companyNavigation';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 
 interface CompanyPortalContextValue {
-  companyId: number;
+  companyId: ApiId;
   company: Company | null;
   loadingCompany: boolean;
   companyError: string | null;
@@ -21,7 +21,7 @@ export const useCompanyPortal = () => useOutletContext<CompanyPortalContextValue
 const CompanyLayout: React.FC = () => {
   const auth = useAuth();
   const navigate = useNavigate();
-  const companyId = Number(auth.user?.company_id || 0);
+  const companyId: ApiId = auth.user?.company_id == null ? '' : String(auth.user.company_id);
   const [company, setCompany] = useState<Company | null>(null);
   const [loadingCompany, setLoadingCompany] = useState(true);
   const [companyError, setCompanyError] = useState<string | null>(null);

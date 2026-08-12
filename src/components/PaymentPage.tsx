@@ -81,8 +81,8 @@ const PaymentPage: React.FC<PaymentPageProps> = ({ bookingData, onBack, onPaymen
     setApiError(null);
 
     try {
-      const scheduledTripId = Number(trip?.scheduled_trip_id ?? trip?.id ?? trip?.trip_id ?? trip);
-      if (!scheduledTripId || Number.isNaN(scheduledTripId)) {
+      const scheduledTripId = trip?.scheduled_trip_id ?? trip?.id ?? trip?.trip_id ?? trip;
+      if (scheduledTripId == null || scheduledTripId === '') {
         throw new Error('Impossible d identifier le voyage a payer.');
       }
 

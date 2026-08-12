@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 import apiService, {
+  ApiId,
   AIBookingRisk,
   AICopilotResponse,
   AIReviewAnalysis,
@@ -51,7 +52,7 @@ const MetricCard: React.FC<{
 
 const ManagementCopilotPage: React.FC<Props> = ({ scope }) => {
   const auth = useAuth();
-  const companyId = Number(auth.user?.company_id || 0);
+  const companyId: ApiId = auth.user?.company_id == null ? '' : String(auth.user.company_id);
   const [question, setQuestion] = useState('Résume la situation et les priorités du jour.');
   const [copilot, setCopilot] = useState<AICopilotResponse | null>(null);
   const [reviews, setReviews] = useState<AIReviewAnalysis | null>(null);
@@ -62,7 +63,7 @@ const ManagementCopilotPage: React.FC<Props> = ({ scope }) => {
   const [error, setError] = useState<string | null>(null);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [lastAnalyzedQuestion, setLastAnalyzedQuestion] = useState<string | null>(null);
-  const [delayInputs, setDelayInputs] = useState<Record<number, string>>({});
+  const [delayInputs, setDelayInputs] = useState<Record<string, string>>({});
   const loadedScopeRef = useRef('');
 
   const ask = useCallback(async (value = question) => {
@@ -111,7 +112,7 @@ const ManagementCopilotPage: React.FC<Props> = ({ scope }) => {
         .filter((trip: any) => !trip.is_past && (!trip.date || trip.date >= new Date().toISOString().slice(0, 10)))
         .slice(0, 8);
       const insightResults = await Promise.allSettled(
-        tripRows.map((trip: any) => apiService.getAITripInsights(Number(trip.id)))
+        tripRows.map((trip: any) => apiService.getAITripInsights(trip.id))
       );
       setForecasts(
         insightResults.flatMap((result, index) => {
@@ -129,8 +130,8 @@ const ManagementCopilotPage: React.FC<Props> = ({ scope }) => {
       const bookingIds = rawTickets
         .filter((ticket: any) => !ticket.source || ['booking', 'mobile'].includes(ticket.source))
         .slice(0, 15)
-        .map((ticket: any) => Number(ticket.id))
-        .filter(Number.isFinite);
+        .map((ticket: any) => ticket.id as ApiId)
+        .filter((id): id is ApiId => id !== null && id !== undefined && id !== '');
       const riskResults = await Promise.allSettled(
         bookingIds.map((id) => apiService.getAIBookingRisk(id))
       );
@@ -161,13 +162,13 @@ const ManagementCopilotPage: React.FC<Props> = ({ scope }) => {
     return () => window.clearInterval(timer);
   }, [cooldownSeconds]);
 
-  const reportDelay = async (tripId: number) => {
-    const value = Number(delayInputs[tripId] || 0);
+  const reportDelay = async (tripId: ApiId) => {
+    const value = Number(delayInputs[String(tripId)] || 0);
     if (!Number.isFinite(value) || value < 0) return;
     try {
       const updated = await apiService.reportAITripDelay(tripId, value);
       setForecasts((current) =>
-        current.map((item) => item.scheduled_trip_id === tripId ? { ...item, ...updated } : item)
+        current.map((item) => String(item.scheduled_trip_id) === String(tripId) ? { ...item, ...updated } : item)
       );
     } catch (delayError: any) {
       setError(delayError?.message || 'Impossible de signaler le retard.');

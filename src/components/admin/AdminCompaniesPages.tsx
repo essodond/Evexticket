@@ -32,7 +32,7 @@ export const AdminCompaniesPage: React.FC = () => {
 
 export const AdminCompanyDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const companyId = Number(id);
+  const companyId = id || '';
   const [company, setCompany] = useState<PlatformAdminCompany | null>(null);
   const [adminModal, setAdminModal] = useState(false);
   const [adminForm, setAdminForm] = useState({ first_name: '', last_name: '', email: '', password: '' });

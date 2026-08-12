@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { apiService, City, Company, Trip, Booking, CreateBookingPayload, DashboardStats, CompanyStats, ScheduledTrip } from '../services/api';
+import { apiService, City, Company, Trip, Booking, CreateBookingPayload, DashboardStats, CompanyStats, ScheduledTrip, ApiId } from '../services/api';
 
 // Shared module-level cache to prevent repeated network calls across multiple hook instances
 // TTL: 5 minutes — cache is invalidated after this period to avoid stale city data
@@ -103,7 +103,7 @@ export const useCompanies = () => {
     }
   };
 
-  const updateCompany = async (id: number, companyData: Partial<Company>) => {
+  const updateCompany = async (id: ApiId, companyData: Partial<Company>) => {
     try {
       const updatedCompany = await apiService.updateCompany(id, companyData);
       setCompanies(prev => prev.map(company => 
@@ -116,7 +116,7 @@ export const useCompanies = () => {
     }
   };
 
-  const deleteCompany = async (id: number) => {
+  const deleteCompany = async (id: ApiId) => {
     try {
       await apiService.deleteCompany(id);
       setCompanies(prev => prev.filter(company => company.id !== id));
@@ -170,7 +170,7 @@ export const useTrips = () => {
     }
   };
 
-  const updateTrip = async (id: number, tripData: Partial<Trip>) => {
+  const updateTrip = async (id: ApiId, tripData: Partial<Trip>) => {
     try {
       const updatedTrip = await apiService.updateTrip(id, tripData);
       setTrips(prev => prev.map(trip => 
@@ -183,7 +183,7 @@ export const useTrips = () => {
     }
   };
 
-  const deleteTrip = async (id: number) => {
+  const deleteTrip = async (id: ApiId) => {
     try {
       await apiService.deleteTrip(id);
       setTrips(prev => prev.filter(trip => trip.id !== id));
@@ -258,7 +258,7 @@ export const useBookings = () => {
     }
   };
 
-  const updateBooking = async (id: number, bookingData: Partial<Booking>) => {
+  const updateBooking = async (id: ApiId, bookingData: Partial<Booking>) => {
     try {
       const updatedBooking = await apiService.updateBooking(id, bookingData);
       setBookings(prev => prev.map(booking => 
@@ -271,7 +271,7 @@ export const useBookings = () => {
     }
   };
 
-  const deleteBooking = async (id: number) => {
+  const deleteBooking = async (id: ApiId) => {
     try {
       await apiService.deleteBooking(id);
       setBookings(prev => prev.filter(booking => booking.id !== id));
@@ -281,7 +281,7 @@ export const useBookings = () => {
     }
   };
 
-  const confirmBooking = async (id: number) => {
+  const confirmBooking = async (id: ApiId) => {
     try {
       await apiService.confirmBooking(id);
       setBookings(prev => prev.map(booking => 
@@ -293,7 +293,7 @@ export const useBookings = () => {
     }
   };
 
-  const cancelBooking = async (id: number) => {
+  const cancelBooking = async (id: ApiId) => {
     try {
       await apiService.cancelBooking(id);
       setBookings(prev => prev.map(booking => 
@@ -344,7 +344,7 @@ export const useDashboardStats = () => {
 };
 
 // Hook pour les statistiques de la compagnie
-export const useCompanyStats = (companyId: number) => {
+export const useCompanyStats = (companyId: ApiId) => {
   const [stats, setStats] = useState<CompanyStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

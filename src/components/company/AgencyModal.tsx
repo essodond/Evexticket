@@ -50,10 +50,10 @@ const AgencyModal: React.FC<AgencyModalProps> = ({ open, agency, cities, agents,
     setError(null);
     const payload: AgencyPayload = {
       nom: form.nom.trim(),
-      ville_id: Number(form.ville_id),
+      ville_id: form.ville_id,
       adresse: form.adresse.trim(),
       telephone: form.telephone.trim(),
-      gestionnaire_id: form.gestionnaire_id ? Number(form.gestionnaire_id) : null,
+      gestionnaire_id: form.gestionnaire_id || null,
       latitude: form.latitude ? Number(form.latitude) : null,
       longitude: form.longitude ? Number(form.longitude) : null,
     };

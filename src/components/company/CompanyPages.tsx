@@ -253,7 +253,7 @@ export const CompanyAgencyDetailPage: React.FC = () => {
   const assignManager = async () => {
     if (!id) return;
     try {
-      const updated = await apiService.assignCompanyAgencyManager(id, managerId ? Number(managerId) : null);
+      const updated = await apiService.assignCompanyAgencyManager(id, managerId || null);
       await load();
       setMessage(updated.gestionnaire ? `${updated.gestionnaire.prenom} ${updated.gestionnaire.nom} dirige maintenant cette agence.` : 'Le gestionnaire a été retiré.');
       setError(null);
@@ -539,13 +539,13 @@ export const CompanyVoyageDetailPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const tripId = Number(id);
+    const tripId = id || '';
     if (!tripId || !companyId) return;
     Promise.all([apiService.getScheduledTrip(tripId), apiService.getCompanyBookings(companyId)])
       .then(([tripData, bookingData]) => {
         setTrip(tripData);
         const routeId = (tripData as any).trip_id || (tripData as any).trip || tripData.id;
-        setBookings(bookingData.filter((booking) => Number(booking.trip) === Number(routeId) && booking.travel_date === tripData.date));
+        setBookings(bookingData.filter((booking) => String(booking.trip) === String(routeId) && booking.travel_date === tripData.date));
       })
       .catch((loadError: any) => setError(loadError?.message || 'Impossible de charger ce voyage.'));
   }, [companyId, id]);

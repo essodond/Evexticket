@@ -109,7 +109,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
   const handleAddCompany = async (payload: any) => {
     try {
       if (payload.id) {
-        const updated = await apiService.updateCompany(Number(payload.id), payload);
+        const updated = await apiService.updateCompany(payload.id, payload);
         setCompanies(prev => prev.map(c => c.id === String(updated.id) ? ({ ...c, name: updated.name, email: updated.email || c.email, phone: updated.phone || c.phone }) : c));
         setNotificationData({ type: 'success', title: 'Modifié', message: 'La compagnie a été modifiée.' });
       } else {
@@ -126,7 +126,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
     const id = companyToDelete.id;
     const prev = companies.slice();
     setCompanies(p => p.filter(x => x.id !== id));
-    try { await apiService.deleteCompany(Number(id)); setNotificationData({ type: 'success', title: 'Supprimée', message: 'Compagnie supprimée.' }); }
+    try { await apiService.deleteCompany(id); setNotificationData({ type: 'success', title: 'Supprimée', message: 'Compagnie supprimée.' }); }
     catch (e: any) { setCompanies(prev); setNotificationData({ type: 'error', title: 'Erreur', message: e?.message || 'Impossible de supprimer.' }); }
     setShowNotification(true); setCompanyToDelete(null);
   };
@@ -135,7 +135,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
   const handleAddTrip = async (payload: any) => {
     try {
       if (editingTrip) {
-        const updated = await apiService.updateTrip(Number(editingTrip.id), payload);
+        const updated = await apiService.updateTrip(editingTrip.id, payload);
         setTrips(prev => prev.map(t => t.id === String(updated.id) ? ({ ...t, companyName: updated.company_name || t.companyName }) : t));
         setNotificationData({ type: 'success', title: 'Modifié', message: 'Trajet modifié.' });
       } else {
@@ -149,7 +149,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
   const handleEditTrip = (t: Trip) => { setEditingTrip(t); setShowAddTripModal(true); };
   const confirmDeleteTrip = async () => {
     if (!tripToDelete) return;
-    try { await apiService.deleteTrip(Number(tripToDelete.id)); setTrips(prev => prev.filter(x => x.id !== tripToDelete.id)); setNotificationData({ type: 'success', title: 'Supprimé', message: 'Trajet supprimé.' }); }
+    try { await apiService.deleteTrip(tripToDelete.id); setTrips(prev => prev.filter(x => x.id !== tripToDelete.id)); setNotificationData({ type: 'success', title: 'Supprimé', message: 'Trajet supprimé.' }); }
     catch (e: any) { setNotificationData({ type: 'error', title: 'Erreur', message: e?.message || 'Erreur' }); }
     setShowNotification(true); setTripToDelete(null);
   };
@@ -159,13 +159,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
   const handleEditUser = (u: User) => { setSelectedUser(u); setShowUserDetails(true); };
   const handleSaveUserDetails = async (payload: any) => {
     try {
-      const resp = await apiService.updateUser(Number(payload.id), { first_name: payload.firstName, last_name: payload.lastName, email: payload.email, phone_number: payload.phone_number, is_active: payload.isActive });
+      const resp = await apiService.updateUser(payload.id, { first_name: payload.firstName, last_name: payload.lastName, email: payload.email, phone_number: payload.phone_number, is_active: payload.isActive });
       setUsers(prev => prev.map(u => u.id === String(resp.id) ? ({ ...u, firstName: resp.first_name, lastName: resp.last_name, email: resp.email, phone_number: resp.phone_number, isActive: resp.is_active }) : u));
       setNotificationData({ type: 'success', title: 'Enregistré', message: 'Utilisateur mis à jour.' }); setShowNotification(true); setShowUserDetails(false); setSelectedUser(null);
     } catch (e: any) { setNotificationData({ type: 'error', title: 'Erreur', message: e?.message || 'Erreur' }); setShowNotification(true); }
   };
   const handleToggleUserActive = async (u: User) => {
-    try { const updated = await apiService.updateUser(Number(u.id), { is_active: !u.isActive }); setUsers(prev => prev.map(p => p.id === String(updated.id) ? ({ ...p, isActive: updated.is_active ?? p.isActive }) : p)); setNotificationData({ type: 'success', title: 'Statut changé', message: `Utilisateur ${updated.is_active ? 'activé' : 'désactivé'}` }); setShowNotification(true); } catch (e: any) { setNotificationData({ type: 'error', title: 'Erreur', message: e?.message || 'Erreur' }); setShowNotification(true); }
+    try { const updated = await apiService.updateUser(u.id, { is_active: !u.isActive }); setUsers(prev => prev.map(p => p.id === String(updated.id) ? ({ ...p, isActive: updated.is_active ?? p.isActive }) : p)); setNotificationData({ type: 'success', title: 'Statut changé', message: `Utilisateur ${updated.is_active ? 'activé' : 'désactivé'}` }); setShowNotification(true); } catch (e: any) { setNotificationData({ type: 'error', title: 'Erreur', message: e?.message || 'Erreur' }); setShowNotification(true); }
   };
   const handleDeleteUser = (u: User) => { setUserToConfirmDelete(u); };
   const confirmDeleteUser = async () => {
@@ -174,7 +174,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
     const prev = users.slice();
     setUsers(s => s.filter(x => x.id !== u.id));
     setUserToConfirmDelete(null);
-    try { await apiService.deleteUser(Number(u.id)); setNotificationData({ type: 'success', title: 'Supprimé', message: 'Utilisateur supprimé.' }); }
+    try { await apiService.deleteUser(u.id); setNotificationData({ type: 'success', title: 'Supprimé', message: 'Utilisateur supprimé.' }); }
     catch (e: any) { setUsers(prev); setNotificationData({ type: 'error', title: 'Erreur', message: e?.message || 'Impossible de supprimer' }); }
     setShowNotification(true);
   };

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiService from '../services/api';
-import type { Booking } from '../services/api';
+import type { ApiId, Booking } from '../services/api';
 import { Ticket, Calendar, MapPin, ChevronRight, Loader2, TicketX, Bus, CreditCard, Search, Clock, Download, XCircle, RotateCcw } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -45,7 +45,7 @@ export default function MyTicketsPage() {
     return true;
   });
 
-  const handleCancelBooking = async (bookingId: number) => {
+  const handleCancelBooking = async (bookingId: ApiId) => {
     if (!window.confirm('Êtes-vous sûr de vouloir annuler cette réservation ?')) return;
     try {
       await apiService.cancelBooking(bookingId);

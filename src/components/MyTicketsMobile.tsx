@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Trash2, Loader2, Home, Ticket, User } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import apiService from '../services/api';
-import type { Booking } from '../services/api';
+import type { ApiId, Booking } from '../services/api';
 
 export default function MyTicketsMobile() {
   const navigate = useNavigate();
@@ -46,7 +46,7 @@ export default function MyTicketsMobile() {
     return timeStr.substring(0, 5);
   };
 
-  const handleDelete = async (bookingId: number) => {
+  const handleDelete = async (bookingId: ApiId) => {
     if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce ticket ?')) return;
     try {
       await apiService.cancelBooking(bookingId);

@@ -239,7 +239,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
       if (!value && value !== 0) return null;
       if (typeof value === 'number') return value;
       if (typeof value === 'string') {
-        if (/^\d+$/.test(value)) return Number(value);
+        if (/^\d+$/.test(value)) return value;
         if (propCities && Array.isArray(propCities)) {
           const found = propCities.find((c:any) => (c.name || '').toLowerCase() === value.toLowerCase() || String(c.id) === value);
           if (found) return found.id;
@@ -250,7 +250,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
     };
 
     const payload: any = {
-      company: formData.companyId ? Number(formData.companyId) : (companyId ? Number(companyId) : null),
+      company: formData.companyId || companyId || null,
       departure_city: resolveTopCity(formData.departureCity),
       arrival_city: resolveTopCity(formData.arrivalCity),
       departure_time: formData.departureTime,
@@ -270,7 +270,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
         if (!value && value !== 0) return null;
         if (typeof value === 'number') return value;
         if (typeof value === 'string') {
-          if (/^\d+$/.test(value)) return Number(value);
+          if (/^\d+$/.test(value)) return value;
           // try to find matching city from propCities by exact or startsWith match
           if (propCities && Array.isArray(propCities)) {
             const exact = propCities.find((c: any) => String(c.id) === value || (c.name || '').toLowerCase() === value.toLowerCase());
@@ -321,13 +321,13 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
           const scheduled = editingTrip as any;
           const tripId = scheduled.trip || scheduled.trip_id || scheduled.trip_info?.id || scheduled.id;
           const scheduledId = scheduled.scheduled_trip_id || scheduled.id;
-          const updatedTrip = await apiService.updateTrip(Number(tripId), payload);
+          const updatedTrip = await apiService.updateTrip(tripId, payload);
           // update scheduled trip metadata if date/isActive were changed
           const scheduledPayload: any = {};
           if (formData.date) scheduledPayload.date = formData.date;
           scheduledPayload.is_active = Boolean(formData.isActive);
           try {
-            const updatedScheduled = await apiService.updateScheduledTrip(Number(scheduledId), scheduledPayload);
+            const updatedScheduled = await apiService.updateScheduledTrip(scheduledId, scheduledPayload);
             setSuccessMessage('Trajet programmé modifié avec succès.');
             onSave(updatedScheduled as any);
           } catch (sErr) {
@@ -337,7 +337,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
           }
         } else {
           // editing a plain Trip
-          const updated = await apiService.updateTrip(Number((editingTrip as any).id), payload);
+          const updated = await apiService.updateTrip((editingTrip as any).id, payload);
           setSuccessMessage('Trajet modifié avec succès.');
           onSave({ ...editingTrip, ...updated } as any);
         }

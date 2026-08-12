@@ -79,7 +79,7 @@ const BookingPage: React.FC<BookingPageProps> = ({ trip, searchData, onBack, onP
   useEffect(() => {
     let mounted = true;
     // trip.id = Trip (route) ID after flattenScheduledTrips — backend expects Trip.id for ScheduledTrip.objects.get(trip_id=...)
-    const tripId = Number(trip?.id);
+    const tripId = trip?.id;
     const travelDate = searchData?.date || searchData?.travel_date || (trip as any)?.date;
     if (!tripId || !travelDate) return;
 

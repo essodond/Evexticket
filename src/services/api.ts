@@ -15,8 +15,10 @@ const API_BASE_URL = (
 ).replace(/\/$/, '');
 
 // Types pour les données
+export type ApiId = string | number;
+
 export interface City {
-  id: number;
+  id: ApiId;
   name: string;
   region: string;
   is_active: boolean;
@@ -24,7 +26,7 @@ export interface City {
 }
 
 export interface Company {
-  id: number;
+  id: ApiId;
   name: string;
   description: string;
   address: string;
@@ -43,12 +45,12 @@ export interface Company {
 export type CompanyFilter = 'active' | 'deleted' | 'all';
 
 export interface Trip {
-  id: number;
-  company: number;
+  id: ApiId;
+  company: ApiId;
   company_name: string;
-  departure_city: number;
+  departure_city: ApiId;
   departure_city_name: string;
-  arrival_city: number;
+  arrival_city: ApiId;
   arrival_city_name: string;
   departure_time: string;
   arrival_time: string;
@@ -67,8 +69,8 @@ export interface Trip {
 
 export interface ScheduledTrip extends Trip {
   date: string;
-  scheduled_trip_id?: number;
-  trip_id?: number;
+  scheduled_trip_id?: ApiId;
+  trip_id?: ApiId;
   seats?: any[];
   stops?: any[];
   badge?: string | null;
@@ -77,8 +79,8 @@ export interface ScheduledTrip extends Trip {
 }
 
 export interface Booking {
-  id: number;
-  trip: number;
+  id: ApiId;
+  trip: ApiId;
   trip_details?: Trip;
   passenger_name: string;
   passenger_email: string;
@@ -90,7 +92,7 @@ export interface Booking {
   booking_date: string;
   travel_date: string;
   notes?: string;
-  user?: number;
+  user?: ApiId;
 }
 
 export type QosOperator = 'flooz' | 'tmoney';
@@ -175,13 +177,13 @@ export interface CompanyStats {
 }
 
 export interface PlatformAdminUser {
-  id: number;
+  id: ApiId;
   email: string;
   first_name: string;
   last_name: string;
   phone?: string | null;
   role: 'SUPER_ADMIN' | 'ADMIN_COMPAGNIE' | 'AGENT_GUICHET' | 'CLIENT';
-  company_id?: number | null;
+  company_id?: ApiId | null;
   company_name?: string | null;
   is_active: boolean;
   last_login?: string | null;
@@ -189,7 +191,7 @@ export interface PlatformAdminUser {
 }
 
 export interface PlatformAdminCompany {
-  id: number;
+  id: ApiId;
   name: string;
   description: string;
   address: string;
@@ -209,8 +211,8 @@ export interface PlatformAdminCompany {
 }
 
 export interface PlatformAdminVoyage {
-  id: number;
-  company_id: number;
+  id: ApiId;
+  company_id: ApiId;
   company_name: string;
   route: string;
   departure_city: string;
@@ -235,12 +237,12 @@ export interface PlatformAdminTicket {
   client_name: string;
   client_email?: string | null;
   client_phone: string;
-  company_id: number;
+  company_id: ApiId;
   company_name: string;
   route: string;
   travel_date?: string | null;
   departure_time?: string | null;
-  voyage_id?: number | null;
+  voyage_id?: ApiId | null;
   seat: string | number;
   amount: number;
   payment_method: string;
@@ -261,7 +263,7 @@ export interface PlatformAdminTicket {
 export type UnifiedTicket = PlatformAdminTicket;
 
 export interface TicketOperation {
-  id: number;
+  id: ApiId;
   action: string;
   operation?: 'sale' | 'cancel' | 'refund' | 'update' | null;
   reason?: string | null;
@@ -283,9 +285,9 @@ export interface PlatformAdminDashboard {
     company_due: number; occupancy_rate: number;
   };
   monthly: Array<{ month: string; key: string; tickets: number; revenue: number; users: number }>;
-  top_companies: Array<{ id: number; name: string; tickets: number; revenue: number; active: boolean }>;
+  top_companies: Array<{ id: ApiId; name: string; tickets: number; revenue: number; active: boolean }>;
   alerts: Array<{ tone: string; title: string; value: number }>;
-  recent_activity: Array<{ id: number; action: string; model: string; object: string; user: string; timestamp: string }>;
+  recent_activity: Array<{ id: ApiId; action: string; model: string; object: string; user: string; timestamp: string }>;
 }
 
 export interface AICopilotResponse {
@@ -303,7 +305,7 @@ export interface AICopilotResponse {
 }
 
 export interface AITripInsights {
-  scheduled_trip_id: number;
+  scheduled_trip_id: ApiId;
   occupancy_forecast_percent: number;
   current_occupancy_percent: number;
   predicted_delay_minutes: number;
@@ -314,7 +316,7 @@ export interface AITripInsights {
 }
 
 export interface AIBookingRisk {
-  booking_id: number;
+  booking_id: ApiId;
   score: number;
   level: 'low' | 'medium' | 'high';
   flags: string[];
@@ -325,7 +327,7 @@ export interface AIBookingRisk {
 export interface AIReviewAnalysis {
   summary: { positive: number; neutral: number; negative: number; urgent: number };
   reviews: Array<{
-    review_id: number;
+    review_id: ApiId;
     sentiment: 'positive' | 'neutral' | 'negative';
     category: string;
     urgency: number;
@@ -339,7 +341,7 @@ export interface AIVoiceCommandResponse {
   provider: 'openai' | 'fallback';
   criteria: Record<string, unknown>;
   trips: Array<{
-    id: number;
+    id: ApiId;
     date: string;
     available_seats: number;
     trip_info: {
@@ -355,7 +357,7 @@ export interface AIVoiceCommandResponse {
 export interface PlatformAdminFinance {
   totals: { gross: number; evex: number; company_due: number; pending_payouts: number; refunds: number };
   monthly: PlatformAdminDashboard['monthly'];
-  companies: Array<{ id: number; name: string; gross: number; evex: number; company_revenue: number; pending_payout: number }>;
+  companies: Array<{ id: ApiId; name: string; gross: number; evex: number; company_revenue: number; pending_payout: number }>;
   channels: Array<{ name: string; tickets: number; revenue: number }>;
 }
 
@@ -367,7 +369,7 @@ export interface PlatformAdminAnalytics {
 }
 
 export interface PlatformAdminAudit {
-  id: number;
+  id: ApiId;
   action: string;
   model: string;
   object_id: string;
@@ -390,7 +392,7 @@ export interface PlatformAdminSettings {
 }
 
 export interface GuichetAgent {
-  id: number;
+  id: ApiId;
   nom: string;
   prenom: string;
   telephone: string;
@@ -404,7 +406,7 @@ export interface GuichetAgent {
 }
 
 export interface AgencyManager {
-  id: number;
+  id: ApiId;
   nom: string;
   prenom: string;
   telephone: string;
@@ -415,7 +417,7 @@ export interface AgencyManager {
 export interface Agency {
   id: string;
   nom: string;
-  ville: { id: number; nom: string; region: string };
+  ville: { id: ApiId; nom: string; region: string };
   adresse: string;
   telephone: string;
   latitude: string | null;
@@ -432,12 +434,12 @@ export interface Agency {
 
 export interface AgencyPayload {
   nom: string;
-  ville_id: number;
+  ville_id: ApiId;
   adresse: string;
   telephone: string;
   latitude?: number | null;
   longitude?: number | null;
-  gestionnaire_id?: number | null;
+  gestionnaire_id?: ApiId | null;
   is_active?: boolean;
 }
 
@@ -463,8 +465,8 @@ export interface AgencyCounterPayload {
 }
 
 export interface GuichetTrip {
-  id: number;
-  trip_id?: number;
+  id: ApiId;
+  trip_id?: ApiId;
   trajet: string;
   date: string;
   heure_depart: string;
@@ -480,7 +482,7 @@ export interface GuichetSale {
   reference_vente: string;
   client_nom: string;
   client_telephone: string;
-  voyage_id: number;
+  voyage_id: ApiId;
   trajet: string;
   date_voyage: string;
   heure_depart: string;
@@ -502,13 +504,13 @@ export interface GuichetControl {
   source: 'guichet' | 'mobile' | null;
   resultat: 'valide' | 'invalide' | 'deja_utilise';
   message: string;
-  voyage_id: number;
+  voyage_id: ApiId;
   created_at: string;
 }
 
 export interface GuichetDashboardData {
   agent: {
-    id: number;
+    id: ApiId;
     nom: string;
     prenom: string;
     email: string;
@@ -532,7 +534,7 @@ export interface GuichetDashboardData {
 }
 
 export interface GuichetSeatMap {
-  voyage_id: number;
+  voyage_id: ApiId;
   voyage: { trajet: string; date: string; heure_depart: string; prix: number };
   sieges: Array<{ id: string | null; numero: number; statut: 'libre' | 'occupe' | 'reserve' }>;
   resume: { total: number; libres: number; occupes: number };
@@ -568,7 +570,7 @@ export interface GuichetScanResult {
   message: string;
   reference: string | null;
   source: 'guichet' | 'mobile' | null;
-  voyage_id: number | null;
+  voyage_id: ApiId | null;
   client_nom: string | null;
   numero_siege: number | null;
 }
@@ -737,7 +739,7 @@ class ApiService {
     return this.request<Company[]>(`/companies/?filter=${encodeURIComponent(filter)}`);
   }
 
-  async getCompany(id: number): Promise<Company> {
+  async getCompany(id: ApiId): Promise<Company> {
     return this.request<Company>(`/companies/${id}/`);
   }
 
@@ -748,26 +750,26 @@ class ApiService {
     });
   }
 
-  async updateCompany(id: number, company: Partial<Company>): Promise<Company> {
+  async updateCompany(id: ApiId, company: Partial<Company>): Promise<Company> {
     return this.request<Company>(`/companies/${id}/`, {
       method: 'PATCH',
       body: JSON.stringify(company),
     });
   }
 
-  async deleteCompany(id: number): Promise<void> {
+  async deleteCompany(id: ApiId): Promise<void> {
     return this.request<void>(`/companies/${id}/`, {
       method: 'DELETE',
     });
   }
 
-  async restoreCompany(id: number): Promise<Company> {
+  async restoreCompany(id: ApiId): Promise<Company> {
     return this.request<Company>(`/companies/${id}/restore/`, {
       method: 'POST',
     });
   }
 
-  async hardDeleteCompany(id: number, password: string): Promise<{ detail: string }> {
+  async hardDeleteCompany(id: ApiId, password: string): Promise<{ detail: string }> {
     return this.request<{ detail: string }>(`/companies/${id}/hard-delete/`, {
       method: 'POST',
       body: JSON.stringify({ password }),
@@ -775,21 +777,21 @@ class ApiService {
   }
 
   // Trajets
-  async getRoutes(companyId?: number): Promise<Trip[]> {
+  async getRoutes(companyId?: ApiId): Promise<Trip[]> {
     const query = companyId ? `?company_id=${encodeURIComponent(String(companyId))}` : '';
     return this.request<Trip[]>(`/trips/${query}`);
   }
 
-  async getRoute(id: number): Promise<Trip> {
+  async getRoute(id: ApiId): Promise<Trip> {
     return this.request<Trip>(`/trips/${id}/`);
   }
 
   // Backwards-compatible aliases expected by frontend components/hooks
-  async getTrip(id: number): Promise<Trip> {
+  async getTrip(id: ApiId): Promise<Trip> {
     return this.getRoute(id);
   }
 
-  async getTrips(companyId?: number): Promise<Trip[]> {
+  async getTrips(companyId?: ApiId): Promise<Trip[]> {
     return this.getRoutes(companyId);
   }
 
@@ -804,24 +806,24 @@ class ApiService {
     return this.createRoute(trip);
   }
 
-  async updateRoute(id: number, trip: Partial<Trip>): Promise<Trip> {
+  async updateRoute(id: ApiId, trip: Partial<Trip>): Promise<Trip> {
     return this.request<Trip>(`/trips/${id}/`, {
       method: 'PATCH',
       body: JSON.stringify(trip),
     });
   }
 
-  async updateTrip(id: number, trip: Partial<Trip>): Promise<Trip> {
+  async updateTrip(id: ApiId, trip: Partial<Trip>): Promise<Trip> {
     return this.updateRoute(id, trip);
   }
 
-  async deleteRoute(id: number): Promise<void> {
+  async deleteRoute(id: ApiId): Promise<void> {
     return this.request<void>(`/trips/${id}/`, {
       method: 'DELETE',
     });
   }
 
-  async deleteTrip(id: number): Promise<void> {
+  async deleteTrip(id: ApiId): Promise<void> {
     return this.deleteRoute(id);
   }
 
@@ -863,13 +865,13 @@ class ApiService {
   }
 
   // Voyages datés
-  async getScheduledTrips(companyId?: number): Promise<ScheduledTrip[]> {
+  async getScheduledTrips(companyId?: ApiId): Promise<ScheduledTrip[]> {
     const query = companyId ? `?company_id=${encodeURIComponent(String(companyId))}` : '';
     const raw = await this.request<any[]>(`/scheduled_trips/${query}`);
     return this.flattenScheduledTrips(raw);
   }
 
-  async getScheduledTrip(id: number): Promise<ScheduledTrip> {
+  async getScheduledTrip(id: ApiId): Promise<ScheduledTrip> {
     const raw = await this.request<any>(`/scheduled_trips/${id}/`);
     return this.flattenScheduledTrips([raw])[0];
   }
@@ -881,14 +883,14 @@ class ApiService {
     });
   }
 
-  async updateScheduledTrip(id: number, scheduledTrip: Partial<ScheduledTrip>): Promise<ScheduledTrip> {
+  async updateScheduledTrip(id: ApiId, scheduledTrip: Partial<ScheduledTrip>): Promise<ScheduledTrip> {
     return this.request<ScheduledTrip>(`/scheduled_trips/${id}/`, {
       method: 'PATCH',
       body: JSON.stringify(scheduledTrip),
     });
   }
 
-  async deleteScheduledTrip(id: number): Promise<void> {
+  async deleteScheduledTrip(id: ApiId): Promise<void> {
     return this.request<void>(`/scheduled_trips/${id}/`, {
       method: 'DELETE',
     });
@@ -902,13 +904,13 @@ class ApiService {
   /**
    * Retourne une liste de numéros de sièges (strings) déjà réservés pour un trajet et une date.
    */
-  async getBookedSeats(tripId: number, travelDate: string): Promise<string[]> {
+  async getBookedSeats(tripId: ApiId, travelDate: string): Promise<string[]> {
     const q = `?trip_id=${encodeURIComponent(String(tripId))}&travel_date=${encodeURIComponent(String(travelDate))}`;
     return this.request<string[]>(`/booked_seats/${q}`);
   }
 
   async getAvailability(
-    tripId: number,
+    tripId: ApiId,
     travelDate: string,
     originStop?: number | string | null,
     destinationStop?: number | string | null,
@@ -923,11 +925,11 @@ class ApiService {
     return this.request<{ occupied_seats: string[]; available_seats: number; capacity: number }>(`/availability/${q}`);
   }
 
-  async getCompanyBookings(companyId: number): Promise<Booking[]> {
+  async getCompanyBookings(companyId: ApiId): Promise<Booking[]> {
     return this.request<Booking[]>(`/companies/${companyId}/bookings/`);
   }
 
-  async getBooking(id: number): Promise<Booking> {
+  async getBooking(id: ApiId): Promise<Booking> {
     return this.request<Booking>(`/bookings/${id}/`);
   }
 
@@ -993,26 +995,26 @@ class ApiService {
     };
   }
 
-  async updateBooking(id: number, booking: Partial<Booking>): Promise<Booking> {
+  async updateBooking(id: ApiId, booking: Partial<Booking>): Promise<Booking> {
     return this.request<Booking>(`/bookings/${id}/`, {
       method: 'PUT',
       body: JSON.stringify(booking),
     });
   }
 
-  async deleteBooking(id: number): Promise<void> {
+  async deleteBooking(id: ApiId): Promise<void> {
     return this.request<void>(`/bookings/${id}/`, {
       method: 'DELETE',
     });
   }
 
-  async confirmBooking(id: number): Promise<{ status: string }> {
+  async confirmBooking(id: ApiId): Promise<{ status: string }> {
     return this.request<{ status: string }>(`/bookings/${id}/confirm/`, {
       method: 'POST',
     });
   }
 
-  async cancelBooking(id: number): Promise<{ status: string }> {
+  async cancelBooking(id: ApiId): Promise<{ status: string }> {
     return this.request<{ status: string }>(`/bookings/${id}/cancel/`, {
       method: 'POST',
     });
@@ -1024,18 +1026,18 @@ class ApiService {
     return this.request<any[]>('/users/');
   }
 
-  async getUser(id: number): Promise<any> {
+  async getUser(id: ApiId): Promise<any> {
     return this.request<any>(`/users/${id}/`);
   }
 
-  async updateUser(id: number, user: Partial<any>): Promise<any> {
+  async updateUser(id: ApiId, user: Partial<any>): Promise<any> {
     return this.request<any>(`/users/${id}/`, {
       method: 'PUT',
       body: JSON.stringify(user),
     });
   }
 
-  async deleteUser(id: number): Promise<void> {
+  async deleteUser(id: ApiId): Promise<void> {
     return this.request<void>(`/users/${id}/`, {
       method: 'DELETE',
     });
@@ -1062,19 +1064,19 @@ class ApiService {
     return this.request<PlatformAdminCompany>('/platform-admin/companies/', { method: 'POST', body: JSON.stringify(payload) });
   }
 
-  async getPlatformAdminCompany(id: number): Promise<PlatformAdminCompany> {
+  async getPlatformAdminCompany(id: ApiId): Promise<PlatformAdminCompany> {
     return this.request<PlatformAdminCompany>(`/platform-admin/companies/${id}/`);
   }
 
-  async updatePlatformAdminCompany(id: number, payload: Partial<PlatformAdminCompany>): Promise<PlatformAdminCompany> {
+  async updatePlatformAdminCompany(id: ApiId, payload: Partial<PlatformAdminCompany>): Promise<PlatformAdminCompany> {
     return this.request<PlatformAdminCompany>(`/platform-admin/companies/${id}/`, { method: 'PATCH', body: JSON.stringify(payload) });
   }
 
-  async setPlatformAdminCompanyStatus(id: number, isActive: boolean, reason = ''): Promise<PlatformAdminCompany> {
+  async setPlatformAdminCompanyStatus(id: ApiId, isActive: boolean, reason = ''): Promise<PlatformAdminCompany> {
     return this.request<PlatformAdminCompany>(`/platform-admin/companies/${id}/status/`, { method: 'PATCH', body: JSON.stringify({ is_active: isActive, reason }) });
   }
 
-  async createPlatformCompanyAdmin(companyId: number, payload: Record<string, unknown>): Promise<PlatformAdminUser> {
+  async createPlatformCompanyAdmin(companyId: ApiId, payload: Record<string, unknown>): Promise<PlatformAdminUser> {
     return this.request<PlatformAdminUser>(`/platform-admin/companies/${companyId}/admins/`, { method: 'POST', body: JSON.stringify(payload) });
   }
 
@@ -1088,15 +1090,15 @@ class ApiService {
     return this.request<PlatformAdminUser>('/platform-admin/users/', { method: 'POST', body: JSON.stringify(payload) });
   }
 
-  async setPlatformAdminUserStatus(id: number, isActive: boolean, reason = ''): Promise<PlatformAdminUser> {
+  async setPlatformAdminUserStatus(id: ApiId, isActive: boolean, reason = ''): Promise<PlatformAdminUser> {
     return this.request<PlatformAdminUser>(`/platform-admin/users/${id}/status/`, { method: 'PATCH', body: JSON.stringify({ is_active: isActive, reason }) });
   }
 
-  async resetPlatformAdminUserPassword(id: number, newPassword: string): Promise<{ detail: string }> {
+  async resetPlatformAdminUserPassword(id: ApiId, newPassword: string): Promise<{ detail: string }> {
     return this.request<{ detail: string }>(`/platform-admin/users/${id}/reset-password/`, { method: 'POST', body: JSON.stringify({ new_password: newPassword }) });
   }
 
-  async revokePlatformAdminUserSessions(id: number): Promise<{ detail: string; tokens_deleted: number }> {
+  async revokePlatformAdminUserSessions(id: ApiId): Promise<{ detail: string; tokens_deleted: number }> {
     return this.request<{ detail: string; tokens_deleted: number }>(`/platform-admin/users/${id}/revoke-sessions/`, { method: 'POST' });
   }
 
@@ -1106,7 +1108,7 @@ class ApiService {
     return this.request<PlatformAdminVoyage[]>(`/platform-admin/voyages/${params.size ? `?${params}` : ''}`);
   }
 
-  async setPlatformAdminVoyageStatus(id: number, isActive: boolean, reason = ''): Promise<PlatformAdminVoyage> {
+  async setPlatformAdminVoyageStatus(id: ApiId, isActive: boolean, reason = ''): Promise<PlatformAdminVoyage> {
     return this.request<PlatformAdminVoyage>(`/platform-admin/voyages/${id}/status/`, { method: 'PATCH', body: JSON.stringify({ is_active: isActive, reason }) });
   }
 
@@ -1238,14 +1240,14 @@ class ApiService {
     return this.request<any>('/guichet/agents/creer/', { method: 'POST', body: JSON.stringify(payload) });
   }
 
-  async setGuichetAgentActive(agentId: number, actif: boolean): Promise<{ status: string; actif: boolean }> {
+  async setGuichetAgentActive(agentId: ApiId, actif: boolean): Promise<{ status: string; actif: boolean }> {
     return this.request<{ status: string; actif: boolean }>(`/guichet/agents/${agentId}/activer/`, {
       method: 'PATCH',
       body: JSON.stringify({ actif }),
     });
   }
 
-  async getCompanyAgencies(filters?: { ville_id?: number; statut?: 'active' | 'inactive' }): Promise<Agency[]> {
+  async getCompanyAgencies(filters?: { ville_id?: ApiId; statut?: 'active' | 'inactive' }): Promise<Agency[]> {
     const params = new URLSearchParams();
     if (filters?.ville_id) params.set('ville_id', String(filters.ville_id));
     if (filters?.statut) params.set('statut', filters.statut);
@@ -1271,7 +1273,7 @@ class ApiService {
     });
   }
 
-  async assignCompanyAgencyManager(id: string, gestionnaireId: number | null): Promise<Agency> {
+  async assignCompanyAgencyManager(id: string, gestionnaireId: ApiId | null): Promise<Agency> {
     return this.request<Agency>(`/compagnie/agences/${encodeURIComponent(id)}/affecter-gestionnaire/`, {
       method: 'PATCH',
       body: JSON.stringify({ gestionnaire_id: gestionnaireId }),
@@ -1308,14 +1310,14 @@ class ApiService {
     });
   }
 
-  async assignCompanyAgent(agentId: number, agencyId: string | null, counterId: string | null): Promise<GuichetAgent> {
+  async assignCompanyAgent(agentId: ApiId, agencyId: string | null, counterId: string | null): Promise<GuichetAgent> {
     return this.request<GuichetAgent>(`/compagnie/agents/${agentId}/affectation/`, {
       method: 'PATCH',
       body: JSON.stringify({ agence_id: agencyId, guichet_id: counterId }),
     });
   }
 
-  async getCompanyStats(id: number): Promise<CompanyStats> {
+  async getCompanyStats(id: ApiId): Promise<CompanyStats> {
     return this.request<CompanyStats>(`/companies/${id}/stats/`);
   }
 
@@ -1350,18 +1352,18 @@ class ApiService {
     });
   }
 
-  async getAITripInsights(scheduledTripId: number): Promise<AITripInsights> {
+  async getAITripInsights(scheduledTripId: ApiId): Promise<AITripInsights> {
     return this.request<AITripInsights>(`/ai/trips/${scheduledTripId}/insights/`);
   }
 
-  async reportAITripDelay(scheduledTripId: number, reportedDelayMinutes: number): Promise<AITripInsights> {
+  async reportAITripDelay(scheduledTripId: ApiId, reportedDelayMinutes: number): Promise<AITripInsights> {
     return this.request<AITripInsights>(`/ai/trips/${scheduledTripId}/insights/`, {
       method: 'PATCH',
       body: JSON.stringify({ reported_delay_minutes: reportedDelayMinutes }),
     });
   }
 
-  async getAIBookingRisk(bookingId: number): Promise<AIBookingRisk> {
+  async getAIBookingRisk(bookingId: ApiId): Promise<AIBookingRisk> {
     return this.request<AIBookingRisk>(`/ai/bookings/${bookingId}/risk/`);
   }
 
