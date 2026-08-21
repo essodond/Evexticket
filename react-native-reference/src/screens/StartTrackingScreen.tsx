@@ -25,6 +25,7 @@ import {
 } from '../services/api';
 import {
   ManageableTrackingTrip,
+  ApiId,
   RootStackParamList,
   TrackingPosition,
   TrackingSnapshot,
@@ -58,8 +59,8 @@ export default function StartTrackingScreen({ route }: Props) {
   const subscriptionRef = useRef<Location.LocationSubscription | null>(null);
   const sendingRef = useRef(false);
   const [trips, setTrips] = useState<ManageableTrackingTrip[]>([]);
-  const [selectedTripId, setSelectedTripId] = useState<number | null>(
-    route.params?.tripId ? Number(route.params.tripId) : null,
+  const [selectedTripId, setSelectedTripId] = useState<ApiId | null>(
+    route.params?.tripId ?? null,
   );
   const [snapshot, setSnapshot] = useState<TrackingSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,7 +68,7 @@ export default function StartTrackingScreen({ route }: Props) {
   const [stopping, setStopping] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
 
-  const selectedTrip = trips.find((trip) => trip.id === selectedTripId) ?? null;
+  const selectedTrip = trips.find((trip) => String(trip.id) === String(selectedTripId)) ?? null;
 
   const loadTrips = useCallback(async () => {
     try {
@@ -99,7 +100,7 @@ export default function StartTrackingScreen({ route }: Props) {
       .catch(() => setSnapshot(null));
   }, [selectedTripId]);
 
-  const sendLocation = useCallback(async (tripId: number, location: Location.LocationObject) => {
+  const sendLocation = useCallback(async (tripId: ApiId, location: Location.LocationObject) => {
     if (sendingRef.current) return;
     sendingRef.current = true;
     try {
@@ -205,7 +206,7 @@ export default function StartTrackingScreen({ route }: Props) {
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tripList}>
             {trips.map((trip) => {
-              const selected = trip.id === selectedTripId;
+              const selected = String(trip.id) === String(selectedTripId);
               return (
                 <TouchableOpacity
                   key={trip.id}

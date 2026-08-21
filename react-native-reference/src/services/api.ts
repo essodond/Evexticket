@@ -9,8 +9,10 @@ import {
   TrackingSnapshot,
   ManageableTrackingTrip,
   DriverLocationPayload,
+  ApiId,
 } from '../types';
 import { Platform, NativeModules } from 'react-native';
+import { assertJsonBodyHasNoUnsafeIntegers, assertNoUnsafeIntegers } from '../utils/safeIntegers';
 
 export interface LoginData {
   // username previously accepted email or phone; password reused as PIN in new flow
@@ -97,6 +99,10 @@ async function handleResponse(response: Response) {
     data = null;
   }
 
+  if (isJson && data !== null) {
+    assertNoUnsafeIntegers(data, 'réponse');
+  }
+
   if (!response.ok) {
     console.error('🚨 handleResponse - Erreur de réponse:', {
       status: response.status,
@@ -138,6 +144,7 @@ async function fetchWithTimeout(
   const id = setTimeout(() => controller.abort(), TIMEOUT);
 
   try {
+    assertJsonBodyHasNoUnsafeIntegers(options.body);
     const response = await fetch(resource, {
       ...options,
       signal: controller.signal,
@@ -302,11 +309,11 @@ export async function getManageableTrackingTrips(): Promise<ManageableTrackingTr
   return request<ManageableTrackingTrip[]>('/tracking/trips/');
 }
 
-export async function getTripTracking(tripId: string | number): Promise<TrackingSnapshot> {
+export async function getTripTracking(tripId: ApiId): Promise<TrackingSnapshot> {
   return request<TrackingSnapshot>(`/scheduled_trips/${tripId}/tracking/`);
 }
 
-export async function startTripTracking(tripId: string | number): Promise<TrackingSnapshot> {
+export async function startTripTracking(tripId: ApiId): Promise<TrackingSnapshot> {
   return request<TrackingSnapshot>(`/scheduled_trips/${tripId}/tracking/start/`, {
     method: 'POST',
     body: JSON.stringify({}),
@@ -314,7 +321,7 @@ export async function startTripTracking(tripId: string | number): Promise<Tracki
 }
 
 export async function sendTripPosition(
-  tripId: string | number,
+  tripId: ApiId,
   location: DriverLocationPayload,
 ): Promise<TrackingSnapshot> {
   return request<TrackingSnapshot>(`/scheduled_trips/${tripId}/tracking/position/`, {
@@ -323,7 +330,7 @@ export async function sendTripPosition(
   });
 }
 
-export async function stopTripTracking(tripId: string | number): Promise<TrackingSnapshot> {
+export async function stopTripTracking(tripId: ApiId): Promise<TrackingSnapshot> {
   return request<TrackingSnapshot>(`/scheduled_trips/${tripId}/tracking/stop/`, {
     method: 'POST',
     body: JSON.stringify({}),
@@ -601,14 +608,14 @@ export async function getMyBookings(): Promise<any[]> {
 }
 
 export interface City {
-  id: number;
+  id: ApiId;
   name: string;
 }
 
 export interface PartnerStation {
   id: string;
   name: string;
-  city_id: number;
+  city_id: ApiId;
   city_name: string;
   region: string;
   address: string;
@@ -619,7 +626,7 @@ export interface PartnerStation {
 }
 
 export interface PartnerReview {
-  id: number;
+  id: ApiId;
   rating: number;
   comment: string;
   created_at: string;
@@ -628,7 +635,7 @@ export interface PartnerReview {
 }
 
 export interface PartnerEligibleBooking {
-  id: number;
+  id: ApiId;
   reference: string;
   route: string;
   travel_date: string | null;
@@ -637,7 +644,7 @@ export interface PartnerEligibleBooking {
 }
 
 export interface PartnerCompany {
-  id: number;
+  id: ApiId;
   name: string;
   description: string;
   address: string;
@@ -695,7 +702,7 @@ export interface TicketAssistantResponse {
 }
 
 export interface SmartNotification {
-  booking_id: number;
+  booking_id: ApiId;
   type: string;
   title: string;
   message: string;
@@ -732,17 +739,17 @@ export async function getPartnerCompanies(): Promise<PartnerCompany[]> {
 }
 
 export async function getPartnerCompany(
-  companyId: number | string,
+  companyId: ApiId,
 ): Promise<PartnerCompany> {
   return request<PartnerCompany>(`/partners/${companyId}/`);
 }
 
 export async function ratePartnerCompany(
-  companyId: number | string,
-  payload: { booking_id: number; rating: number; comment: string },
+  companyId: ApiId,
+  payload: { booking_id: ApiId; rating: number; comment: string },
 ): Promise<{
-  id: number;
-  booking_id: number;
+  id: ApiId;
+  booking_id: ApiId;
   rating: number;
   comment: string;
   rating_average: number;
@@ -770,7 +777,7 @@ export async function getAIRecommendations(departureCity?: string): Promise<Trip
 }
 
 export async function askTicketAssistant(
-  bookingId: number,
+  bookingId: ApiId,
   question: string
 ): Promise<TicketAssistantResponse> {
   return request<TicketAssistantResponse>(`/ai/tickets/${bookingId}/assistant/`, {

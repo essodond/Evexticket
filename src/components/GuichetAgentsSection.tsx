@@ -1,11 +1,11 @@
 import React from 'react';
 import { Plus, Power, Users } from 'lucide-react';
-import type { GuichetAgent } from '../services/api';
+import type { ApiId, GuichetAgent } from '../services/api';
 
 interface GuichetAgentsSectionProps {
   agents: GuichetAgent[];
   loading?: boolean;
-  togglingAgentId?: number | null;
+  togglingAgentId?: ApiId | null;
   onCreate: () => void;
   onToggle: (agent: GuichetAgent) => void;
 }

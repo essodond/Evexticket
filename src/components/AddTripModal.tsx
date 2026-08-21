@@ -110,7 +110,9 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
     const parsedValue: any = (type === 'checkbox')
       ? (e.target as HTMLInputElement).checked
       : (e.target as HTMLSelectElement).tagName === 'SELECT' && name.match(/City/i)
-        ? (value === '' ? '' : Number(value))
+        // CockroachDB generates 64-bit IDs. Keep select values as strings because
+        // converting them to Number can silently round values above 2^53 - 1.
+        ? value
         : (type === 'number' ? parseFloat(value) || 0 : value);
 
     setFormData(prev => ({

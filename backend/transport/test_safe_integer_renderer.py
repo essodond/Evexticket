@@ -3,7 +3,7 @@ import json
 from django.contrib.auth.models import User
 from rest_framework.test import APITestCase
 
-from transport.models import Company
+from transport.models import City, Company, Trip
 
 
 class SafeIntegerRendererTests(APITestCase):
@@ -44,3 +44,70 @@ class SafeIntegerRendererTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         payload = json.loads(response.content)
         self.assertIsInstance(payload['total_bookings'], int)
+
+    def test_large_city_ids_round_trip_as_strings_when_creating_trip(self):
+        departure_id = self.unsafe_id + 2
+        arrival_id = self.unsafe_id + 4
+        City.objects.create(id=departure_id, name='Lomé CRDB', region='Maritime')
+        City.objects.create(id=arrival_id, name='Kara CRDB', region='Kara')
+
+        cities_response = self.client.get('/api/cities/')
+        self.assertEqual(cities_response.status_code, 200)
+        city_payload = json.loads(cities_response.content)
+        self.assertEqual(
+            {item['id'] for item in city_payload},
+            {str(departure_id), str(arrival_id)},
+        )
+
+        trip_response = self.client.post(
+            '/api/trips/',
+            {
+                'company': str(self.unsafe_id),
+                'departure_city': str(departure_id),
+                'arrival_city': str(arrival_id),
+                'departure_time': '08:00',
+                'arrival_time': '10:00',
+                'price': '7500.00',
+                'duration': 120,
+                'bus_type': 'Standard',
+                'capacity': 50,
+            },
+            format='json',
+        )
+
+        self.assertEqual(trip_response.status_code, 201, trip_response.data)
+        trip = Trip.objects.get()
+        self.assertEqual(trip.company_id, self.unsafe_id)
+        self.assertEqual(trip.departure_city_id, departure_id)
+        self.assertEqual(trip.arrival_city_id, arrival_id)
+        response_payload = json.loads(trip_response.content)
+        self.assertEqual(response_payload['company'], str(self.unsafe_id))
+        self.assertEqual(response_payload['departure_city'], str(departure_id))
+        self.assertEqual(response_payload['arrival_city'], str(arrival_id))
+
+    def test_unsafe_json_integer_is_rejected_with_actionable_error(self):
+        response = self.client.generic(
+            'POST',
+            '/api/trips/',
+            json.dumps({
+                'company': self.unsafe_id,
+                'departure_city': self.unsafe_id + 2,
+                'arrival_city': self.unsafe_id + 4,
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('doivent être transmis sous forme de chaînes', response.data['detail'])
+        self.assertFalse(Trip.objects.exists())
+
+    def test_unsafe_exponential_json_number_is_also_rejected(self):
+        response = self.client.generic(
+            'POST',
+            '/api/trips/',
+            '{"company": 1.2008037870527447e18}',
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('doivent être transmis sous forme de chaînes', response.data['detail'])

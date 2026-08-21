@@ -209,6 +209,11 @@ REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': [
         'togotrans_api.renderers.SafeIntegerJSONRenderer',
     ],
+    'DEFAULT_PARSER_CLASSES': [
+        'togotrans_api.parsers.SafeIntegerJSONParser',
+        'rest_framework.parsers.FormParser',
+        'rest_framework.parsers.MultiPartParser',
+    ],
 }
 
 # CORS settings

@@ -10,14 +10,14 @@ import {
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { RootStackParamList } from '../types';
+import { ApiId, RootStackParamList } from '../types';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
 import { formatCurrency } from '../utils/mockData';
 import { getMyBookings } from '../services/api';
 
 interface TicketItem {
-  id: number;
+  id: ApiId;
   reference: string;
   passenger_name: string;
   date: string;
@@ -30,9 +30,9 @@ interface TicketItem {
   arrival: string;
   seat_number: string;
   status: string;
-  scheduled_trip?: number | null;
-  origin_stop?: number | string | null;
-  destination_stop?: number | string | null;
+  scheduled_trip?: ApiId | null;
+  origin_stop?: ApiId | null;
+  destination_stop?: ApiId | null;
   trip_info?: any;
 }
 import { useAuth } from '../contexts/AuthContext';
@@ -42,7 +42,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'MainTabs'>;
 export default function MyTicketsScreen({ navigation }: Props) {
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [hiddenTickets, setHiddenTickets] = useState<Set<number>>(new Set());
+  const [hiddenTickets, setHiddenTickets] = useState<Set<ApiId>>(new Set());
   const { user } = useAuth();
 
   useEffect(() => {

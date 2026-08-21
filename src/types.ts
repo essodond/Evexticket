@@ -30,11 +30,11 @@ export interface Company {
 
 export interface Trip {
   id: number | string;
-  company?: number;
+  company?: number | string;
   company_name?: string;
-  departure_city?: number;
+  departure_city?: number | string;
   departure_city_name?: string;
-  arrival_city?: number;
+  arrival_city?: number | string;
   arrival_city_name?: string;
   departure_time?: string;
   arrival_time?: string;

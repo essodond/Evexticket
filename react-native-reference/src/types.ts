@@ -1,8 +1,10 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SeatStatus } from './components/SeatSelection';
 
+export type ApiId = string | number;
+
 export interface User {
-  id: number;
+  id: ApiId;
   username: string;
   email: string;
   first_name: string;
@@ -11,7 +13,7 @@ export interface User {
   date_joined?: string;
   loyalty?: LoyaltySummary;
   role?: 'CLIENT' | 'AGENT_GUICHET' | 'ADMIN_COMPAGNIE' | 'SUPER_ADMIN';
-  company_id?: number | null;
+  company_id?: ApiId | null;
 }
 
 export interface LoyaltyLevelPreview {
@@ -27,11 +29,11 @@ export interface LoyaltyLevel extends LoyaltyLevelPreview {
 }
 
 export interface LoyaltyTransaction {
-  id: number;
+  id: ApiId;
   points: number;
   event_type: 'trip_completed' | 'trip_reversed' | 'adjustment';
   description: string;
-  booking_id: number | null;
+  booking_id: ApiId | null;
   created_at: string;
 }
 
@@ -46,7 +48,7 @@ export interface LoyaltySummary {
 export type TrackingStatus = 'not_started' | 'live' | 'offline' | 'stopped';
 
 export interface TrackingPosition {
-  id?: number;
+  id?: ApiId;
   latitude: number;
   longitude: number;
   accuracy_m: number | null;
@@ -57,7 +59,7 @@ export interface TrackingPosition {
 
 export interface TrackingStop {
   id: string;
-  trip_stop_id: number | null;
+  trip_stop_id: ApiId | null;
   sequence: number;
   city_name: string;
   station_name: string;
@@ -67,7 +69,7 @@ export interface TrackingStop {
 }
 
 export interface TrackingSnapshot {
-  scheduled_trip_id: number;
+  scheduled_trip_id: ApiId;
   status: TrackingStatus;
   is_active: boolean;
   is_stale: boolean;
@@ -94,7 +96,7 @@ export interface TrackingSnapshot {
 }
 
 export interface ManageableTrackingTrip {
-  id: number;
+  id: ApiId;
   date: string;
   departure_time: string;
   departure_city: string;
@@ -113,12 +115,12 @@ export interface DriverLocationPayload {
 }
 
 export interface City {
-  id: number;
+  id: ApiId;
   name: string;
 }
 
 export interface Company {
-  id: number;
+  id: ApiId;
   name: string;
   logo_url?: string;
 }
@@ -130,15 +132,15 @@ export interface Seat {
 }
 
 export interface Trip {
-  id: number | string;
+  id: ApiId;
   available_seats: number;
   date: string;
-  trip: number;
+  trip: ApiId;
   seat_number?: string;
   payment_status?: string;
   transaction_id?: string;
   trip_info: {
-    company?: number;
+    company?: ApiId;
     departure_city?: City | number | string;
     arrival_city?: City | number | string;
     arrival_city_name: string;
@@ -152,7 +154,7 @@ export interface Trip {
     departure_city_name: string;
     departure_time: string;
     duration: number;
-    id: number;
+    id: ApiId;
     price: string;
     stops: TripStop[];
     departure_station?: StationDestination | null;
@@ -163,9 +165,9 @@ export interface Trip {
 export type PaymentMethod = 'flooz' | 'tmoney';
 
 export interface TripStop {
-  id: number;
-  trip?: number;
-  city: City | number;
+  id: ApiId;
+  trip?: ApiId;
+  city: City | ApiId;
   city_name?: string;
   sequence?: number;
   segment_price?: string | null;
@@ -175,9 +177,9 @@ export interface TripStop {
 }
 
 export interface BoardingZone {
-  id: number;
-  trip_stop: number;
-  city?: number;
+  id: ApiId;
+  trip_stop: ApiId;
+  city?: ApiId;
   city_name?: string;
   name: string;
   description?: string;
@@ -205,11 +207,11 @@ export type RootStackParamList = {
   TripDetails: { trip: Trip };
   Payment: { trip: Trip; selectedSeat?: string | null };
   Ticket: { trip: Trip };
-  TrackBus: { tripId?: string | number };
-  StartTracking: { tripId?: string | number };
+  TrackBus: { tripId?: ApiId };
+  StartTracking: { tripId?: ApiId };
   StationMap: { station: StationDestination };
-  CompanyDetails: { companyId: number; preferredCityName?: string };
-  TicketAssistant: { bookingId: number; reference?: string };
+  CompanyDetails: { companyId: ApiId; preferredCityName?: string };
+  TicketAssistant: { bookingId: ApiId; reference?: string };
   PaymentSuccess: undefined;
   PaymentFailed: undefined;
 };

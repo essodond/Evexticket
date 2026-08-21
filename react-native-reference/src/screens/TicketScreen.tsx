@@ -64,9 +64,7 @@ export default function TicketScreen({ navigation, route }: Props) {
   const departureStation = findDepartureStation(ticketData);
   const rawCompanyId =
     tripInfo.company || ticketData.company_id || ticketData.trip_company_id;
-  const companyId = Number.isFinite(Number(rawCompanyId))
-    ? Number(rawCompanyId)
-    : null;
+  const companyId = rawCompanyId == null ? null : String(rawCompanyId);
   const qrPayload = JSON.stringify({
     type: 'EVEX_TICKET',
     reference: ticketNumber,

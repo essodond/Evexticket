@@ -152,8 +152,9 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
   const arrivalTimeLabel = formatTime(arrivalTime);
   const seatsLeft = (trip as any).seats_left ?? (trip as any).seatsLeft ?? '';
   const departureStation = findDepartureStation(trip);
-  const companyId = Number((trip as any).trip_info?.company);
-  const canOpenCompany = Number.isFinite(companyId);
+  const rawCompanyId = (trip as any).trip_info?.company;
+  const companyId = rawCompanyId == null ? null : String(rawCompanyId);
+  const canOpenCompany = Boolean(companyId);
 
   return (
     <View style={styles.container}>
@@ -264,7 +265,7 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
                   navigation.navigate('StationMap', { station: departureStation });
                 } else {
                   navigation.navigate('CompanyDetails', {
-                    companyId,
+                    companyId: companyId!,
                     preferredCityName: trip.trip_info.departure_city_name,
                   });
                 }

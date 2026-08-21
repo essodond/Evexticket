@@ -14,7 +14,7 @@ import {
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import apiService from '../../services/api';
-import type { Agency, AgencyCounter, Booking, City, Company, CompanyStats, GuichetAgent, ScheduledTrip, TicketOperation, Trip, UnifiedTicket } from '../../services/api';
+import type { Agency, AgencyCounter, ApiId, Booking, City, Company, CompanyStats, GuichetAgent, ScheduledTrip, TicketOperation, Trip, UnifiedTicket } from '../../services/api';
 import AddTripModal from '../AddTripModal';
 import AgencyPerformance from '../AgencyPerformance';
 import CreateGuichetModal from '../CreateGuichetModal';
@@ -219,8 +219,8 @@ export const CompanyAgencyDetailPage: React.FC = () => {
   const [showEdit, setShowEdit] = useState(false);
   const [showCounterModal, setShowCounterModal] = useState(false);
   const [editingCounter, setEditingCounter] = useState<AgencyCounter | null>(null);
-  const [assignments, setAssignments] = useState<Record<number, string>>({});
-  const [savingAgentId, setSavingAgentId] = useState<number | null>(null);
+  const [assignments, setAssignments] = useState<Record<string, string>>({});
+  const [savingAgentId, setSavingAgentId] = useState<ApiId | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -239,7 +239,7 @@ export const CompanyAgencyDetailPage: React.FC = () => {
       setAgents(agentData);
       setManagerId(agencyData.gestionnaire ? String(agencyData.gestionnaire.id) : '');
       setAssignments(Object.fromEntries(agentData.map((agent) => [
-        agent.id,
+        String(agent.id),
         agent.agence?.id === id ? (agent.guichet?.id || 'agency') : '',
       ])));
       setError(null);
@@ -275,7 +275,7 @@ export const CompanyAgencyDetailPage: React.FC = () => {
 
   const assignAgent = async (agent: GuichetAgent) => {
     if (!id) return;
-    const destination = assignments[agent.id] || '';
+    const destination = assignments[String(agent.id)] || '';
     setSavingAgentId(agent.id);
     setError(null);
     try {
@@ -319,7 +319,7 @@ export const CompanyAgencyDetailPage: React.FC = () => {
 
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Organisation</p><h2 className="mt-2 text-xl font-semibold text-slate-900">Affectation du personnel</h2><p className="mt-1 text-sm text-slate-500">Placez chaque agent dans l’agence seule ou dans un guichet précis.</p></div>
-            <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200"><table className="min-w-full divide-y divide-slate-200 text-sm"><thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Agent</th><th className="px-5 py-3">Rôle</th><th className="px-5 py-3">Affectation</th><th className="px-5 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-slate-100">{assignableAgents.length === 0 && <tr><td colSpan={4} className="px-5 py-10 text-center text-slate-500">Aucun agent actif disponible.</td></tr>}{assignableAgents.map((agent) => <tr key={agent.id}><td className="px-5 py-4"><p className="font-semibold text-slate-900">{agent.prenom} {agent.nom}</p><p className="text-xs text-slate-500">{agent.email}</p></td><td className="px-5 py-4 text-slate-600">{agent.est_gestionnaire ? 'Gestionnaire' : 'Agent guichet'}</td><td className="px-5 py-4"><select value={assignments[agent.id] || ''} onChange={(event) => setAssignments((current) => ({ ...current, [agent.id]: event.target.value }))} className="min-w-52 rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-blue-500"><option value="">Non affecté</option><option value="agency">Agence uniquement</option>{counters.filter((counter) => counter.is_active).map((counter) => <option key={counter.id} value={counter.id}>{counter.code} — {counter.nom}</option>)}</select></td><td className="px-5 py-4 text-right"><button type="button" disabled={savingAgentId === agent.id} onClick={() => void assignAgent(agent)} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{savingAgentId === agent.id ? 'Affectation…' : 'Enregistrer'}</button></td></tr>)}</tbody></table></div>
+            <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200"><table className="min-w-full divide-y divide-slate-200 text-sm"><thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Agent</th><th className="px-5 py-3">Rôle</th><th className="px-5 py-3">Affectation</th><th className="px-5 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-slate-100">{assignableAgents.length === 0 && <tr><td colSpan={4} className="px-5 py-10 text-center text-slate-500">Aucun agent actif disponible.</td></tr>}{assignableAgents.map((agent) => <tr key={agent.id}><td className="px-5 py-4"><p className="font-semibold text-slate-900">{agent.prenom} {agent.nom}</p><p className="text-xs text-slate-500">{agent.email}</p></td><td className="px-5 py-4 text-slate-600">{agent.est_gestionnaire ? 'Gestionnaire' : 'Agent guichet'}</td><td className="px-5 py-4"><select value={assignments[String(agent.id)] || ''} onChange={(event) => setAssignments((current) => ({ ...current, [String(agent.id)]: event.target.value }))} className="min-w-52 rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-blue-500"><option value="">Non affecté</option><option value="agency">Agence uniquement</option>{counters.filter((counter) => counter.is_active).map((counter) => <option key={counter.id} value={counter.id}>{counter.code} — {counter.nom}</option>)}</select></td><td className="px-5 py-4 text-right"><button type="button" disabled={savingAgentId === agent.id} onClick={() => void assignAgent(agent)} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{savingAgentId === agent.id ? 'Affectation…' : 'Enregistrer'}</button></td></tr>)}</tbody></table></div>
           </section>
         </>}
       </CompanyPageShell>
@@ -335,7 +335,7 @@ export const CompanyPersonnelPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [togglingId, setTogglingId] = useState<ApiId | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);

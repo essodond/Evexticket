@@ -10,6 +10,8 @@
 // - La méthode request utilise `credentials: 'include'` pour supporter la SessionAuthentication
 //   si le backend utilise des cookies.
 
+import { assertJsonBodyHasNoUnsafeIntegers, assertNoUnsafeIntegers } from '../utils/safeIntegers';
+
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
 ).replace(/\/$/, '');
@@ -644,6 +646,10 @@ class ApiService {
     };
 
     try {
+      // Never send an integer that JavaScript has already rounded. API IDs above
+      // Number.MAX_SAFE_INTEGER must remain decimal strings end-to-end.
+      assertJsonBodyHasNoUnsafeIntegers(config.body);
+
       const response = await fetch(url, config);
 
       if (!response.ok) {
@@ -696,6 +702,10 @@ class ApiService {
         // If response is not JSON for some reason, return raw text
         return (text as unknown) as T;
       }
+
+      // The Django renderer stringifies large CockroachDB integers. Fail loudly
+      // if an endpoint bypasses it instead of propagating a corrupted ID.
+      assertNoUnsafeIntegers(data, 'réponse');
 
       // DRF pagination: responses for list endpoints may be { count, next, previous, results: [...] }
       // Normalize by returning the inner `results` array when present so callers can always expect an array.

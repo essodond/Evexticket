@@ -58,7 +58,7 @@ export default function HomeConnectedScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false); // Nouvel état pour le rafraîchissement
   const [isSearchCollapsed, setIsSearchCollapsed] = useState(true); // État pour la barre de recherche dépliable
   const [cities, setCities] = useState<City[]>([]);
-  const [companies, setCompanies] = useState<{ id: number; name: string }[]>([]);
+  const [companies, setCompanies] = useState<{ id: string | number; name: string }[]>([]);
   const [loadingCities, setLoadingCities] = useState<boolean>(true);
   const [citiesError, setCitiesError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'departure' | 'price' | 'duration' | 'seats'>('departure');
@@ -148,7 +148,7 @@ export default function HomeConnectedScreen({ navigation }: Props) {
         new Map(
           fetchedTrips
             .map((trip) => ({
-              id: trip.id as number,
+              id: trip.id,
               name: trip.trip_info?.company_name || 'Compagnie inconnue',
             }))
             .map((item) => [item.name, item])

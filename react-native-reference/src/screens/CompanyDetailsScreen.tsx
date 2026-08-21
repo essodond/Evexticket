@@ -27,7 +27,7 @@ import {
   PartnerStation,
   ratePartnerCompany,
 } from '../services/api';
-import { RootStackParamList, StationDestination } from '../types';
+import { ApiId, RootStackParamList, StationDestination } from '../types';
 import { distanceBetweenCoordinatesKm } from '../utils/station';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CompanyDetails'>;
@@ -70,7 +70,7 @@ export default function CompanyDetailsScreen({ navigation, route }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedBookingId, setSelectedBookingId] = useState<number | null>(null);
+  const [selectedBookingId, setSelectedBookingId] = useState<ApiId | null>(null);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
 

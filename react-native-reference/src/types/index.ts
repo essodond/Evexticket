@@ -39,6 +39,6 @@ export type MainTabParamList = {
 };
 
 export interface City {
-  id: number;
+  id: string | number;
   name: string;
 }

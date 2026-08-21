@@ -11,9 +11,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
+import type { ApiId } from '../types';
 
 interface Option {
-  id: number;
+  id: ApiId;
   name: string;
 }
 
