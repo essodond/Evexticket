@@ -294,7 +294,7 @@ class TripStopSerializer(serializers.ModelSerializer):
 
 
 class TripSerializer(serializers.ModelSerializer):
-    company = serializers.PrimaryKeyRelatedField(queryset=Company.objects.all(), required=False)
+    company = serializers.PrimaryKeyRelatedField(queryset=Company.objects.all(), required=True)
     """Serializer pour les trajets (aligné avec models.base.Trip)"""
     company_name = serializers.CharField(source='company.name', read_only=True)
     company_logo = serializers.URLField(source='company.logo', read_only=True, allow_null=True)
@@ -312,7 +312,7 @@ class TripSerializer(serializers.ModelSerializer):
             'company',
             'company_name', 'company_logo', 'departure_city', 'departure_city_name', 'arrival_city', 'arrival_city_name',
             'price', 'departure_time', 'arrival_time',
-            'duration', 'bus_type', 'capacity',
+            'duration', 'bus_type', 'capacity', 'is_active',
             'bookings_count', 'available_seats', 'stops', 'departure_station'
         ]
         read_only_fields = [
@@ -663,6 +663,50 @@ class ScheduledTripSerializer(serializers.ModelSerializer):
             'id', 'trip', 'trip_info', 'date', 'is_active', 'departure_city_display', 'arrival_city_display', 'stops', 'available_seats', 'seats',
             'badge', 'booking_closed', 'badge_label', 'safety_blocked'
         ]
+        # A Trip signal pre-generates the next 14 dated departures. Creating the
+        # same (trip, date) from the admin form must therefore be idempotent
+        # instead of failing the default UniqueTogetherValidator.
+        validators = []
+
+    def create(self, validated_data):
+        trip = validated_data['trip']
+        selected_date = validated_data['date']
+        is_active = validated_data.get('is_active', True)
+        scheduled_trip, created = ScheduledTrip.objects.get_or_create(
+            trip=trip,
+            date=selected_date,
+            defaults={
+                'is_active': is_active,
+                'available_seats': trip.capacity,
+            },
+        )
+        if (
+            not created
+            and 'is_active' in validated_data
+            and scheduled_trip.is_active != is_active
+        ):
+            scheduled_trip.is_active = is_active
+            scheduled_trip.save(update_fields=['is_active'])
+        return scheduled_trip
+
+    def validate(self, attrs):
+        # Keep updates protected against moving a schedule onto another
+        # existing (trip, date), while allowing idempotent POST creation above.
+        if self.instance is not None:
+            trip = attrs.get('trip', self.instance.trip)
+            if trip.pk != self.instance.trip_id:
+                raise serializers.ValidationError(
+                    {'trip': 'Le trajet associé à un voyage programmé ne peut pas être remplacé.'}
+                )
+            selected_date = attrs.get('date', self.instance.date)
+            if ScheduledTrip.objects.filter(
+                trip=trip,
+                date=selected_date,
+            ).exclude(pk=self.instance.pk).exists():
+                raise serializers.ValidationError(
+                    {'date': 'Un voyage est déjà programmé pour ce trajet à cette date.'}
+                )
+        return attrs
 
     def _is_safety_blocked(self, obj):
         cache_name = '_evex_safety_blocked'

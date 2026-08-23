@@ -67,4 +67,38 @@ describe('AddTripModal with CockroachDB IDs', () => {
       trip: createdTripId,
     }));
   });
+
+  it('requires and submits a company when a platform admin creates a trip', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <AddTripModal
+        isOpen
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        editingTrip={null}
+        companies={[{ id: companyId, name: 'Evex Express' } as any]}
+        cities={[
+          { id: departureId, name: 'Lomé' },
+          { id: arrivalId, name: 'Kara' },
+        ]}
+      />,
+    );
+
+    await user.selectOptions(screen.getByLabelText(/Compagnie/), companyId);
+    await user.selectOptions(screen.getByLabelText(/Ville de départ/), departureId);
+    await user.selectOptions(screen.getByLabelText(/Ville d'arrivée/), arrivalId);
+    fireEvent.change(screen.getByLabelText(/Heure de départ/), { target: { value: '08:00' } });
+    fireEvent.change(screen.getByLabelText(/Heure d'arrivée/), { target: { value: '10:00' } });
+    fireEvent.change(screen.getByLabelText(/Date du voyage/), { target: { value: '2026-09-01' } });
+    fireEvent.change(screen.getByLabelText(/Prix \(FCFA\)/), { target: { value: '7500' } });
+    await user.click(screen.getByRole('button', { name: 'Créer' }));
+
+    await waitFor(() => expect(apiService.createTrip).toHaveBeenCalledOnce());
+    expect(apiService.createTrip).toHaveBeenCalledWith(expect.objectContaining({
+      company: companyId,
+      departure_city: departureId,
+      arrival_city: arrivalId,
+    }));
+  });
 });

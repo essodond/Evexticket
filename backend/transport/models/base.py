@@ -639,7 +639,7 @@ def create_scheduled_trips_on_trip_creation(sender, instance, created, **kwargs)
             ScheduledTrip.objects.get_or_create(
                 trip=instance,
                 date=d,
-                defaults={'is_active': True, 'available_seats': instance.capacity},
+                defaults={'is_active': instance.is_active, 'available_seats': instance.capacity},
             )
     except Exception:
         pass

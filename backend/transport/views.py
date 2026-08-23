@@ -513,14 +513,17 @@ class ScheduledTripViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         scheduled_trip = self.get_object()
         trip = scheduled_trip.trip
-        if not (
-            self.request.user.is_staff
-            or trip.company.admin_user_id == self.request.user.id
-            or trip.company.admins.filter(id=self.request.user.id).exists()
-        ):
-            raise serializers.ValidationError(
-                f"Vous n'avez pas la permission de modifier ce trajet planifié pour la compagnie '{trip.company.name}'."
-            )
+        target_trip = serializer.validated_data.get('trip', trip)
+        for candidate_trip in (trip, target_trip):
+            company = candidate_trip.company
+            if not (
+                self.request.user.is_staff
+                or company.admin_user_id == self.request.user.id
+                or company.admins.filter(id=self.request.user.id).exists()
+            ):
+                raise serializers.ValidationError(
+                    f"Vous n'avez pas la permission de modifier ce trajet planifié pour la compagnie '{company.name}'."
+                )
         serializer.save()
 
     def perform_destroy(self, instance):
@@ -1355,6 +1358,10 @@ class TripViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         # Ensure the user creating the trip is an admin of the associated company
         company = serializer.validated_data.get('company')
+        if company is None:
+            raise serializers.ValidationError(
+                {'company': 'Veuillez sélectionner une compagnie.'}
+            )
         if not (
             self.request.user.is_staff
             or company.admin_user_id == self.request.user.id
@@ -1369,12 +1376,16 @@ class TripViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         # Ensure the user updating the trip is an admin of the associated company
         company = serializer.instance.company
-        if not (
-            self.request.user.is_staff
-            or company.admin_user_id == self.request.user.id
-            or company.admins.filter(id=self.request.user.id).exists()
-        ):
-            raise serializers.ValidationError("You do not have permission to update trips for this company.")
+        target_company = serializer.validated_data.get('company', company)
+        for candidate_company in (company, target_company):
+            if not (
+                self.request.user.is_staff
+                or candidate_company.admin_user_id == self.request.user.id
+                or candidate_company.admins.filter(id=self.request.user.id).exists()
+            ):
+                raise serializers.ValidationError(
+                    "Vous n'avez pas la permission de déplacer ce trajet vers cette compagnie."
+                )
         serializer.save()
 
     def perform_destroy(self, instance):

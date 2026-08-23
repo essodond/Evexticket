@@ -20,6 +20,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
   onSave,
   editingTrip,
   companyId,
+  companies: propCompanies = [],
   cities: propCities,
   requireDate = true,
 }) => {
@@ -72,10 +73,20 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
   useEffect(() => {
     if (editingTrip) {
       const sourceTrip = (editingTrip as any).trip_info || (editingTrip as any).trip || editingTrip;
+      const resolveEditingCity = (value: any) => {
+        if (value && typeof value === 'object') return value.id ?? value.pk ?? '';
+        if (typeof value === 'string' && !/^\d+$/.test(value)) {
+          const city = propCities?.find(
+            (candidate: any) => candidate.name?.toLowerCase() === value.toLowerCase(),
+          );
+          return city?.id ?? value;
+        }
+        return value ?? '';
+      };
       setFormData({
         companyId: sourceTrip.company ?? (editingTrip as any).companyId ?? companyId,
-        departureCity: sourceTrip.departure_city ?? sourceTrip.departureCity ?? '',
-        arrivalCity: sourceTrip.arrival_city ?? sourceTrip.arrivalCity ?? '',
+        departureCity: resolveEditingCity(sourceTrip.departure_city ?? sourceTrip.departureCity),
+        arrivalCity: resolveEditingCity(sourceTrip.arrival_city ?? sourceTrip.arrivalCity),
         departureTime: sourceTrip.departure_time ?? sourceTrip.departureTime ?? '',
         arrivalTime: sourceTrip.arrival_time ?? sourceTrip.arrivalTime ?? '',
         price: sourceTrip.price ?? 0,
@@ -96,14 +107,31 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
         })));
       }
     }
-  }, [editingTrip, companyId]);
+  }, [editingTrip, companyId, propCities]);
 
   useEffect(() => {
-    // initialize stops when modal opens and no editingTrip
+    // Start every creation with a clean form. This also picks up a company ID
+    // that may have loaded after the modal component was first mounted.
     if (!editingTrip && isOpen) {
+      setFormData({
+        companyId: companyId ?? '',
+        departureCity: '',
+        arrivalCity: '',
+        departureTime: '',
+        arrivalTime: '',
+        price: 0,
+        duration: 0,
+        busType: 'Standard',
+        capacity: 50,
+        isActive: true,
+        date: ''
+      });
       setStops([]);
+      setErrors({});
+      setErrorMessage(null);
+      setSuccessMessage(null);
     }
-  }, [isOpen, editingTrip]);
+  }, [isOpen, editingTrip, companyId]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -172,9 +200,9 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    // if (!formData.companyId) {
-    //   newErrors.companyId = 'Veuillez sélectionner une compagnie';
-    // }
+    if (!formData.companyId && !companyId) {
+      newErrors.companyId = 'Veuillez sélectionner une compagnie';
+    }
 
     if (!formData.departureCity) {
       newErrors.departureCity = 'La ville de départ est requise';
@@ -184,7 +212,11 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
       newErrors.arrivalCity = 'La ville d\'arrivée est requise';
     }
 
-    if (formData.departureCity === formData.arrivalCity) {
+    if (
+      formData.departureCity
+      && formData.arrivalCity
+      && String(formData.departureCity) === String(formData.arrivalCity)
+    ) {
       newErrors.arrivalCity = 'La ville d\'arrivée doit être différente de la ville de départ';
     }
 
@@ -419,6 +451,33 @@ const AddTripModal: React.FC<AddTripModalProps> = ({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {!companyId && (
+            <div>
+              <label htmlFor="companyId" className="block text-sm font-medium text-gray-700 mb-2">
+                Compagnie *
+              </label>
+              <select
+                id="companyId"
+                name="companyId"
+                value={formData.companyId || ''}
+                onChange={handleInputChange}
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  errors.companyId ? 'border-red-500' : 'border-gray-300'
+                }`}
+              >
+                <option value="">Sélectionner une compagnie</option>
+                {propCompanies.map((company: any) => (
+                  <option key={company.id} value={company.id}>{company.name}</option>
+                ))}
+              </select>
+              {errors.companyId && (
+                <p className="mt-1 text-sm text-red-600 flex items-center">
+                  <AlertCircle className="w-4 h-4 mr-1" />
+                  {errors.companyId}
+                </p>
+              )}
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Ville de départ */}
             <div>

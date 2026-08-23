@@ -87,12 +87,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
         const [s, comps, tps] = await Promise.all([
           apiService.getDashboardStats(),
           apiService.getCompanies(),
-          apiService.getScheduledTrips(),
+          apiService.getTrips(),
         ]);
         if (!mounted) return;
         setStats(s || {});
         setCompanies(((comps as any[]) || []).map(c => ({ id: String(c.id), name: c.name, description: c.description || '', address: c.address || '', phone: c.phone || '', email: c.email || '', website: c.website || '', logo: c.logo || '', isActive: c.is_active, createdAt: c.created_at })));
-        setTrips(((tps as any[]) || []).map(t => ({ id: String(t.id), companyId: String(t.company), companyName: t.company_name || '', departureCity: t.departure_city_name || String(t.departure_city), arrivalCity: t.arrival_city_name || String(t.arrival_city), departureTime: t.departure_time, arrivalTime: t.arrival_time, price: t.price, duration: t.duration, busType: t.bus_type, capacity: t.capacity, isActive: t.is_active })));
+        setTrips(((tps as any[]) || []).map(t => ({ id: String(t.id), companyId: String(t.company), companyName: t.company_name || '', departureCity: String(t.departure_city), departureCityName: t.departure_city_name || String(t.departure_city), arrivalCity: String(t.arrival_city), arrivalCityName: t.arrival_city_name || String(t.arrival_city), departureTime: t.departure_time, arrivalTime: t.arrival_time, price: t.price, duration: t.duration, busType: t.bus_type, capacity: t.capacity, isActive: t.is_active })));
         // Charger les utilisateurs
         let usersData: any[] = [];
         try { usersData = await apiService.getUsers(); } catch (e) { console.warn('Impossible de charger les utilisateurs:', e); usersData = []; }
@@ -132,18 +132,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
   };
 
   // --- Handlers trajets ---
-  const handleAddTrip = async (payload: any) => {
-    try {
-      if (editingTrip) {
-        const updated = await apiService.updateTrip(editingTrip.id, payload);
-        setTrips(prev => prev.map(t => t.id === String(updated.id) ? ({ ...t, companyName: updated.company_name || t.companyName }) : t));
-        setNotificationData({ type: 'success', title: 'Modifié', message: 'Trajet modifié.' });
-      } else {
-        const created = await apiService.createTrip(payload);
-        setTrips(prev => [{ id: String(created.id), companyId: String(created.company), companyName: created.company_name || '', departureCity: created.departure_city_name || '', arrivalCity: created.arrival_city_name || '', departureTime: created.departure_time, arrivalTime: created.arrival_time, price: created.price, duration: created.duration, busType: created.bus_type, capacity: created.capacity, isActive: created.is_active }, ...prev]);
-        setNotificationData({ type: 'success', title: 'Créé', message: 'Trajet créé.' });
-      }
-    } catch (e: any) { setNotificationData({ type: 'error', title: 'Erreur', message: e?.message || 'Erreur' }); }
+  const handleAddTrip = (savedTrip: any) => {
+    // AddTripModal already persists the route. Treat onSave as a completion
+    // callback so a platform admin never creates or updates the same route twice.
+    const trip = savedTrip?.trip_info || savedTrip;
+    const normalizedTrip = {
+      id: String(trip.id),
+      companyId: String(trip.company ?? trip.companyId ?? ''),
+      companyName: trip.company_name || trip.companyName || '',
+      departureCity: String(trip.departure_city ?? trip.departureCity ?? ''),
+      departureCityName: trip.departure_city_name || trip.departureCityName || String(trip.departure_city ?? trip.departureCity ?? ''),
+      arrivalCity: String(trip.arrival_city ?? trip.arrivalCity ?? ''),
+      arrivalCityName: trip.arrival_city_name || trip.arrivalCityName || String(trip.arrival_city ?? trip.arrivalCity ?? ''),
+      departureTime: trip.departure_time || trip.departureTime || '',
+      arrivalTime: trip.arrival_time || trip.arrivalTime || '',
+      price: trip.price,
+      duration: trip.duration,
+      busType: trip.bus_type || trip.busType || 'Standard',
+      capacity: trip.capacity,
+      isActive: trip.is_active ?? trip.isActive ?? true,
+    } as Trip;
+    if (editingTrip) {
+      setTrips(prev => prev.map(t => String(t.id) === String(editingTrip.id) ? normalizedTrip : t));
+      setNotificationData({ type: 'success', title: 'Modifié', message: 'Trajet modifié.' });
+    } else {
+      setTrips(prev => [normalizedTrip, ...prev]);
+      setNotificationData({ type: 'success', title: 'Créé', message: 'Trajet créé.' });
+    }
     setShowNotification(true); setShowAddTripModal(false); setEditingTrip(null);
   };
   const handleEditTrip = (t: Trip) => { setEditingTrip(t); setShowAddTripModal(true); };
@@ -409,7 +424,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
                         <Bus className="w-5 h-5 text-violet-600" />
                       </div>
                       <div>
-                        <div className="font-semibold text-gray-900">{t.departureCity} → {t.arrivalCity}</div>
+                        <div className="font-semibold text-gray-900">{(t as any).departureCityName || t.departureCity} → {(t as any).arrivalCityName || t.arrivalCity}</div>
                         <div className="text-sm text-gray-500">{t.departureTime} - {t.arrivalTime} • {t.busType}</div>
                       </div>
                     </div>
@@ -702,7 +717,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (_props) => {
 
       {/* Modals */}
       <AddCompanyModal isOpen={showAddCompanyModal} onClose={() => { setShowAddCompanyModal(false); setEditingCompany(null); }} onSave={handleAddCompany as any} editingCompany={editingCompany as any} />
-      <AddTripModal isOpen={showAddTripModal} onClose={() => { setShowAddTripModal(false); setEditingTrip(null); }} onSave={handleAddTrip as any} editingTrip={editingTrip as any} companies={companies as any} cities={apiCities as any} />
+      <AddTripModal isOpen={showAddTripModal} onClose={() => { setShowAddTripModal(false); setEditingTrip(null); }} onSave={handleAddTrip as any} editingTrip={editingTrip as any} companies={companies as any} cities={apiCities as any} requireDate={false} />
       <ExportTicketsModal isOpen={showExportModal} onClose={() => setShowExportModal(false)} onExport={() => {}} />
 
       {/* Confirmation dialogs */}
