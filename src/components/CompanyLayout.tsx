@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Menu } from 'lucide-react';
+import { Menu, ShieldAlert } from 'lucide-react';
 import { NavLink, Outlet, useNavigate, useOutletContext } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import apiService from '../services/api';
-import type { ApiId, Company } from '../services/api';
+import type { ApiId, Company, SafetyIncident } from '../services/api';
 import { companyNavigationItems } from '../utils/companyNavigation';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
@@ -25,6 +25,7 @@ const CompanyLayout: React.FC = () => {
   const [company, setCompany] = useState<Company | null>(null);
   const [loadingCompany, setLoadingCompany] = useState(true);
   const [companyError, setCompanyError] = useState<string | null>(null);
+  const [activeIncidents, setActiveIncidents] = useState<SafetyIncident[]>([]);
 
   const refreshCompany = useCallback(async () => {
     if (!companyId) {
@@ -36,8 +37,8 @@ const CompanyLayout: React.FC = () => {
     try {
       setCompany(await apiService.getCompany(companyId));
       setCompanyError(null);
-    } catch (error: any) {
-      setCompanyError(error?.message || 'Impossible de charger la compagnie.');
+    } catch (error: unknown) {
+      setCompanyError(error instanceof Error && error.message ? error.message : 'Impossible de charger la compagnie.');
     } finally {
       setLoadingCompany(false);
     }
@@ -46,6 +47,34 @@ const CompanyLayout: React.FC = () => {
   useEffect(() => {
     void refreshCompany();
   }, [refreshCompany]);
+
+  useEffect(() => {
+    if (!companyId) return undefined;
+    let mounted = true;
+    let requestInFlight = false;
+    const refreshSafety = async () => {
+      if (requestInFlight || document.visibilityState === 'hidden') return;
+      requestInFlight = true;
+      try {
+        const incidents = await apiService.getSafetyIncidents({ status: 'active' });
+        if (mounted) {
+          setActiveIncidents(incidents.filter((incident) => (
+            incident.severity === 'high' || incident.severity === 'critical'
+          )));
+        }
+      } catch {
+        if (mounted) setActiveIncidents([]);
+      } finally {
+        requestInFlight = false;
+      }
+    };
+    void refreshSafety();
+    const interval = window.setInterval(() => void refreshSafety(), 30_000);
+    return () => {
+      mounted = false;
+      window.clearInterval(interval);
+    };
+  }, [companyId]);
 
   const logout = () => {
     auth.logout();
@@ -82,6 +111,23 @@ const CompanyLayout: React.FC = () => {
           </details>
 
           <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+            {activeIncidents.length > 0 && (
+              <NavLink
+                to="/company/securite"
+                className={`mb-5 flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm shadow-sm transition hover:shadow ${
+                  activeIncidents.some((incident) => incident.severity === 'critical')
+                    ? 'border-red-300 bg-red-50 text-red-900'
+                    : 'border-amber-300 bg-amber-50 text-amber-900'
+                }`}
+              >
+                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
+                <span className="min-w-0 flex-1">
+                  <strong>{activeIncidents.length} incident{activeIncidents.length > 1 ? 's' : ''} de trajet ouvert{activeIncidents.length > 1 ? 's' : ''}</strong>
+                  <span className="mt-0.5 block truncate">{activeIncidents[0].route_label} — {activeIncidents[0].public_message}</span>
+                </span>
+                <span className="font-semibold">Ouvrir le centre sécurité</span>
+              </NavLink>
+            )}
             {companyError && (
               <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                 {companyError}

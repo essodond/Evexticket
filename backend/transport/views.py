@@ -37,6 +37,8 @@ from .services.tracking import (
     start_tracking,
     stop_tracking,
 )
+from .services.access import can_manage_scheduled_trip, company_ids_for_user
+from .services.safety import is_incident_reportable_now
 
 logger = logging.getLogger(__name__)
 
@@ -531,7 +533,12 @@ class ScheduledTripViewSet(viewsets.ModelViewSet):
             raise serializers.ValidationError(
                 f"Vous n'avez pas la permission de supprimer ce trajet planifié pour la compagnie '{trip.company.name}'."
             )
-        instance.delete()
+        try:
+            instance.delete()
+        except ProtectedError:
+            raise serializers.ValidationError(
+                'Ce voyage conserve un historique d’incidents de sécurité. Désactivez-le au lieu de le supprimer.'
+            )
 
 
 class MyBookingsView(generics.ListAPIView):
@@ -634,24 +641,8 @@ class LoyaltySummaryView(APIView):
         return Response(get_loyalty_summary(request.user, include_history=True))
 
 
-def _tracking_company_for_user(user):
-    if user.is_superuser:
-        return None
-    company = user.admin_companies.filter(is_active=True).first()
-    if company:
-        return company
-    if hasattr(user, 'company_admin') and user.company_admin.is_active:
-        return user.company_admin
-    if hasattr(user, 'agentguichet') and user.agentguichet.actif:
-        return user.agentguichet.compagnie
-    return False
-
-
 def _can_manage_tracking(user, scheduled_trip):
-    if user.is_superuser:
-        return True
-    company = _tracking_company_for_user(user)
-    return bool(company and scheduled_trip.trip.company_id == company.id)
+    return can_manage_scheduled_trip(user, scheduled_trip)
 
 
 def _can_view_tracking(user, scheduled_trip):
@@ -679,8 +670,8 @@ class ManageableTrackingTripsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        company = _tracking_company_for_user(request.user)
-        if company is False:
+        company_ids = company_ids_for_user(request.user)
+        if company_ids is not None and not company_ids:
             return Response({'detail': 'Accès réservé à la compagnie.'}, status=status.HTTP_403_FORBIDDEN)
         today = timezone.localdate()
         trips = ScheduledTrip.objects.filter(
@@ -693,8 +684,8 @@ class ManageableTrackingTripsView(APIView):
             'trip__arrival_city',
             'tracking_session',
         )
-        if company is not None:
-            trips = trips.filter(trip__company=company)
+        if company_ids is not None:
+            trips = trips.filter(trip__company_id__in=company_ids)
 
         return Response([
             {
@@ -707,6 +698,7 @@ class ManageableTrackingTripsView(APIView):
                 'tracking_active': bool(
                     hasattr(item, 'tracking_session') and item.tracking_session.is_active
                 ),
+                'incident_reportable': is_incident_reportable_now(item),
             }
             for item in trips.order_by('date', 'trip__departure_time')
         ])
@@ -788,8 +780,14 @@ class TripTrackingPositionView(APIView):
         recorded_at = timezone.now()
         if request.data.get('recorded_at'):
             parsed = parse_datetime(str(request.data['recorded_at']))
-            if parsed:
-                recorded_at = parsed if timezone.is_aware(parsed) else timezone.make_aware(parsed)
+            if not parsed:
+                return Response({'detail': 'Horodatage GPS invalide.'}, status=status.HTTP_400_BAD_REQUEST)
+            recorded_at = parsed if timezone.is_aware(parsed) else timezone.make_aware(parsed)
+            now = timezone.now()
+            if recorded_at > now + timedelta(minutes=2):
+                return Response({'detail': 'L’horodatage GPS ne peut pas être dans le futur.'}, status=status.HTTP_400_BAD_REQUEST)
+            if recorded_at < now - timedelta(minutes=10):
+                return Response({'detail': 'La position GPS est trop ancienne.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             session, _ = record_position(scheduled_trip, request.user, {
@@ -1239,12 +1237,18 @@ class CompanyViewSet(viewsets.ModelViewSet):
         company = self.get_object()
         old_values = build_company_delete_snapshot(company)
 
-        with transaction.atomic():
-            Booking.all_objects.filter(trip__company=company).delete()
-            ScheduledTrip.objects.filter(trip__company=company).delete()
-            TripStop.objects.filter(trip__company=company).delete()
-            Trip.all_objects.filter(company=company).delete()
-            company.hard_delete()
+        try:
+            with transaction.atomic():
+                Booking.all_objects.filter(trip__company=company).delete()
+                ScheduledTrip.objects.filter(trip__company=company).delete()
+                TripStop.objects.filter(trip__company=company).delete()
+                Trip.all_objects.filter(company=company).delete()
+                company.hard_delete()
+        except ProtectedError:
+            return Response(
+                {'detail': 'Suppression définitive refusée : la compagnie possède un historique d’incidents de sécurité à conserver.'},
+                status=status.HTTP_409_CONFLICT,
+            )
 
         log_action(
             user=request.user,
@@ -1386,8 +1390,8 @@ class TripViewSet(viewsets.ModelViewSet):
             instance.delete()
         except ProtectedError:
             raise serializers.ValidationError(
-                "Ce trajet ne peut pas être supprimé car il possède des réservations existantes. "
-                "Veuillez d'abord annuler ou supprimer les réservations associées."
+                "Ce trajet ne peut pas être supprimé car il possède des réservations ou un historique de sécurité. "
+                "Désactivez-le afin de conserver ces données."
             )
 
 class ScheduledTripSearchView(APIView):
@@ -1819,7 +1823,13 @@ class InitierPaiementView(APIView):
 
         voyage_id = request.data.get('voyage_id')
         numero_siege = request.data.get('numero_siege')
-        siege_id = reservation_service.reserver_siege_temporaire(voyage_id, numero_siege)
+        try:
+            siege_id = reservation_service.reserver_siege_temporaire(voyage_id, numero_siege)
+        except reservation_service.SafetyBookingSuspended:
+            return Response(
+                {'erreur': 'VOYAGE_SUSPENDU_SECURITE', 'detail': 'Les réservations sont suspendues en raison d’un incident de sécurité.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         if not siege_id:
             return Response({'erreur': 'SIEGE_INDISPONIBLE'}, status=status.HTTP_409_CONFLICT)
 
@@ -1866,6 +1876,12 @@ class InitierPaiementView(APIView):
                 'siege': numero_siege,
                 'expires_dans': '5 minutes',
             })
+        except reservation_service.SafetyBookingSuspended:
+            reservation_service.liberer_siege(siege_id)
+            return Response(
+                {'erreur': 'VOYAGE_SUSPENDU_SECURITE', 'detail': 'Les réservations sont suspendues en raison d’un incident de sécurité.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         except Exception as exc:
             logger.exception("Payment init endpoint failed")
             reservation_service.liberer_siege(siege_id)

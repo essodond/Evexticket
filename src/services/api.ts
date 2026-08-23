@@ -19,6 +19,66 @@ const API_BASE_URL = (
 // Types pour les données
 export type ApiId = string | number;
 
+export type SafetyIncidentType = 'accident' | 'breakdown' | 'medical' | 'road_hazard' | 'security' | 'other';
+export type SafetyTravelState = 'continuing' | 'stopped' | 'unknown';
+export type SafetySeverity = 'low' | 'medium' | 'high' | 'critical';
+export type SafetyIncidentStatus = 'reported' | 'acknowledged' | 'resolved';
+
+export interface ManageableTrackingTrip {
+  id: ApiId;
+  date: string;
+  departure_time: string;
+  departure_city: string;
+  arrival_city: string;
+  company_name: string;
+  tracking_active: boolean;
+  incident_reportable: boolean;
+}
+
+export interface SafetyIncident {
+  id: string;
+  company: ApiId;
+  company_name: string;
+  scheduled_trip: ApiId;
+  route_label: string;
+  travel_date: string;
+  incident_type: SafetyIncidentType;
+  incident_type_label: string;
+  travel_state: SafetyTravelState;
+  travel_state_label: string;
+  severity: SafetySeverity;
+  severity_label: string;
+  status: SafetyIncidentStatus;
+  status_label: string;
+  description: string;
+  public_message: string;
+  latitude: string | number | null;
+  longitude: string | number | null;
+  accuracy_m: number | null;
+  location_recorded_at: string | null;
+  location_source: 'device' | 'tracking' | 'unavailable';
+  injured_count: number;
+  emergency_services_contacted: boolean;
+  occurred_at: string;
+  created_at: string;
+  updated_at: string;
+  reporter_name: string | null;
+  acknowledged_at: string | null;
+  acknowledged_by_name: string | null;
+  resolved_at: string | null;
+  resolved_by_name: string | null;
+  resolution_note: string;
+}
+
+export interface SafetyIncidentReport {
+  incident_type: SafetyIncidentType;
+  travel_state: SafetyTravelState;
+  description: string;
+  injured_count: number;
+  emergency_services_contacted: boolean;
+  idempotency_key: string;
+}
+
 export interface City {
   id: ApiId;
   name: string;
@@ -477,7 +537,8 @@ export interface GuichetTrip {
   places_total: number;
   places_libres: number;
   places_occupees?: number;
-  statut: 'actif' | 'inactif';
+  statut: 'actif' | 'inactif' | 'suspendu_securite';
+  safety_blocked: boolean;
 }
 
 export interface GuichetSale {
@@ -540,6 +601,8 @@ export interface GuichetSeatMap {
   voyage: { trajet: string; date: string; heure_depart: string; prix: number };
   sieges: Array<{ id: string | null; numero: number; statut: 'libre' | 'occupe' | 'reserve' }>;
   resume: { total: number; libres: number; occupes: number };
+  safety_blocked: boolean;
+  safety_message: string | null;
 }
 
 export interface GuichetSaleReceipt {
@@ -1329,6 +1392,43 @@ class ApiService {
 
   async getCompanyStats(id: ApiId): Promise<CompanyStats> {
     return this.request<CompanyStats>(`/companies/${id}/stats/`);
+  }
+
+  async getManageableTrackingTrips(): Promise<ManageableTrackingTrip[]> {
+    return this.request<ManageableTrackingTrip[]>('/tracking/trips/');
+  }
+
+  async getSafetyIncidents(filters: {
+    status?: 'active' | SafetyIncidentStatus;
+    severity?: SafetySeverity;
+    scheduled_trip?: ApiId;
+  } = {}): Promise<SafetyIncident[]> {
+    const params = new URLSearchParams();
+    if (filters.status) params.set('status', filters.status);
+    if (filters.severity) params.set('severity', filters.severity);
+    if (filters.scheduled_trip != null) params.set('scheduled_trip', String(filters.scheduled_trip));
+    const query = params.toString();
+    return this.request<SafetyIncident[]>(`/safety/incidents/${query ? `?${query}` : ''}`);
+  }
+
+  async reportSafetyIncident(
+    scheduledTripId: ApiId,
+    payload: SafetyIncidentReport,
+  ): Promise<SafetyIncident> {
+    return this.request<SafetyIncident>(`/scheduled_trips/${scheduledTripId}/incidents/`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateSafetyIncident(
+    incidentId: string,
+    payload: { status: 'acknowledged' } | { status: 'resolved'; resolution_note: string },
+  ): Promise<SafetyIncident> {
+    return this.request<SafetyIncident>(`/safety/incidents/${encodeURIComponent(incidentId)}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
   }
 
   async getMyBookings(): Promise<Booking[]> {

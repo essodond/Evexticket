@@ -46,6 +46,37 @@ export interface LoyaltySummary {
 }
 
 export type TrackingStatus = 'not_started' | 'live' | 'offline' | 'stopped';
+export type SafetyIncidentType = 'accident' | 'breakdown' | 'medical' | 'road_hazard' | 'security' | 'other';
+export type SafetyTravelState = 'continuing' | 'stopped' | 'unknown';
+export type SafetySeverity = 'low' | 'medium' | 'high' | 'critical';
+export type SafetyIncidentStatus = 'reported' | 'acknowledged' | 'resolved';
+
+export interface SafetyIncidentAlert {
+  id: string;
+  incident_type: SafetyIncidentType;
+  incident_type_label: string;
+  travel_state: SafetyTravelState;
+  travel_state_label: string;
+  severity: SafetySeverity;
+  severity_label: string;
+  status: SafetyIncidentStatus;
+  status_label: string;
+  public_message: string;
+  occurred_at: string;
+}
+
+export interface SafetyIncidentReportPayload {
+  incident_type: SafetyIncidentType;
+  travel_state: SafetyTravelState;
+  description: string;
+  injured_count: number;
+  emergency_services_contacted: boolean;
+  idempotency_key: string;
+  latitude?: number;
+  longitude?: number;
+  accuracy_m?: number | null;
+  occurred_at?: string;
+}
 
 export interface TrackingPosition {
   id?: ApiId;
@@ -90,6 +121,10 @@ export interface TrackingSnapshot {
     stop_name: string | null;
     distance_km: number | null;
   };
+  safety?: {
+    status: 'normal' | 'incident_active';
+    alerts: SafetyIncidentAlert[];
+  };
   history: TrackingPosition[];
   updated_at: string | null;
   server_time: string;
@@ -103,6 +138,7 @@ export interface ManageableTrackingTrip {
   arrival_city: string;
   company_name: string;
   tracking_active: boolean;
+  incident_reportable: boolean;
 }
 
 export interface DriverLocationPayload {

@@ -8,6 +8,7 @@ from .base import ScheduledTrip
 from .mixins import SoftDeleteModel
 from .loyalty import XPTransaction
 from .tracking import BusPosition, TripTrackingSession
+from .safety import SafetyIncident
 
 __all__ = [
     'UserProfile',
@@ -31,4 +32,5 @@ __all__ = [
     'XPTransaction',
     'TripTrackingSession',
     'BusPosition',
+    'SafetyIncident',
 ]

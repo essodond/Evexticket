@@ -1,5 +1,6 @@
 from django.urls import path, include
 from . import views
+from . import safety_views
 from rest_framework.authtoken.views import obtain_auth_token
 from rest_framework.routers import DefaultRouter
 from .partner_views import (
@@ -35,6 +36,9 @@ urlpatterns = [
     path('me/', views.CurrentUserView.as_view(), name='current-user'),
     path('loyalty/', views.LoyaltySummaryView.as_view(), name='loyalty-summary'),
     path('tracking/trips/', views.ManageableTrackingTripsView.as_view(), name='manageable-tracking-trips'),
+    path('safety/incidents/', safety_views.SafetyIncidentListView.as_view(), name='safety-incident-list'),
+    path('safety/incidents/<uuid:pk>/', safety_views.SafetyIncidentDetailView.as_view(), name='safety-incident-detail'),
+    path('scheduled_trips/<int:pk>/incidents/', safety_views.ScheduledTripIncidentView.as_view(), name='scheduled-trip-incidents'),
     path('scheduled_trips/<int:pk>/tracking/', views.TripTrackingView.as_view(), name='trip-tracking'),
     path('scheduled_trips/<int:pk>/tracking/start/', views.StartTripTrackingView.as_view(), name='start-trip-tracking'),
     path('scheduled_trips/<int:pk>/tracking/position/', views.TripTrackingPositionView.as_view(), name='trip-tracking-position'),

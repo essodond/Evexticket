@@ -38,7 +38,10 @@ describe('getAuthenticatedHomePath', () => {
 describe('company navigation', () => {
   it('uses one dedicated route per sidebar entry without anchors', () => {
     expect(companyDefaultPath).toBe('/company/tableau-de-bord');
-    expect(companyNavigationItems).toHaveLength(10);
+    expect(companyNavigationItems.map((item) => item.key)).toEqual([
+      'dashboard', 'company', 'agencies', 'personnel', 'buses', 'routes',
+      'trips', 'safety', 'tickets', 'revenues', 'copilot', 'settings',
+    ]);
     expect(new Set(companyNavigationItems.map((item) => item.path)).size).toBe(companyNavigationItems.length);
     expect(companyNavigationItems.every((item) => item.path.startsWith('/company/') && !item.path.includes('#'))).toBe(true);
   });

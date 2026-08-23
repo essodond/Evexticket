@@ -2,14 +2,53 @@ import math
 from datetime import datetime, timedelta
 
 from django.db import transaction
+from django.db.models import Case, IntegerField, Value, When
 from django.utils import timezone
 
-from transport.models import Booking, BusPosition, TripTrackingSession
+from transport.models import Booking, BusPosition, SafetyIncident, TripTrackingSession
 
 
 APPROACH_RADIUS_KM = 5
 STOP_REACHED_RADIUS_KM = 2
 STALE_AFTER_SECONDS = 120
+
+
+def _safety_snapshot(scheduled_trip):
+    incidents = SafetyIncident.objects.filter(
+        scheduled_trip=scheduled_trip,
+        status__in=[
+            SafetyIncident.Status.REPORTED,
+            SafetyIncident.Status.ACKNOWLEDGED,
+        ],
+    ).annotate(
+        safety_priority=Case(
+            When(severity=SafetyIncident.Severity.CRITICAL, then=Value(0)),
+            When(severity=SafetyIncident.Severity.HIGH, then=Value(1)),
+            When(severity=SafetyIncident.Severity.MEDIUM, then=Value(2)),
+            default=Value(3),
+            output_field=IntegerField(),
+        ),
+    ).order_by('safety_priority', '-occurred_at', '-created_at')[:10]
+    alerts = [
+        {
+            'id': str(incident.id),
+            'incident_type': incident.incident_type,
+            'incident_type_label': incident.get_incident_type_display(),
+            'travel_state': incident.travel_state,
+            'travel_state_label': incident.get_travel_state_display(),
+            'severity': incident.severity,
+            'severity_label': incident.get_severity_display(),
+            'status': incident.status,
+            'status_label': incident.get_status_display(),
+            'public_message': incident.public_message,
+            'occurred_at': incident.occurred_at,
+        }
+        for incident in incidents
+    ]
+    return {
+        'status': 'incident_active' if alerts else 'normal',
+        'alerts': alerts,
+    }
 
 
 def haversine_km(first, second):
@@ -273,6 +312,7 @@ def serialize_tracking(scheduled_trip, session=None, user=None, include_history=
         'distance_remaining_km': round(distance_remaining, 1) if distance_remaining is not None else None,
         'stops': serialized_stops,
         'approach_alert': _passenger_alert(user, scheduled_trip, current, stops, passed_ids),
+        'safety': _safety_snapshot(scheduled_trip),
         'updated_at': last_position_at,
         'server_time': timezone.now(),
     }
@@ -317,6 +357,8 @@ def record_position(scheduled_trip, driver, data):
         raise ValueError('Le suivi GPS doit être démarré avant l’envoi des positions.')
 
     recorded_at = data.get('recorded_at') or timezone.now()
+    if session.last_position_at and recorded_at < session.last_position_at:
+        raise ValueError('Cette position est antérieure à la dernière position enregistrée.')
     speed_mps = data.get('speed_mps')
     speed_kmh = max(float(speed_mps) * 3.6, 0) if speed_mps is not None else None
     current = (float(data['latitude']), float(data['longitude']))

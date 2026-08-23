@@ -20,6 +20,7 @@ import {
   getManageableTrackingTrips,
   getTripTracking,
   sendTripPosition,
+  reportTripIncident,
   startTripTracking,
   stopTripTracking,
 } from '../services/api';
@@ -29,7 +30,9 @@ import {
   RootStackParamList,
   TrackingPosition,
   TrackingSnapshot,
+  SafetyIncidentReportPayload,
 } from '../types';
+import IncidentReportModal from '../components/IncidentReportModal';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'StartTracking'>;
 
@@ -38,6 +41,22 @@ const timeLabel = (value: string) => new Date(value).toLocaleTimeString('fr-FR',
   minute: '2-digit',
   second: '2-digit',
 });
+
+const safetyPriority = { critical: 4, high: 3, medium: 2, low: 1 } as const;
+
+const currentLocationWithTimeout = async (timeoutMs = 5_000): Promise<Location.LocationObject | null> => {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+      new Promise<null>((resolve) => {
+        timeout = setTimeout(() => resolve(null), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+};
 
 const PositionItem = ({ item }: { item: TrackingPosition }) => (
   <View style={styles.positionRow}>
@@ -58,6 +77,7 @@ export default function StartTrackingScreen({ route }: Props) {
   const insets = useSafeAreaInsets();
   const subscriptionRef = useRef<Location.LocationSubscription | null>(null);
   const sendingRef = useRef(false);
+  const lastDeviceLocationRef = useRef<Location.LocationObject | null>(null);
   const [trips, setTrips] = useState<ManageableTrackingTrip[]>([]);
   const [selectedTripId, setSelectedTripId] = useState<ApiId | null>(
     route.params?.tripId ?? null,
@@ -67,6 +87,7 @@ export default function StartTrackingScreen({ route }: Props) {
   const [starting, setStarting] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
+  const [incidentVisible, setIncidentVisible] = useState(false);
 
   const selectedTrip = trips.find((trip) => String(trip.id) === String(selectedTripId)) ?? null;
 
@@ -101,6 +122,7 @@ export default function StartTrackingScreen({ route }: Props) {
   }, [selectedTripId]);
 
   const sendLocation = useCallback(async (tripId: ApiId, location: Location.LocationObject) => {
+    lastDeviceLocationRef.current = location;
     if (sendingRef.current) return;
     sendingRef.current = true;
     try {
@@ -179,6 +201,47 @@ export default function StartTrackingScreen({ route }: Props) {
     }
   };
 
+  const reportIncident = async (
+    payload: Omit<SafetyIncidentReportPayload, 'latitude' | 'longitude' | 'accuracy_m' | 'occurred_at'>,
+  ) => {
+    if (!selectedTripId) throw new Error('Sélectionnez le voyage concerné.');
+
+    let location = lastDeviceLocationRef.current;
+    if (!location || Date.now() - location.timestamp > 30_000) {
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (permission.status === Location.PermissionStatus.GRANTED) {
+          location = await currentLocationWithTimeout();
+          if (location && location.coords.accuracy != null && location.coords.accuracy > 100) {
+            location = null;
+          }
+          if (location) lastDeviceLocationRef.current = location;
+        } else {
+          location = null;
+        }
+      } catch {
+        location = null;
+      }
+    }
+    if (location && location.coords.accuracy != null && location.coords.accuracy > 100) {
+      location = null;
+    }
+
+    const incident = await reportTripIncident(selectedTripId, {
+      ...payload,
+      ...(location ? {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        accuracy_m: location.coords.accuracy,
+        occurred_at: new Date(location.timestamp).toISOString(),
+      } : {
+        occurred_at: new Date().toISOString(),
+      }),
+    });
+    void getTripTracking(selectedTripId).then(setSnapshot).catch(() => undefined);
+    return incident.id;
+  };
+
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -187,6 +250,10 @@ export default function StartTrackingScreen({ route }: Props) {
       </View>
     );
   }
+
+  const activeIncident = [...(snapshot?.safety?.alerts ?? [])].sort(
+    (first, second) => safetyPriority[second.severity] - safetyPriority[first.severity],
+  )[0] ?? null;
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
@@ -268,6 +335,48 @@ export default function StartTrackingScreen({ route }: Props) {
           </TouchableOpacity>
         </View>
 
+        <TouchableOpacity
+          style={[styles.incidentButton, (!selectedTripId || !selectedTrip?.incident_reportable) && styles.disabledButton]}
+          onPress={() => {
+            if (!selectedTripId) {
+              Alert.alert('Voyage requis', 'Sélectionnez le voyage concerné avant de signaler.');
+              return;
+            }
+            if (!selectedTrip?.incident_reportable) {
+              Alert.alert(
+                'Signalement indisponible',
+                'Ce voyage n’est pas actuellement dans sa fenêtre d’exploitation.',
+              );
+              return;
+            }
+            setIncidentVisible(true);
+          }}
+          disabled={!selectedTripId || !selectedTrip?.incident_reportable}
+          accessibilityRole="button"
+          accessibilityLabel="Signaler un incident de sécurité"
+        >
+          <Ionicons name="warning" size={22} color={COLORS.white} />
+          <View style={styles.incidentButtonCopy}>
+            <Text style={styles.incidentButtonTitle}>Signaler un incident</Text>
+            <Text style={styles.incidentButtonHint}>
+              {selectedTrip && !selectedTrip.incident_reportable
+                ? 'Disponible pendant la fenêtre d’exploitation du voyage'
+                : 'Accident, panne, urgence ou danger routier'}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={COLORS.white} />
+        </TouchableOpacity>
+
+        {activeIncident && (
+          <View style={styles.activeIncidentCard}>
+            <Ionicons name="shield" size={22} color="#991B1B" />
+            <View style={styles.activeIncidentCopy}>
+              <Text style={styles.activeIncidentTitle}>Incident ouvert · {activeIncident.status_label}</Text>
+              <Text style={styles.activeIncidentText}>{activeIncident.public_message}</Text>
+            </View>
+          </View>
+        )}
+
         <View style={styles.gpsCard}>
           <View style={styles.gpsHeader}>
             <View>
@@ -309,6 +418,20 @@ export default function StartTrackingScreen({ route }: Props) {
           />
         </View>
       </ScrollView>
+      <IncidentReportModal
+        visible={incidentVisible}
+        tripId={selectedTripId}
+        tripLabel={selectedTrip ? `${selectedTrip.departure_city} → ${selectedTrip.arrival_city} · ${selectedTrip.date} à ${selectedTrip.departure_time.slice(0, 5)}` : 'Voyage non sélectionné'}
+        locationStatus={
+          lastDeviceLocationRef.current && Date.now() - lastDeviceLocationRef.current.timestamp <= 30_000
+            ? 'Position GPS récente disponible'
+            : snapshot?.current_position
+              ? `Position du suivi disponible (${Math.round(snapshot.current_position.accuracy_m ?? 0)} m)`
+              : 'Aucune position récente; l’envoi restera possible'
+        }
+        onClose={() => setIncidentVisible(false)}
+        onSubmit={reportIncident}
+      />
     </View>
   );
 }
@@ -347,6 +470,14 @@ const styles = StyleSheet.create({
   stopButton: { flex: 1, height: 50, borderRadius: 14, backgroundColor: COLORS.white, borderColor: '#FECACA', borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   disabledStopButton: { opacity: 0.45 },
   stopButtonText: { color: COLORS.error, fontWeight: FONT_WEIGHTS.bold, marginLeft: 7 },
+  incidentButton: { minHeight: 64, marginHorizontal: 20, marginBottom: 12, paddingHorizontal: 16, borderRadius: 16, backgroundColor: COLORS.error, flexDirection: 'row', alignItems: 'center' },
+  incidentButtonCopy: { flex: 1, marginLeft: 11 },
+  incidentButtonTitle: { color: COLORS.white, fontSize: FONT_SIZES.base, fontWeight: FONT_WEIGHTS.bold },
+  incidentButtonHint: { color: 'rgba(255,255,255,0.82)', fontSize: FONT_SIZES.xs, marginTop: 3 },
+  activeIncidentCard: { marginHorizontal: 20, marginBottom: 12, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: '#FECACA', backgroundColor: '#FEF2F2', flexDirection: 'row', alignItems: 'flex-start' },
+  activeIncidentCopy: { flex: 1, marginLeft: 10 },
+  activeIncidentTitle: { color: '#991B1B', fontWeight: FONT_WEIGHTS.bold },
+  activeIncidentText: { color: '#B91C1C', fontSize: FONT_SIZES.sm, lineHeight: 19, marginTop: 4 },
   gpsCard: { backgroundColor: COLORS.white, marginHorizontal: 20, borderRadius: 16, padding: 16, marginBottom: 14 },
   gpsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   gpsLabel: { fontSize: FONT_SIZES.xs, color: COLORS.textSecondary },

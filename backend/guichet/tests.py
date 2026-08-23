@@ -1,4 +1,5 @@
 from datetime import time, timedelta
+import uuid
 
 from django.contrib.auth.models import User
 from django.test import override_settings
@@ -12,6 +13,7 @@ from transport.models import (
     City,
     Company,
     Reservation,
+    SafetyIncident,
     ScheduledTrip,
     Siege,
     Trip,
@@ -499,6 +501,41 @@ class GuichetApiTests(APITestCase):
         self.assertEqual(VenteGuichet.objects.count(), 1)
         self.voyage.refresh_from_db()
         self.assertEqual(self.voyage.available_seats, self.trip.capacity - 1)
+
+    def test_critical_safety_incident_suspends_counter_sales(self):
+        SafetyIncident.objects.create(
+            scheduled_trip=self.voyage,
+            reported_by=self.admin,
+            incident_type=SafetyIncident.IncidentType.ACCIDENT,
+            travel_state=SafetyIncident.TravelState.STOPPED,
+            severity=SafetyIncident.Severity.CRITICAL,
+            public_message='Un accident a été signalé sur ce voyage.',
+            idempotency_key=uuid.uuid4(),
+        )
+        self.authenticate_agent()
+
+        trips = self.client.get('/api/guichet/voyages/disponibles/')
+        seat_map = self.client.get(f'/api/guichet/voyages/{self.voyage.id}/sieges/')
+        sale = self.client.post(
+            '/api/guichet/ventes/creer/',
+            {
+                'voyage_id': self.voyage.id,
+                'numero_siege': 2,
+                'client_nom': 'Client sécurité',
+                'client_telephone': '90000014',
+                'mode_paiement': 'cash',
+            },
+            format='json',
+        )
+
+        trip_payload = next(item for item in trips.data if item['id'] == self.voyage.id)
+        self.assertTrue(trip_payload['safety_blocked'])
+        self.assertEqual(trip_payload['places_libres'], 0)
+        self.assertEqual(trip_payload['statut'], 'suspendu_securite')
+        self.assertTrue(seat_map.data['safety_blocked'])
+        self.assertEqual(seat_map.data['resume']['libres'], 0)
+        self.assertEqual(sale.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(VenteGuichet.objects.count(), 0)
 
     def test_sale_history_filters_and_only_seller_can_cancel(self):
         self.authenticate_agent()

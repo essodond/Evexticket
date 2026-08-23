@@ -10,6 +10,8 @@ import {
   ManageableTrackingTrip,
   DriverLocationPayload,
   ApiId,
+  SafetyIncidentAlert,
+  SafetyIncidentReportPayload,
 } from '../types';
 import { Platform, NativeModules } from 'react-native';
 import { assertJsonBodyHasNoUnsafeIntegers, assertNoUnsafeIntegers } from '../utils/safeIntegers';
@@ -93,7 +95,6 @@ async function handleResponse(response: Response) {
 
   try {
     data = isJson ? await response.json() : await response.text();
-    console.log('📝 handleResponse - Données brute:', data);
   } catch (parseError) {
     console.error('❌ Erreur de parsing de la réponse:', parseError);
     data = null;
@@ -107,7 +108,6 @@ async function handleResponse(response: Response) {
     console.error('🚨 handleResponse - Erreur de réponse:', {
       status: response.status,
       statusText: response.statusText,
-      data: data,
       contentType: contentType
     });
 
@@ -132,16 +132,16 @@ async function handleResponse(response: Response) {
     throw new Error(errorMessage);
   }
 
-  console.log('✅ handleResponse - Réponse valide:', data);
   return data;
 }
 
 async function fetchWithTimeout(
   resource: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  timeoutMs = TIMEOUT,
 ): Promise<Response> {
   const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), TIMEOUT);
+  const id = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     assertJsonBodyHasNoUnsafeIntegers(options.body);
@@ -167,7 +167,8 @@ async function fetchWithTimeout(
 
 async function request<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  timeoutMs = TIMEOUT,
 ): Promise<T> {
   try {
     const token = await AsyncStorage.getItem('token');
@@ -178,16 +179,10 @@ async function request<T>(
       ...options.headers,
     } as Record<string, string>;
 
-    // Log de la requête
-    console.log('🌐 API Request:', {
-      url: primaryUrl,
-      method: options.method || 'GET',
-      headers,
-      body: options.body ? JSON.parse(options.body as string) : undefined
-    });
+    if (__DEV__) console.log('🌐 API Request:', options.method || 'GET', endpoint);
 
     try {
-      const response = await fetchWithTimeout(primaryUrl, { ...options, headers });
+      const response = await fetchWithTimeout(primaryUrl, { ...options, headers }, timeoutMs);
 
       // Log de la réponse
       console.log('🌐 API Response:', {
@@ -196,10 +191,7 @@ async function request<T>(
         statusText: response.statusText
       });
 
-      const responseData = await handleResponse(response);
-      console.log('📋 API Response Data:', responseData);
-
-      return responseData;
+      return await handleResponse(response);
     } catch (primaryErr) {
       console.error('❌ API Request Error:', primaryErr);
       throw primaryErr;
@@ -335,6 +327,16 @@ export async function stopTripTracking(tripId: ApiId): Promise<TrackingSnapshot>
     method: 'POST',
     body: JSON.stringify({}),
   });
+}
+
+export async function reportTripIncident(
+  tripId: ApiId,
+  payload: SafetyIncidentReportPayload,
+): Promise<SafetyIncidentAlert> {
+  return request<SafetyIncidentAlert>(`/scheduled_trips/${tripId}/incidents/`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }, 10_000);
 }
 
 export async function getTrips(params?: SearchTripsParams): Promise<Trip[]> {
@@ -581,7 +583,6 @@ export async function getMyBookings(): Promise<any[]> {
     const response = await request<any>('/my-bookings/', {
       method: 'GET',
     });
-    console.log('✅ Réponse brute des réservations:', JSON.stringify(response, null, 2));
 
     // Gérer les différents formats de réponse du backend
     if (Array.isArray(response)) {
@@ -597,7 +598,7 @@ export async function getMyBookings(): Promise<any[]> {
       return response.data;
     }
 
-    console.warn('⚠️  Format de réponse inattendu:', response);
+    console.warn('⚠️  Format de réponse inattendu pour /my-bookings/');
     // Retourner un tableau vide plutôt que undefined
     return [];
   } catch (error) {

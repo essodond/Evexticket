@@ -132,8 +132,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       const response = await api.register(payload);
-      console.log('Register API Response:', JSON.stringify(response, null, 2));
-
       if (!response.token) {
         throw new Error('Réponse d\'inscription invalide');
       }

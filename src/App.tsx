@@ -19,6 +19,7 @@ import MyTicketsPage from './components/MyTicketsPage';
 import ProfilePage from './components/ProfilePage';
 import CompanyDashboard from './components/CompanyDashboard';
 import CompanyLayout from './components/CompanyLayout';
+import CompanyIncidentsPage from './components/company/CompanyIncidentsPage';
 import {
   CompanyAgenciesPage,
   CompanyAgencyDetailPage,
@@ -400,6 +401,7 @@ function App() {
             <Route path="trajets" element={<CompanyRoutesPage />} />
             <Route path="voyages" element={<CompanyVoyagesPage />} />
             <Route path="voyages/:id" element={<CompanyVoyageDetailPage />} />
+            <Route path="securite" element={<CompanyIncidentsPage />} />
             <Route path="billets" element={<CompanyTicketsPage />} />
             <Route path="revenus" element={<CompanyRevenuePage />} />
             <Route path="copilote" element={<ManagementCopilotPage scope="company" />} />

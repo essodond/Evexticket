@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from rest_framework import serializers
 from decimal import Decimal
 import uuid
@@ -9,6 +10,7 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.utils import timezone
 from .models import Company, City, Trip, TripStop, Booking, Payment, Review, Notification, ScheduledTrip, BoardingZone
+from .services.safety import is_booking_suspended_for_safety
 import unicodedata
 import re
 from datetime import datetime, timedelta
@@ -653,13 +655,20 @@ class ScheduledTripSerializer(serializers.ModelSerializer):
     badge = serializers.SerializerMethodField()
     booking_closed = serializers.SerializerMethodField()
     badge_label = serializers.SerializerMethodField()
+    safety_blocked = serializers.SerializerMethodField()
 
     class Meta:
         model = ScheduledTrip
         fields = [
-            'id', 'trip', 'trip_info', 'date', 'departure_city_display', 'arrival_city_display', 'stops', 'available_seats', 'seats',
-            'badge', 'booking_closed', 'badge_label'
+            'id', 'trip', 'trip_info', 'date', 'is_active', 'departure_city_display', 'arrival_city_display', 'stops', 'available_seats', 'seats',
+            'badge', 'booking_closed', 'badge_label', 'safety_blocked'
         ]
+
+    def _is_safety_blocked(self, obj):
+        cache_name = '_evex_safety_blocked'
+        if not hasattr(obj, cache_name):
+            setattr(obj, cache_name, is_booking_suspended_for_safety(obj))
+        return getattr(obj, cache_name)
 
     def _get_departure_datetime(self, obj):
         departure_datetime = datetime.combine(obj.date, obj.trip.departure_time)
@@ -671,6 +680,8 @@ class ScheduledTripSerializer(serializers.ModelSerializer):
         return departure_datetime
 
     def _get_badge_value(self, obj):
+        if self._is_safety_blocked(obj):
+            return 'safety_suspended'
         available_seats = self.get_available_seats(obj)
         now = timezone.now()
         departure_datetime = self._get_departure_datetime(obj)
@@ -708,6 +719,8 @@ class ScheduledTripSerializer(serializers.ModelSerializer):
         return TripStopSerializer(obj.trip.stops.all().order_by('sequence'), many=True).data
 
     def get_available_seats(self, obj):
+        if self._is_safety_blocked(obj):
+            return 0
         request = self.context.get('request')
         if request:
             departure_city_id = request.query_params.get('departure_city')
@@ -794,12 +807,18 @@ class ScheduledTripSerializer(serializers.ModelSerializer):
         return self._get_badge_value(obj)
 
     def get_booking_closed(self, obj):
+        if self._is_safety_blocked(obj):
+            return True
         departure_datetime = self._get_departure_datetime(obj)
         return departure_datetime < timezone.now() + timedelta(hours=1)
+
+    def get_safety_blocked(self, obj):
+        return self._is_safety_blocked(obj)
 
     def get_badge_label(self, obj):
         badge = self._get_badge_value(obj)
         labels = {
+            'safety_suspended': 'Réservations suspendues — incident sécurité',
             'departure_imminent': 'Départ imminent',
             'last_seats': 'Dernières places',
             'full': 'Complet',
@@ -835,6 +854,11 @@ class BookingCreateSerializer(serializers.ModelSerializer):
 
         if not scheduled_trip:
             raise serializers.ValidationError("Le voyage planifié (scheduled_trip) est requis.")
+
+        if is_booking_suspended_for_safety(scheduled_trip):
+            raise serializers.ValidationError({
+                'scheduled_trip': 'Les réservations sont suspendues : un incident de sécurité grave est en cours sur ce voyage.'
+            })
         
         # Vérifier la disponibilité du siège pour ce voyage programmé spécifique
         if seat_number:
@@ -882,8 +906,16 @@ class BookingCreateSerializer(serializers.ModelSerializer):
         data['trip'] = scheduled_trip.trip # Associer le trip réel
         return data
 
+    @transaction.atomic
     def create(self, validated_data):
         scheduled_trip = validated_data.pop('scheduled_trip')
+        scheduled_trip = ScheduledTrip.objects.select_for_update().select_related('trip').get(
+            pk=scheduled_trip.pk
+        )
+        if is_booking_suspended_for_safety(scheduled_trip):
+            raise serializers.ValidationError({
+                'scheduled_trip': 'Les réservations sont suspendues : un incident de sécurité grave est en cours sur ce voyage.'
+            })
         validated_data['trip'] = scheduled_trip.trip
         validated_data['scheduled_trip'] = scheduled_trip
         # EN MODE DEVELOPPEMENT: créer la réservation directement en statut 'confirmed'

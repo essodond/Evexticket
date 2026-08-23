@@ -18,15 +18,23 @@ from transport.models import (
     PlatformConfiguration,
 )
 from transport.services import qos_service
+from transport.services.safety import is_booking_suspended_for_safety
 
 logger = logging.getLogger(__name__)
 
 TAUX_FRAIS_QOS = Decimal('0.017')
 
 
+class SafetyBookingSuspended(Exception):
+    pass
+
+
 def reserver_siege_temporaire(voyage_id, numero_siege):
     logger.info("Temporary seat reservation requested voyage=%s siege=%s", voyage_id, numero_siege)
     with transaction.atomic():
+        voyage = ScheduledTrip.objects.select_for_update().get(pk=voyage_id)
+        if is_booking_suspended_for_safety(voyage):
+            raise SafetyBookingSuspended
         siege = (
             Siege.objects
             .select_for_update()
@@ -34,7 +42,6 @@ def reserver_siege_temporaire(voyage_id, numero_siege):
             .first()
         )
         if not siege:
-            ScheduledTrip.objects.select_for_update().get(pk=voyage_id)
             siege = Siege.objects.create(voyage_id=voyage_id, numero=numero_siege)
 
         if siege.statut != Siege.STATUT_LIBRE:
@@ -66,24 +73,30 @@ def creer_reservation(voyage_id, siege_id, client_nom, client_telephone, montant
     for _ in range(5):
         reference_evex = _generer_reference_evex()
         try:
-            reservation = Reservation.objects.create(
-                voyage_id=voyage_id,
-                siege_id=siege_id,
-                client_nom=client_nom,
-                client_telephone=client_telephone,
-                montant_billet=montant_billet,
-                frais_evex=frais_evex_fixes,
-                montant_total=montant_total,
-                frais_qos=frais_qos,
-                revenu_net_evex=revenu_net_evex,
-                montant_reverse_compagnie=montant_billet,
-                operateur=operateur,
-                reference_evex=reference_evex,
-                statut_paiement=Reservation.STATUT_EN_ATTENTE,
-                expires_at=timezone.now() + timedelta(minutes=settings.SIEGE_EXPIRY_MINUTES),
-            )
+            with transaction.atomic():
+                voyage = ScheduledTrip.objects.select_for_update().get(pk=voyage_id)
+                if is_booking_suspended_for_safety(voyage):
+                    raise SafetyBookingSuspended
+                reservation = Reservation.objects.create(
+                    voyage=voyage,
+                    siege_id=siege_id,
+                    client_nom=client_nom,
+                    client_telephone=client_telephone,
+                    montant_billet=montant_billet,
+                    frais_evex=frais_evex_fixes,
+                    montant_total=montant_total,
+                    frais_qos=frais_qos,
+                    revenu_net_evex=revenu_net_evex,
+                    montant_reverse_compagnie=montant_billet,
+                    operateur=operateur,
+                    reference_evex=reference_evex,
+                    statut_paiement=Reservation.STATUT_EN_ATTENTE,
+                    expires_at=timezone.now() + timedelta(minutes=settings.SIEGE_EXPIRY_MINUTES),
+                )
             logger.info("Reservation created reference=%s", reservation.reference_evex)
             return reservation
+        except SafetyBookingSuspended:
+            raise
         except Exception:
             logger.exception("Reservation creation attempt failed reference=%s", reference_evex)
 

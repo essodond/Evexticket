@@ -17,6 +17,7 @@ from .models import (
     XPTransaction,
     BusPosition,
     TripTrackingSession,
+    SafetyIncident,
 )
 
 
@@ -94,6 +95,29 @@ class BusPositionAdmin(admin.ModelAdmin):
     list_display = ['session', 'latitude', 'longitude', 'speed_kmh', 'accuracy_m', 'recorded_at']
     list_filter = ['recorded_at']
     readonly_fields = ['session', 'latitude', 'longitude', 'speed_kmh', 'accuracy_m', 'heading', 'recorded_at', 'created_at']
+
+
+@admin.register(SafetyIncident)
+class SafetyIncidentAdmin(admin.ModelAdmin):
+    list_display = [
+        'id', 'scheduled_trip', 'incident_type', 'severity', 'status',
+        'reported_by', 'occurred_at',
+    ]
+    list_filter = ['incident_type', 'severity', 'status', 'travel_state', 'occurred_at']
+    search_fields = [
+        'id', 'scheduled_trip__trip__company__name',
+        'scheduled_trip__trip__departure_city__name',
+        'scheduled_trip__trip__arrival_city__name',
+        'reported_by__username', 'description',
+    ]
+    readonly_fields = [
+        'id', 'scheduled_trip', 'tracking_session', 'reported_by', 'incident_type',
+        'travel_state', 'severity', 'status', 'description', 'public_message',
+        'latitude', 'longitude', 'accuracy_m', 'location_recorded_at',
+        'location_source', 'injured_count', 'emergency_services_contacted',
+        'idempotency_key', 'occurred_at', 'acknowledged_by', 'acknowledged_at',
+        'resolved_by', 'resolved_at', 'resolution_note', 'created_at', 'updated_at',
+    ]
 
 
 @admin.register(Payment)

@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import Agence, AgentGuichet, Guichet, VenteGuichet, ControlePassager
 from transport.models import ScheduledTrip, Siege
+from transport.services.safety import is_booking_suspended_for_safety
 
 
 class AgentGuichetSerializer(serializers.ModelSerializer):
@@ -202,20 +203,35 @@ class VoyageDisponibleSerializer(serializers.ModelSerializer):
     heure_arrivee = serializers.TimeField(source='trip.arrival_time', read_only=True)
     prix = serializers.DecimalField(source='trip.price', max_digits=10, decimal_places=2, read_only=True)
     places_total = serializers.IntegerField(source='trip.capacity', read_only=True)
-    places_libres = serializers.IntegerField(source='available_seats', read_only=True)
+    places_libres = serializers.SerializerMethodField()
     statut = serializers.SerializerMethodField()
+    safety_blocked = serializers.SerializerMethodField()
 
     class Meta:
         model = ScheduledTrip
         fields = [
             'id', 'trip_id', 'trajet', 'date', 'heure_depart', 'heure_arrivee',
-            'prix', 'places_total', 'places_libres', 'statut',
+            'prix', 'places_total', 'places_libres', 'statut', 'safety_blocked',
         ]
+
+    def _is_safety_blocked(self, obj):
+        cache_name = '_evex_safety_blocked'
+        if not hasattr(obj, cache_name):
+            setattr(obj, cache_name, is_booking_suspended_for_safety(obj))
+        return getattr(obj, cache_name)
 
     def get_trajet(self, obj):
         return f"{obj.trip.departure_city.name}→{obj.trip.arrival_city.name}"
 
+    def get_places_libres(self, obj):
+        return 0 if self._is_safety_blocked(obj) else obj.available_seats
+
+    def get_safety_blocked(self, obj):
+        return self._is_safety_blocked(obj)
+
     def get_statut(self, obj):
+        if self._is_safety_blocked(obj):
+            return 'suspendu_securite'
         return 'actif' if obj.is_active else 'inactif'
 
 

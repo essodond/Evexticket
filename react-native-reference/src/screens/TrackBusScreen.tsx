@@ -13,6 +13,7 @@ import * as Notifications from 'expo-notifications';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
@@ -33,16 +34,21 @@ const trackingLabel = (snapshot: TrackingSnapshot) => {
   return 'Suivi pas encore démarré';
 };
 
+const safetyPriority = { critical: 4, high: 3, medium: 2, low: 1 } as const;
+
 export default function TrackBusScreen({ route }: Props) {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const notifiedAlertRef = useRef<string | null>(null);
+  const notifiedIncidentRefs = useRef<Set<string>>(new Set());
   const tripId = route.params?.tripId;
   const [snapshot, setSnapshot] = useState<TrackingSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
+  const [incidentNotificationsReady, setIncidentNotificationsReady] = useState(false);
+  const incidentNotificationStorageKey = `evex:notified-safety-incidents:${String(tripId ?? 'unknown')}`;
 
   const loadTracking = useCallback(async (silent = false) => {
     if (!tripId) {
@@ -88,6 +94,57 @@ export default function TrackBusScreen({ route }: Props) {
       trigger: null,
     });
   }, [snapshot?.approach_alert, tripId]);
+
+  useEffect(() => {
+    let mounted = true;
+    setIncidentNotificationsReady(false);
+    void AsyncStorage.getItem(incidentNotificationStorageKey)
+      .then((raw) => {
+        if (!mounted) return;
+        try {
+          const ids = raw ? JSON.parse(raw) : [];
+          notifiedIncidentRefs.current = new Set(Array.isArray(ids) ? ids.filter((id) => typeof id === 'string') : []);
+        } catch {
+          notifiedIncidentRefs.current = new Set();
+        }
+        setIncidentNotificationsReady(true);
+      })
+      .catch(() => {
+        if (mounted) setIncidentNotificationsReady(true);
+      });
+    return () => { mounted = false; };
+  }, [incidentNotificationStorageKey]);
+
+  useEffect(() => {
+    const alerts = snapshot?.safety?.alerts ?? [];
+    if (!incidentNotificationsReady || alerts.length === 0) return undefined;
+    let cancelled = false;
+    const notify = async () => {
+      for (const safetyAlert of alerts) {
+        if (cancelled || notifiedIncidentRefs.current.has(safetyAlert.id)) continue;
+        try {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: `Incident signalé · ${safetyAlert.incident_type_label}`,
+              body: safetyAlert.public_message,
+              sound: 'default',
+              data: { tripId: String(tripId), incidentId: safetyAlert.id },
+            },
+            trigger: null,
+          });
+          notifiedIncidentRefs.current.add(safetyAlert.id);
+          await AsyncStorage.setItem(
+            incidentNotificationStorageKey,
+            JSON.stringify([...notifiedIncidentRefs.current]),
+          );
+        } catch {
+          // Réessayer au prochain polling si la notification locale échoue.
+        }
+      }
+    };
+    void notify();
+    return () => { cancelled = true; };
+  }, [incidentNotificationStorageKey, incidentNotificationsReady, snapshot?.safety?.alerts, tripId]);
 
   useEffect(() => {
     const position = snapshot?.current_position;
@@ -145,6 +202,9 @@ export default function TrackBusScreen({ route }: Props) {
     : snapshot.delay_minutes < -5
       ? `${Math.abs(snapshot.delay_minutes)} min d’avance`
       : 'À l’heure';
+  const activeSafetyAlert = [...(snapshot.safety?.alerts ?? [])].sort(
+    (first, second) => safetyPriority[second.severity] - safetyPriority[first.severity],
+  )[0] ?? null;
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
@@ -160,6 +220,33 @@ export default function TrackBusScreen({ route }: Props) {
           <Text style={styles.liveText}>{trackingLabel(snapshot)}</Text>
         </View>
       </View>
+
+      {activeSafetyAlert && (
+        <View style={[
+          styles.safetyBanner,
+          activeSafetyAlert.severity === 'critical' ? styles.safetyBannerCritical : styles.safetyBannerWarning,
+        ]}>
+          <Ionicons
+            name="warning"
+            size={23}
+            color={activeSafetyAlert.severity === 'critical' ? '#991B1B' : '#92400E'}
+          />
+          <View style={styles.safetyBannerCopy}>
+            <Text style={[
+              styles.safetyBannerTitle,
+              activeSafetyAlert.severity === 'critical' ? styles.safetyTextCritical : styles.safetyTextWarning,
+            ]}>
+              Incident signalé · {activeSafetyAlert.incident_type_label}
+            </Text>
+            <Text style={[
+              styles.safetyBannerText,
+              activeSafetyAlert.severity === 'critical' ? styles.safetyTextCritical : styles.safetyTextWarning,
+            ]}>
+              {activeSafetyAlert.public_message}
+            </Text>
+          </View>
+        </View>
+      )}
 
       <View style={styles.mapContainer}>
         <MapView
@@ -311,6 +398,14 @@ const styles = StyleSheet.create({
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.success, marginRight: 6 },
   offlineDot: { backgroundColor: COLORS.warning },
   liveText: { fontSize: FONT_SIZES.xs, fontWeight: FONT_WEIGHTS.semibold, color: COLORS.text, flexShrink: 1 },
+  safetyBanner: { marginHorizontal: 16, marginBottom: 12, padding: 13, borderRadius: 15, borderWidth: 1, flexDirection: 'row', alignItems: 'flex-start' },
+  safetyBannerCritical: { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' },
+  safetyBannerWarning: { backgroundColor: '#FFFBEB', borderColor: '#FCD34D' },
+  safetyBannerCopy: { flex: 1, marginLeft: 10 },
+  safetyBannerTitle: { fontSize: FONT_SIZES.sm, fontWeight: FONT_WEIGHTS.bold },
+  safetyBannerText: { marginTop: 3, fontSize: FONT_SIZES.xs, lineHeight: 18 },
+  safetyTextCritical: { color: '#991B1B' },
+  safetyTextWarning: { color: '#92400E' },
   mapContainer: { height: 310, marginHorizontal: 16, borderRadius: 20, overflow: 'hidden', backgroundColor: COLORS.gray },
   mapTypeButton: { position: 'absolute', top: 12, right: 12, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.94)', paddingHorizontal: 11, paddingVertical: 9, borderRadius: 12 },
   mapTypeText: { marginLeft: 6, fontSize: FONT_SIZES.xs, fontWeight: FONT_WEIGHTS.semibold, color: COLORS.text },

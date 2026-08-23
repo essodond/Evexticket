@@ -18,6 +18,7 @@ from .permissions import (
 )
 from .utils_qr import generer_qr_code_base64
 from transport.models.audit import log_action
+from transport.services.safety import is_booking_suspended_for_safety
 from transport.ticketing import (
     filter_ticket_collection,
     perform_ticket_action,
@@ -731,6 +732,7 @@ class SiegesVoyageView(APIView):
             )
         except ScheduledTrip.DoesNotExist:
             return Response({'detail':'Voyage introuvable'}, status=404)
+        safety_blocked = is_booking_suspended_for_safety(voyage)
         existing_seats = {seat.numero: seat for seat in voyage.sieges.all()}
         booked_seats = {
             int(number)
@@ -752,7 +754,9 @@ class SiegesVoyageView(APIView):
                 'statut': seat_status,
             })
 
-        libres = sum(1 for seat in seat_list if seat['statut'] == Siege.STATUT_LIBRE)
+        libres = 0 if safety_blocked else sum(
+            1 for seat in seat_list if seat['statut'] == Siege.STATUT_LIBRE
+        )
         resume = {
             'total': voyage.trip.capacity,
             'libres': libres,
@@ -768,6 +772,11 @@ class SiegesVoyageView(APIView):
             },
             'sieges': seat_list,
             'resume': resume,
+            'safety_blocked': safety_blocked,
+            'safety_message': (
+                'Vente suspendue : un incident de sécurité grave est en cours sur ce voyage.'
+                if safety_blocked else None
+            ),
         })
 
 
@@ -802,6 +811,11 @@ class CreerVenteView(APIView):
                     is_active=True,
                     date__gte=timezone.localdate(),
                 )
+                if is_booking_suspended_for_safety(voyage):
+                    return Response(
+                        {'detail': 'Vente suspendue : un incident de sécurité grave est en cours sur ce voyage.'},
+                        status=409,
+                    )
                 if seat_number < 1 or seat_number > voyage.trip.capacity:
                     return Response({'detail': 'Numéro de siège hors capacité.'}, status=400)
                 if Booking.objects.filter(
