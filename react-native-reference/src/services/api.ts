@@ -76,6 +76,18 @@ console.log('API_BASE_URL utilisée:', API_BASE_URL);
 console.log('API_BASE_URL utilisée:', API_BASE_URL);
 const TIMEOUT = 60000; // 60s pour gérer les cold starts Render (30s+ de démarrage)
 
+export class ApiError extends Error {
+  status: number;
+  payload: unknown;
+
+  constructor(message: string, status: number, payload: unknown) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
 const mobilePaymentsFlag =
   (Constants.expoConfig?.extra as any)?.EXPO_PUBLIC_MOBILE_PAYMENTS_ENABLED ??
   (Constants.manifest as any)?.extra?.EXPO_PUBLIC_MOBILE_PAYMENTS_ENABLED ??
@@ -113,23 +125,23 @@ async function handleResponse(response: Response) {
 
     if (isJson && data) {
       if (data.detail) {
-        throw new Error(data.detail);
+        throw new ApiError(data.detail, response.status, data);
       }
       if (data.message) {
-        throw new Error(data.message);
+        throw new ApiError(data.message, response.status, data);
       }
       if (typeof data === 'object') {
         const firstError = Object.values(data)[0];
         if (Array.isArray(firstError) && firstError[0]) {
-          throw new Error(firstError[0]);
+          throw new ApiError(String(firstError[0]), response.status, data);
         } else if (typeof firstError === 'string') {
-          throw new Error(firstError);
+          throw new ApiError(firstError, response.status, data);
         }
       }
     }
 
     const errorMessage = `Erreur ${response.status}: ${response.statusText}`;
-    throw new Error(errorMessage);
+    throw new ApiError(errorMessage, response.status, data);
   }
 
   return data;
@@ -464,7 +476,7 @@ export interface InitiateQosPaymentResponse {
 
 export interface VerifyQosPaymentResponse {
   reference: string;
-  statut: 'en_attente' | 'paye' | 'echoue' | 'expire' | 'rembourse';
+  statut: 'en_attente' | 'paye' | 'echoue' | 'expire' | 'rembourse' | 'a_rapprocher';
   montant_total: number;
   frais_evex: number;
   montant_billet: number;
@@ -504,35 +516,10 @@ export async function initiateQosPayment(data: InitiateQosPaymentPayload): Promi
         expires_dans: '5 minutes',
       } as InitiateQosPaymentResponse;
     }
-    const [firstname = '', ...lastnameParts] = String(data.client_nom || '').trim().split(' ');
-    const amount = Number(data.montant_total ?? data.montant_billet);
-    const ticketAmount = Number(data.montant_billet);
-    const operator = data.operateur === 'flooz' ? 'MOOV' : 'TOGOCEL';
-    const method = data.operateur === 'flooz' ? 'moov' : 'togocel';
-    const response = await request<any>('/payments/pay/', {
+    return await request<InitiateQosPaymentResponse>('/payment/initier/', {
       method: 'POST',
-      body: JSON.stringify({
-        operator,
-        phone_number: data.client_telephone,
-        method,
-        phone: data.client_telephone,
-        amount,
-        firstname: firstname || data.client_nom || 'Client',
-        lastname: lastnameParts.join(' ') || 'EvexTicket',
-      }),
+      body: JSON.stringify(data),
     });
-    const transaction = response.transaction || {};
-    const paidAmount = Number(transaction.amount || amount);
-    return {
-      reference_evex: transaction.transref,
-      transaction_id: transaction.transref,
-      montant_billet: ticketAmount,
-      frais_evex: Math.max(paidAmount - ticketAmount, 0),
-      montant_total: paidAmount,
-      operateur: data.operateur,
-      siege: String(data.numero_siege),
-      expires_dans: '5 minutes',
-    };
   } catch (error) {
     console.error('Erreur lors de l initialisation du paiement QOS:', error);
     throw error;
@@ -554,23 +541,9 @@ export async function verifyQosPayment(reference: string): Promise<VerifyQosPaym
         message: 'Simulation: paiement confirme',
       } as VerifyQosPaymentResponse;
     }
-    const response = await request<any>('/payments/status/', {
-      method: 'POST',
-      body: JSON.stringify({ transref: reference }),
-    });
-    const transaction = response.transaction || {};
-    const isPaid = transaction.status === 'success';
-    const amount = Number(transaction.amount || 0);
-    return {
-      reference,
-      statut: isPaid ? 'paye' : transaction.status === 'pending' ? 'en_attente' : 'echoue',
-      montant_total: amount,
-      frais_evex: 0,
-      montant_billet: amount,
-      siege: '',
-      paye: isPaid,
-      message: isPaid ? 'Paiement confirme' : 'Paiement en attente',
-    };
+    return await request<VerifyQosPaymentResponse>(
+      `/payment/verifier/${encodeURIComponent(reference)}/`,
+    );
   } catch (error) {
     console.error('Erreur lors de la verification du paiement QOS:', error);
     throw error;
@@ -598,13 +571,10 @@ export async function getMyBookings(): Promise<any[]> {
       return response.data;
     }
 
-    console.warn('⚠️  Format de réponse inattendu pour /my-bookings/');
-    // Retourner un tableau vide plutôt que undefined
-    return [];
+    throw new Error('Format de réponse inattendu pour /my-bookings/.');
   } catch (error) {
     console.error('💥 Erreur lors de la récupération des réservations:', error);
-    // Retourner un tableau vide plutôt que de lever l'erreur
-    return [];
+    throw error;
   }
 }
 

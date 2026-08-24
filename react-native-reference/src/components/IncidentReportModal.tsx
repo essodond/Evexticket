@@ -29,13 +29,14 @@ interface Props {
   tripId: ApiId | null;
   tripLabel: string;
   locationStatus: string;
+  reporterMode?: 'driver' | 'passenger';
   onClose: () => void;
   onSubmit: (payload: DraftPayload) => Promise<string>;
 }
 
 const incidentTypes: Array<{ value: SafetyIncidentType; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
   { value: 'accident', label: 'Accident', icon: 'warning' },
-  { value: 'breakdown', label: 'Panne', icon: 'construct' },
+  { value: 'breakdown', label: 'Panne / crevaison', icon: 'construct' },
   { value: 'medical', label: 'Urgence médicale', icon: 'medkit' },
   { value: 'road_hazard', label: 'Danger routier', icon: 'trail-sign' },
   { value: 'security', label: 'Sécurité', icon: 'shield' },
@@ -54,7 +55,15 @@ const makeIdempotencyKey = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(
   return value.toString(16);
 });
 
-export default function IncidentReportModal({ visible, tripId, tripLabel, locationStatus, onClose, onSubmit }: Props) {
+export default function IncidentReportModal({
+  visible,
+  tripId,
+  tripLabel,
+  locationStatus,
+  reporterMode = 'driver',
+  onClose,
+  onSubmit,
+}: Props) {
   const [incidentType, setIncidentType] = useState<SafetyIncidentType | null>(null);
   const [travelState, setTravelState] = useState<SafetyTravelState | null>(null);
   const [description, setDescription] = useState('');
@@ -67,7 +76,7 @@ export default function IncidentReportModal({ visible, tripId, tripLabel, locati
   const [draftReady, setDraftReady] = useState(false);
   const [recordedReference, setRecordedReference] = useState<string | null>(null);
 
-  const storageKey = tripId == null ? null : `evex:safety-incident-draft:${String(tripId)}`;
+  const storageKey = tripId == null ? null : `evex:safety-incident-draft:${reporterMode}:${String(tripId)}`;
 
   useEffect(() => {
     if (!visible) return;
@@ -184,7 +193,11 @@ export default function IncidentReportModal({ visible, tripId, tripLabel, locati
         <View style={[styles.container, styles.successContainer]}>
           <View style={styles.successIcon}><Ionicons name="checkmark" size={42} color={COLORS.white} /></View>
           <Text style={styles.successTitle}>Signalement enregistré</Text>
-          <Text style={styles.successText}>Référence {recordedReference.slice(0, 8)}. L’alerte est désormais visible dans le suivi EVEX.</Text>
+          <Text style={styles.successText}>
+            Référence {recordedReference.slice(0, 8)}. {reporterMode === 'passenger'
+              ? 'La compagnie a reçu votre déclaration et doit maintenant la vérifier.'
+              : 'L’alerte est désormais visible dans le suivi EVEX.'}
+          </Text>
           <TouchableOpacity style={styles.successButton} onPress={onClose}><Text style={styles.successButtonText}>Fermer</Text></TouchableOpacity>
         </View>
       </Modal>
@@ -207,7 +220,11 @@ export default function IncidentReportModal({ visible, tripId, tripLabel, locati
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.stopFirstCard}>
             <Ionicons name="hand-left" size={22} color="#92400E" />
-            <Text style={styles.stopFirstText}>Immobilisez le véhicule avant toute manipulation, si cela peut être fait sans danger.</Text>
+            <Text style={styles.stopFirstText}>
+              {reporterMode === 'passenger'
+                ? 'Décrivez uniquement ce que vous constatez. La compagnie vérifiera le signalement avant toute mesure sur les ventes.'
+                : 'Immobilisez le véhicule avant toute manipulation, si cela peut être fait sans danger.'}
+            </Text>
           </View>
 
           <View style={styles.tripCard}>

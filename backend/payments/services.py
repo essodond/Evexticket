@@ -64,10 +64,11 @@ class QosPayService:
         amount: int,
         phone_number: str,
         operator: str,
+        transref: str | None = None,
     ) -> dict[str, Any]:
         """Initie un paiement QosPay et retourne la reponse JSON."""
         operator_config = self.get_operator_config(operator)
-        transref = self.generate_transref()
+        transref = transref or self.generate_transref()
         payload = {
             'clientid': operator_config['client_id'],
             'transref': transref,

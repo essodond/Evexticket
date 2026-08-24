@@ -7,6 +7,7 @@ from guichet.models import ControlePassager, VenteGuichet
 
 from .models import Booking, Reservation, ScheduledTrip, Siege
 from .models.audit import log_action
+from .services.seat_inventory import booking_seat_is_occupied, occupied_booking_seat_numbers
 
 
 TERMINAL_STATUSES = {
@@ -90,7 +91,10 @@ def serialize_ticket(item, source):
             'created_at': item.created_at,
             'sale_location': 'Application Evex',
         }
-        can_refund = status == Reservation.STATUT_PAYE
+        can_refund = status in {
+            Reservation.STATUT_PAYE,
+            Reservation.STATUT_A_RAPPROCHER,
+        }
     else:
         company = item.voyage.trip.company
         voyage = item.voyage
@@ -126,20 +130,24 @@ def serialize_ticket(item, source):
         or bool(last_control and last_control.resultat == 'valide')
     )
     terminal = status in TERMINAL_STATUSES[source]
+    requires_reconciliation = (
+        source == 'mobile'
+        and status == Reservation.STATUT_A_RAPPROCHER
+    )
     payload.update({
         'source': source,
         'channel': 'guichet' if source == 'guichet' else 'application',
         'company_id': company.id,
         'company_name': company.name,
         'control_status': last_control.resultat if last_control else 'en_attente',
-        'can_cancel': not terminal and not used,
+        'can_cancel': not terminal and not used and not requires_reconciliation,
         'can_refund': can_refund and not used,
-        'can_edit': not terminal and not used,
+        'can_edit': not terminal and not used and not requires_reconciliation,
     })
     return payload
 
 
-def ticket_collection(company=None, voyage=None, limit=500):
+def ticket_collection(company=None, voyage=None, limit=500, valid_sales=False):
     booking_queryset = Booking.all_objects.select_related(
         'trip__company',
         'trip__departure_city',
@@ -169,6 +177,13 @@ def ticket_collection(company=None, voyage=None, limit=500):
         booking_queryset = booking_queryset.filter(scheduled_trip=voyage)
         reservation_queryset = reservation_queryset.filter(voyage=voyage)
         counter_queryset = counter_queryset.filter(voyage=voyage)
+
+    if valid_sales:
+        booking_queryset = booking_queryset.filter(status__in=['confirmed', 'completed'])
+        reservation_queryset = reservation_queryset.filter(
+            statut_paiement=Reservation.STATUT_PAYE,
+        )
+        counter_queryset = counter_queryset.filter(statut__in=['valide', 'utilise'])
 
     if limit:
         booking_queryset = booking_queryset.order_by('-booking_date')[:limit]
@@ -257,29 +272,16 @@ def _ticket_is_used(item, source):
 def recalculate_voyage_availability(voyage):
     if voyage is None:
         return
-    occupied = {
-        str(number)
-        for number in Booking.objects.filter(
-            scheduled_trip=voyage,
-            status__in=['pending', 'confirmed'],
-        ).values_list('seat_number', flat=True)
-    }
+    occupied = occupied_booking_seat_numbers(voyage)
+    # Les ventes mobile et guichet partagent le modèle Siege. Son état est la
+    # source atomique qui inclut aussi une demande Mobile Money encore en cours.
     occupied.update(
-        str(number)
-        for number in Reservation.objects.filter(
+        int(number)
+        for number in Siege.objects.filter(
             voyage=voyage,
-            statut_paiement__in=[
-                Reservation.STATUT_EN_ATTENTE,
-                Reservation.STATUT_PAYE,
-            ],
-        ).values_list('siege__numero', flat=True)
-    )
-    occupied.update(
-        str(number)
-        for number in VenteGuichet.objects.filter(
-            voyage=voyage,
-            statut__in=['valide', 'utilise'],
-        ).values_list('siege__numero', flat=True)
+            statut__in=[Siege.STATUT_RESERVE_TEMP, Siege.STATUT_OCCUPE],
+        ).values_list('numero', flat=True)
+        if 1 <= int(number) <= voyage.trip.capacity
     )
     ScheduledTrip.objects.filter(pk=voyage.pk).update(
         available_seats=max(voyage.trip.capacity - len(occupied), 0),
@@ -290,11 +292,7 @@ def _release_seat_if_unused(voyage, seat_number):
     if voyage is None:
         return
     active = (
-        Booking.objects.filter(
-            scheduled_trip=voyage,
-            seat_number=str(seat_number),
-            status__in=['pending', 'confirmed'],
-        ).exists()
+        booking_seat_is_occupied(voyage, seat_number)
         or Reservation.objects.filter(
             voyage=voyage,
             siege__numero=seat_number,
@@ -345,6 +343,14 @@ def perform_ticket_action(
     voyage = _ticket_voyage(item, source)
     if _ticket_is_used(item, source):
         raise ValidationError({'detail': 'Un billet déjà utilisé ne peut plus être modifié, annulé ou remboursé.'})
+    reconciliation_refund = (
+        source == 'mobile'
+        and item.statut_paiement == Reservation.STATUT_A_RAPPROCHER
+    )
+    if reconciliation_refund and action != 'refund':
+        raise ValidationError({
+            'detail': 'Ce paiement confirmé sans siège doit uniquement être remboursé.'
+        })
 
     old_values = {
         'status': item.status if source == 'booking' else (
@@ -395,7 +401,10 @@ def perform_ticket_action(
     elif source == 'mobile':
         if item.statut_paiement in TERMINAL_STATUSES[source]:
             raise ValidationError({'detail': 'Ce billet est déjà clôturé.'})
-        if action == 'refund' and item.statut_paiement != Reservation.STATUT_PAYE:
+        if action == 'refund' and item.statut_paiement not in {
+            Reservation.STATUT_PAYE,
+            Reservation.STATUT_A_RAPPROCHER,
+        }:
             raise ValidationError({'detail': 'Seul un billet payé peut être remboursé.'})
         item.statut_paiement = (
             Reservation.STATUT_REMBOURSE
@@ -409,7 +418,8 @@ def perform_ticket_action(
         item.statut = 'rembourse' if action == 'refund' else 'annule'
         item.save(update_fields=['statut'])
 
-    _release_seat_if_unused(voyage, seat_number)
+    if not reconciliation_refund:
+        _release_seat_if_unused(voyage, seat_number)
     recalculate_voyage_availability(voyage)
     refreshed = _get_ticket(company, source, pk)
     serialized = serialize_ticket(refreshed, source)

@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Menu, ShieldAlert } from 'lucide-react';
-import { NavLink, Outlet, useNavigate, useOutletContext } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import apiService from '../services/api';
 import type { ApiId, Company, SafetyIncident } from '../services/api';
@@ -21,13 +21,16 @@ export const useCompanyPortal = () => useOutletContext<CompanyPortalContextValue
 const CompanyLayout: React.FC = () => {
   const auth = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const companyId: ApiId = auth.user?.company_id == null ? '' : String(auth.user.company_id);
   const [company, setCompany] = useState<Company | null>(null);
   const [loadingCompany, setLoadingCompany] = useState(true);
   const [companyError, setCompanyError] = useState<string | null>(null);
   const [activeIncidents, setActiveIncidents] = useState<SafetyIncident[]>([]);
+  const companyRequestId = useRef(0);
 
   const refreshCompany = useCallback(async () => {
+    const requestId = ++companyRequestId.current;
     if (!companyId) {
       setCompanyError('Aucune compagnie n’est associée à ce compte.');
       setLoadingCompany(false);
@@ -35,28 +38,38 @@ const CompanyLayout: React.FC = () => {
     }
     setLoadingCompany(true);
     try {
-      setCompany(await apiService.getCompany(companyId));
-      setCompanyError(null);
+      const nextCompany = await apiService.getCompany(companyId);
+      if (companyRequestId.current === requestId) {
+        setCompany(nextCompany);
+        setCompanyError(null);
+      }
     } catch (error: unknown) {
-      setCompanyError(error instanceof Error && error.message ? error.message : 'Impossible de charger la compagnie.');
+      if (companyRequestId.current === requestId) {
+        setCompanyError(error instanceof Error && error.message ? error.message : 'Impossible de charger la compagnie.');
+      }
     } finally {
-      setLoadingCompany(false);
+      if (companyRequestId.current === requestId) setLoadingCompany(false);
     }
   }, [companyId]);
 
   useEffect(() => {
+    setCompany(null);
+    setActiveIncidents([]);
     void refreshCompany();
-  }, [refreshCompany]);
+  }, [companyId, refreshCompany]);
 
   useEffect(() => {
-    if (!companyId) return undefined;
+    if (!companyId || location.pathname.startsWith('/company/securite')) {
+      setActiveIncidents([]);
+      return undefined;
+    }
     let mounted = true;
     let requestInFlight = false;
     const refreshSafety = async () => {
       if (requestInFlight || document.visibilityState === 'hidden') return;
       requestInFlight = true;
       try {
-        const incidents = await apiService.getSafetyIncidents({ status: 'active' });
+        const incidents = await apiService.getSafetyIncidents({ status: 'active', company: companyId });
         if (mounted) {
           setActiveIncidents(incidents.filter((incident) => (
             incident.severity === 'high' || incident.severity === 'critical'
@@ -74,7 +87,7 @@ const CompanyLayout: React.FC = () => {
       mounted = false;
       window.clearInterval(interval);
     };
-  }, [companyId]);
+  }, [companyId, location.pathname]);
 
   const logout = () => {
     auth.logout();

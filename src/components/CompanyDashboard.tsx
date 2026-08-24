@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CalendarPlus, Users } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, CalendarPlus, RefreshCw, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import apiService from '../services/api';
-import type { Booking, City, CompanyStats, ScheduledTrip } from '../services/api';
+import type { City, CompanyStats, ScheduledTrip, UnifiedTicket } from '../services/api';
 import AddTripModal from './AddTripModal';
 import AgencyPerformance from './AgencyPerformance';
 import RecentReservations from './RecentReservations';
@@ -31,54 +31,173 @@ const CompanyDashboard: React.FC = () => {
   const { companyId, company } = useCompanyPortal();
   const [stats, setStats] = useState<CompanyStats>(emptyStats);
   const [trips, setTrips] = useState<ScheduledTrip[]>([]);
-  const [reservations, setReservations] = useState<Booking[]>([]);
+  const [reservations, setReservations] = useState<UnifiedTicket[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAddTripModal, setShowAddTripModal] = useState(false);
+  const requestInFlight = useRef(false);
+  const mountedRef = useRef(true);
+  const queuedTimeoutRef = useRef<number | null>(null);
+  const activeCompanyId = useRef(String(companyId));
+  const queuedRefresh = useRef<'manual' | 'silent' | null>(null);
+  const loadDashboardRef = useRef<(mode?: 'initial' | 'manual' | 'silent') => Promise<void>>(async () => undefined);
+  const hasLoaded = useRef(false);
+  const citiesLoaded = useRef(false);
+  const lastTripsLoadAt = useRef(0);
+  const dashboardRef = useRef<HTMLDivElement>(null);
+  const pullStart = useRef<{ x: number; y: number } | null>(null);
+  activeCompanyId.current = String(companyId);
 
-  const loadDashboard = useCallback(async () => {
-    if (!companyId) return;
-    setLoading(true);
-    try {
-      const [statsData, tripsData, reservationsData, citiesData] = await Promise.all([
-        apiService.getCompanyStats(companyId),
-        apiService.getScheduledTrips(companyId),
-        apiService.getCompanyBookings(companyId),
-        apiService.getCities(),
-      ]);
-      setStats(statsData);
-      setTrips(tripsData);
-      setReservations(reservationsData);
-      setCities(citiesData);
-      setError(null);
-    } catch (loadError: any) {
-      setError(loadError?.message || 'Impossible de charger le tableau de bord.');
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      queuedRefresh.current = null;
+      if (queuedTimeoutRef.current !== null) window.clearTimeout(queuedTimeoutRef.current);
+    };
+  }, []);
+
+  const loadDashboard = useCallback(async (mode: 'initial' | 'manual' | 'silent' = 'initial') => {
+    if (!mountedRef.current || !companyId) return;
+    if (requestInFlight.current) {
+      if (mode !== 'silent' || !queuedRefresh.current) queuedRefresh.current = mode === 'initial' ? 'manual' : mode;
+      return;
     }
+    const requestedCompanyId = String(companyId);
+    requestInFlight.current = true;
+    if (mode === 'manual' && mountedRef.current) setRefreshing(true);
+    if (!hasLoaded.current && mountedRef.current) setLoading(true);
+    try {
+      const refreshTrips = mode !== 'silent'
+        || !hasLoaded.current
+        || Date.now() - lastTripsLoadAt.current >= 60_000;
+      const results = await Promise.allSettled([
+        apiService.getCompanyStats(companyId),
+        refreshTrips ? apiService.getScheduledTrips(companyId) : Promise.resolve<ScheduledTrip[] | null>(null),
+        apiService.getCompanyTickets({ limit: 12, valid_sales: true }),
+        citiesLoaded.current ? Promise.resolve<City[] | null>(null) : apiService.getCities(),
+      ]);
+      const failures: string[] = [];
+      const [statsResult, tripsResult, reservationsResult, citiesResult] = results;
+      if (!mountedRef.current || activeCompanyId.current !== requestedCompanyId) return;
+
+      if (statsResult.status === 'fulfilled') setStats(statsResult.value);
+      else failures.push('statistiques');
+      if (tripsResult.status === 'fulfilled') {
+        if (tripsResult.value) {
+          setTrips(tripsResult.value);
+          lastTripsLoadAt.current = Date.now();
+        }
+      } else failures.push('voyages');
+      if (reservationsResult.status === 'fulfilled') setReservations(reservationsResult.value);
+      else failures.push('ventes récentes');
+      if (citiesResult.status === 'fulfilled') {
+        if (citiesResult.value) setCities(citiesResult.value);
+        citiesLoaded.current = true;
+      } else failures.push('villes');
+
+      if (results.some((result) => result.status === 'fulfilled')) hasLoaded.current = true;
+      setError(failures.length
+        ? `Actualisation partielle : ${failures.join(', ')} indisponible(s). Les autres données sont à jour.`
+        : null);
+    } finally {
+      requestInFlight.current = false;
+      if (mountedRef.current && activeCompanyId.current === requestedCompanyId) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+      const queued = queuedRefresh.current;
+      queuedRefresh.current = null;
+      if (mountedRef.current && queued) {
+        queuedTimeoutRef.current = window.setTimeout(() => {
+          queuedTimeoutRef.current = null;
+          void loadDashboardRef.current(queued);
+        }, 0);
+      }
+    }
+  }, [companyId]);
+
+  loadDashboardRef.current = loadDashboard;
+
+  useEffect(() => {
+    hasLoaded.current = false;
+    lastTripsLoadAt.current = 0;
+    setStats(emptyStats);
+    setTrips([]);
+    setReservations([]);
+    setLoading(true);
   }, [companyId]);
 
   useEffect(() => {
     void loadDashboard();
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void loadDashboard('silent');
+    };
+    const dashboardElement = dashboardRef.current;
+    const onTouchStart = (event: TouchEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const interactive = target?.closest('button, a, input, textarea, select, [role="dialog"], [data-no-pull-refresh]');
+      pullStart.current = window.scrollY <= 0 && event.touches.length === 1 && !interactive
+        ? { x: event.touches[0].clientX, y: event.touches[0].clientY }
+        : null;
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      const start = pullStart.current;
+      if (!start || event.touches.length !== 1) return;
+      const deltaX = Math.abs(event.touches[0].clientX - start.x);
+      const deltaY = event.touches[0].clientY - start.y;
+      if (deltaY < 0 || deltaX > Math.max(20, deltaY)) pullStart.current = null;
+      else if (deltaY > 6 && event.cancelable) event.preventDefault();
+    };
+    const onTouchEnd = (event: TouchEvent) => {
+      const start = pullStart.current;
+      pullStart.current = null;
+      if (!start || event.changedTouches.length !== 1) return;
+      if (event.changedTouches[0].clientY - start.y >= 80) void loadDashboard('manual');
+    };
+    const onTouchCancel = () => { pullStart.current = null; };
+    const interval = window.setInterval(refreshWhenVisible, 10_000);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    window.addEventListener('focus', refreshWhenVisible);
+    dashboardElement?.addEventListener('touchstart', onTouchStart, { passive: true });
+    dashboardElement?.addEventListener('touchmove', onTouchMove, { passive: false });
+    dashboardElement?.addEventListener('touchend', onTouchEnd, { passive: true });
+    dashboardElement?.addEventListener('touchcancel', onTouchCancel, { passive: true });
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.removeEventListener('focus', refreshWhenVisible);
+      dashboardElement?.removeEventListener('touchstart', onTouchStart);
+      dashboardElement?.removeEventListener('touchmove', onTouchMove);
+      dashboardElement?.removeEventListener('touchend', onTouchEnd);
+      dashboardElement?.removeEventListener('touchcancel', onTouchCancel);
+    };
   }, [loadDashboard]);
 
   const recentSales = useMemo(() => {
-    const mobileSales = reservations.map((reservation) => ({ ...reservation, source: 'mobile' }));
-    return [...mobileSales, ...(stats.recent_guichet_sales || [])].sort((left, right) => {
-      const leftDate = new Date((left as any).booking_date || (left as any).created_at || 0).getTime();
-      const rightDate = new Date((right as any).booking_date || (right as any).created_at || 0).getTime();
-      return rightDate - leftDate;
+    const completedSales = reservations.filter((ticket) => {
+      if (ticket.source === 'mobile') return ticket.status === 'paye';
+      if (ticket.source === 'guichet') return ['valide', 'utilise'].includes(ticket.status);
+      return ['confirmed', 'completed'].includes(ticket.status);
     });
-  }, [reservations, stats.recent_guichet_sales]);
+    return completedSales.sort((left, right) => (
+      new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime()
+    ));
+  }, [reservations]);
 
   return (
     <>
-      <CompanyPageShell
+      <div ref={dashboardRef} style={{ overscrollBehaviorY: 'contain' }}>
+        <CompanyPageShell
         title="Tableau de bord"
         description={`Vue d’ensemble des ventes, voyages et opérations de ${company?.name || 'votre compagnie'}.`}
         actions={(
           <>
+            <button type="button" onClick={() => void loadDashboard('manual')} disabled={refreshing || loading} className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> Actualiser
+            </button>
             <button type="button" onClick={() => setShowAddTripModal(true)} className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700">
               <CalendarPlus className="h-4 w-4" /> Nouveau voyage
             </button>
@@ -112,7 +231,8 @@ const CompanyDashboard: React.FC = () => {
             <RecentReservations reservations={recentSales} />
           </div>
         </section>
-      </CompanyPageShell>
+        </CompanyPageShell>
+      </div>
 
       {showAddTripModal && (
         <AddTripModal
@@ -120,7 +240,7 @@ const CompanyDashboard: React.FC = () => {
           onClose={() => setShowAddTripModal(false)}
           onSave={() => {
             setShowAddTripModal(false);
-            void loadDashboard();
+            void loadDashboard('manual');
           }}
           editingTrip={null}
           cities={cities}

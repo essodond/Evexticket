@@ -3,89 +3,41 @@ from django.core.exceptions import ImproperlyConfigured
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from .models import Transaction
 from .serializers import (
-    PaymentRequestSerializer,
     TransactionSerializer,
     TransactionStatusRequestSerializer,
 )
 from .services import (
-    QosPayService,
     check_transaction_status,
-    extract_message,
-    extract_response_code,
-    status_from_qospay_code,
 )
 
 
-class PaymentView(APIView):
-    """Endpoint mobile pour initier un paiement QosPay."""
+class QosWebhookRateThrottle(AnonRateThrottle):
+    rate = '120/min'
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+
+class PaymentView(APIView):
+    """Ancien endpoint désactivé : il ne pouvait pas émettre de billet."""
+
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        serializer = PaymentRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-
-        service = QosPayService()
-        operator = data['operator']
-        phone_number = data['phone_number']
-        amount = data['amount']
-
-        try:
-            qos_response = service.initiate_payment(
-                amount=amount,
-                phone_number=phone_number,
-                operator=operator,
-            )
-            operator_config = service.get_operator_config(operator)
-            response_code = extract_response_code(qos_response)
-            transaction_status = (
-                status_from_qospay_code(response_code)
-                if response_code
-                else Transaction.STATUS_PENDING
-            )
-            transaction = Transaction.objects.create(
-                transref=qos_response['transref'],
-                method=operator_config['method'],
-                phone=phone_number,
-                amount=amount,
-                firstname=data['firstname'],
-                lastname=data['lastname'],
-                status=transaction_status,
-                qos_response_code=response_code,
-                qos_response_message=extract_message(qos_response),
-                qos_raw_response=qos_response,
-            )
-
-            return Response(
-                {
-                    'transaction': TransactionSerializer(transaction).data,
-                    'qospay_response': qos_response,
-                },
-                status=status.HTTP_201_CREATED,
-            )
-        except requests.RequestException as exc:
-            return Response(
-                {'detail': 'Impossible de contacter QosPay.', 'error': str(exc)},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-        except ImproperlyConfigured as exc:
-            return Response(
-                {'detail': 'Configuration QosPay incomplete.', 'error': str(exc)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-        except ValueError as exc:
-            return Response(
-                {'detail': str(exc)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        return Response(
+            {
+                'detail': (
+                    'Cette version de l’application utilise un ancien paiement qui ne peut pas créer de billet. '
+                    'Mettez l’application à jour puis recommencez.'
+                ),
+                'code': 'MISE_A_JOUR_APPLICATION_REQUISE',
+            },
+            status=status.HTTP_410_GONE,
+        )
 
 
 class TransactionStatusView(APIView):
@@ -129,6 +81,7 @@ class QosPayWebhookView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [QosWebhookRateThrottle]
 
     def post(self, request):
         payload = request.data
@@ -144,27 +97,61 @@ class QosPayWebhookView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Le callback configuré sur les anciens déploiements pointe encore vers
+        # /api/payments/webhook/. Les nouvelles réservations utilisent leur
+        # référence EVEX comme transref : les traiter ici évite qu'un billet
+        # confirmé reste invisible lorsque l'application est fermée.
+        from transport.models import Reservation
+        from transport.services import qos_service, reservation_service
+
+        reservation = Reservation.objects.filter(reference_evex=transref).first()
+        if reservation:
+            if reservation.statut_paiement == Reservation.STATUT_PAYE:
+                return Response({'received': True, 'confirmation': 'already_paid'})
+            if reservation.statut_paiement == Reservation.STATUT_A_RAPPROCHER:
+                return Response({'received': True, 'confirmation': 'manual_review'})
+            if reservation.statut_paiement == Reservation.STATUT_REMBOURSE:
+                return Response({'received': True, 'confirmation': 'already_refunded'})
+            verification = qos_service.verifier_paiement(
+                reservation.transaction_id_qos or reservation.reference_evex,
+                reservation.operateur,
+            )
+            verified_status = verification.get('statut')
+            if verified_status == Reservation.STATUT_PAYE:
+                try:
+                    reservation_service.confirmer_paiement(
+                        reservation.reference_evex,
+                        reservation.transaction_id_qos or reservation.reference_evex,
+                    )
+                except reservation_service.PaymentReconciliationRequired:
+                    return Response({'received': True, 'confirmation': 'manual_review'})
+                except reservation_service.PaymentStateConflict:
+                    return Response(
+                        {'received': True, 'confirmation': 'manual_review'},
+                    )
+            elif verified_status in [Reservation.STATUT_ECHOUE, Reservation.STATUT_EXPIRE]:
+                reservation_service.terminer_paiement(
+                    reservation.reference_evex,
+                    verified_status,
+                )
+            else:
+                return Response(
+                    {'received': True, 'confirmation': 'pending_verification'},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+            return Response({'received': True, 'status': verified_status})
+
         try:
-            transaction = Transaction.objects.get(transref=transref)
+            transaction, _ = check_transaction_status(transref)
         except Transaction.DoesNotExist:
             return Response(
                 {'detail': 'Transaction introuvable.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
-
-        response_code = extract_response_code(payload)
-        transaction.status = status_from_qospay_code(response_code)
-        transaction.qos_response_code = response_code
-        transaction.qos_response_message = extract_message(payload)
-        transaction.qos_raw_response = payload if isinstance(payload, dict) else {
-            'raw': payload,
-        }
-        transaction.save(update_fields=[
-            'status',
-            'qos_response_code',
-            'qos_response_message',
-            'qos_raw_response',
-            'updated_at',
-        ])
+        except (requests.RequestException, ImproperlyConfigured):
+            return Response(
+                {'received': True, 'confirmation': 'pending_verification'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
         return Response({'received': True, 'status': transaction.status})

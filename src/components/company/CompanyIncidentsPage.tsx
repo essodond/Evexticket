@@ -21,6 +21,7 @@ import type {
   SafetyTravelState,
 } from '../../services/api';
 import CompanyPageShell from './CompanyPageShell';
+import { useCompanyPortal } from '../CompanyLayout';
 
 const incidentTypes: Array<{ value: SafetyIncidentType; label: string }> = [
   { value: 'accident', label: 'Accident' },
@@ -75,6 +76,7 @@ const tripLabel = (trip: ManageableTrackingTrip) => (
 );
 
 const CompanyIncidentsPage: React.FC = () => {
+  const { companyId } = useCompanyPortal();
   const [incidents, setIncidents] = useState<SafetyIncident[]>([]);
   const [trips, setTrips] = useState<ManageableTrackingTrip[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,6 +92,16 @@ const CompanyIncidentsPage: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(makeIdempotencyKey);
   const incidentRequestInFlight = useRef(false);
+  const incidentRefreshQueued = useRef(false);
+  const incidentQueuedTimeout = useRef<number | null>(null);
+  const loadIncidentsRef = useRef<(mode?: 'initial' | 'manual' | 'silent') => Promise<void>>(async () => undefined);
+  const tripRequestInFlight = useRef(false);
+  const tripRefreshQueued = useRef(false);
+  const tripQueuedTimeout = useRef<number | null>(null);
+  const loadTripsRef = useRef<() => Promise<void>>(async () => undefined);
+  const mountedRef = useRef(true);
+  const activeCompanyIdRef = useRef(String(companyId));
+  activeCompanyIdRef.current = String(companyId);
   const [form, setForm] = useState({
     scheduledTrip: '',
     incidentType: '' as SafetyIncidentType | '',
@@ -99,40 +111,116 @@ const CompanyIncidentsPage: React.FC = () => {
     emergencyServicesContacted: false,
   });
 
-  const loadIncidents = useCallback(async (silent = false) => {
-    if (incidentRequestInFlight.current) return;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      incidentRefreshQueued.current = false;
+      tripRefreshQueued.current = false;
+      if (incidentQueuedTimeout.current !== null) window.clearTimeout(incidentQueuedTimeout.current);
+      if (tripQueuedTimeout.current !== null) window.clearTimeout(tripQueuedTimeout.current);
+    };
+  }, []);
+
+  const loadIncidents = useCallback(async (mode: 'initial' | 'manual' | 'silent' = 'initial') => {
+    if (!mountedRef.current) return;
+    if (incidentRequestInFlight.current) {
+      incidentRefreshQueued.current = true;
+      return;
+    }
+    const requestedCompanyId = String(companyId);
     incidentRequestInFlight.current = true;
-    if (silent) setRefreshing(true);
-    else setLoading(true);
+    if (mode === 'manual') setRefreshing(true);
+    if (mode === 'initial') setLoading(true);
     try {
-      const incidentData = await apiService.getSafetyIncidents();
+      const incidentData = await apiService.getSafetyIncidents({ company: companyId });
+      if (!mountedRef.current || activeCompanyIdRef.current !== requestedCompanyId) return;
       setIncidents(incidentData);
       setError(null);
     } catch (loadError: unknown) {
-      setError(errorMessage(loadError, 'Impossible d’actualiser les incidents. Les données affichées peuvent être anciennes.'));
+      if (mountedRef.current && activeCompanyIdRef.current === requestedCompanyId) {
+        setError(errorMessage(loadError, 'Impossible d’actualiser les incidents. Les données affichées peuvent être anciennes.'));
+      }
     } finally {
       incidentRequestInFlight.current = false;
-      setLoading(false);
-      setRefreshing(false);
+      if (mountedRef.current && activeCompanyIdRef.current === requestedCompanyId) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+      if (mountedRef.current && incidentRefreshQueued.current) {
+        incidentRefreshQueued.current = false;
+        incidentQueuedTimeout.current = window.setTimeout(() => {
+          incidentQueuedTimeout.current = null;
+          void loadIncidentsRef.current('silent');
+        }, 0);
+      }
     }
-  }, []);
+  }, [companyId]);
+
+  loadIncidentsRef.current = loadIncidents;
 
   const loadTrips = useCallback(async () => {
+    if (!mountedRef.current) return;
+    if (tripRequestInFlight.current) {
+      tripRefreshQueued.current = true;
+      return;
+    }
+    const requestedCompanyId = String(companyId);
+    tripRequestInFlight.current = true;
     try {
-      setTrips(await apiService.getManageableTrackingTrips());
+      const nextTrips = await apiService.getManageableTrackingTrips(companyId);
+      if (!mountedRef.current || activeCompanyIdRef.current !== requestedCompanyId) return;
+      setTrips(nextTrips);
       setTripError(null);
     } catch (loadError: unknown) {
-      setTripError(errorMessage(loadError, 'Impossible de charger les voyages : le signalement est temporairement indisponible.'));
+      if (mountedRef.current && activeCompanyIdRef.current === requestedCompanyId) {
+        setTripError(errorMessage(loadError, 'Impossible de charger les voyages : le signalement est temporairement indisponible.'));
+      }
+    } finally {
+      tripRequestInFlight.current = false;
+      if (mountedRef.current && tripRefreshQueued.current) {
+        tripRefreshQueued.current = false;
+        tripQueuedTimeout.current = window.setTimeout(() => {
+          tripQueuedTimeout.current = null;
+          void loadTripsRef.current();
+        }, 0);
+      }
     }
-  }, []);
+  }, [companyId]);
+
+  loadTripsRef.current = loadTrips;
+
+  useEffect(() => {
+    setIncidents([]);
+    setTrips([]);
+    setLoading(true);
+    setError(null);
+    setTripError(null);
+  }, [companyId]);
 
   useEffect(() => {
     void loadIncidents();
     void loadTrips();
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void loadIncidents(true);
-    }, 15_000);
-    return () => window.clearInterval(interval);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void loadIncidents('silent');
+        void loadTrips();
+      }
+    };
+    const incidentInterval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void loadIncidents('silent');
+    }, 10_000);
+    const tripInterval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void loadTrips();
+    }, 60_000);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    window.addEventListener('focus', refreshWhenVisible);
+    return () => {
+      window.clearInterval(incidentInterval);
+      window.clearInterval(tripInterval);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.removeEventListener('focus', refreshWhenVisible);
+    };
   }, [loadIncidents, loadTrips]);
 
   const filteredIncidents = useMemo(() => incidents.filter((incident) => {
@@ -199,6 +287,7 @@ const CompanyIncidentsPage: React.FC = () => {
         emergency_services_contacted: form.emergencyServicesContacted,
         idempotency_key: idempotencyKey,
       });
+      if (!mountedRef.current) return;
       setShowReport(false);
       setForm((current) => ({
         ...current,
@@ -206,11 +295,13 @@ const CompanyIncidentsPage: React.FC = () => {
         injuredCount: '0',
         emergencyServicesContacted: false,
       }));
-      await loadIncidents(true);
+      await loadIncidents('silent');
     } catch (submitError: unknown) {
-      setFormError(errorMessage(submitError, 'Signalement non envoyé. Vérifiez la connexion puis réessayez.'));
+      if (mountedRef.current) {
+        setFormError(errorMessage(submitError, 'Signalement non envoyé. Vérifiez la connexion puis réessayez.'));
+      }
     } finally {
-      setSubmitting(false);
+      if (mountedRef.current) setSubmitting(false);
     }
   };
 
@@ -218,11 +309,12 @@ const CompanyIncidentsPage: React.FC = () => {
     setProcessingId(incident.id);
     try {
       await apiService.updateSafetyIncident(incident.id, { status: 'acknowledged' });
-      await loadIncidents(true);
+      if (!mountedRef.current) return;
+      await loadIncidents('silent');
     } catch (actionError: unknown) {
-      setError(errorMessage(actionError, 'Impossible de prendre en charge cet incident.'));
+      if (mountedRef.current) setError(errorMessage(actionError, 'Impossible de prendre en charge cet incident.'));
     } finally {
-      setProcessingId(null);
+      if (mountedRef.current) setProcessingId(null);
     }
   };
 
@@ -235,11 +327,12 @@ const CompanyIncidentsPage: React.FC = () => {
         status: 'resolved',
         resolution_note: note.trim(),
       });
-      await loadIncidents(true);
+      if (!mountedRef.current) return;
+      await loadIncidents('silent');
     } catch (actionError: unknown) {
-      setError(errorMessage(actionError, 'Impossible de résoudre cet incident.'));
+      if (mountedRef.current) setError(errorMessage(actionError, 'Impossible de résoudre cet incident.'));
     } finally {
-      setProcessingId(null);
+      if (mountedRef.current) setProcessingId(null);
     }
   };
 
@@ -250,7 +343,7 @@ const CompanyIncidentsPage: React.FC = () => {
       description="Signalez un accident, une panne ou un danger, enregistrez la position connue et suivez la prise en charge sans exposer les détails internes aux voyageurs."
       actions={(
         <>
-          <button type="button" onClick={() => void loadIncidents(true)} disabled={refreshing} className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+          <button type="button" onClick={() => void loadIncidents('manual')} disabled={refreshing} className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> Actualiser
           </button>
           <button type="button" onClick={openReport} className="inline-flex items-center gap-2 rounded-2xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700">
@@ -301,7 +394,7 @@ const CompanyIncidentsPage: React.FC = () => {
           <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center">
             <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-500" />
             <h2 className="mt-3 font-semibold text-slate-900">Aucun incident pour ces filtres</h2>
-            <p className="mt-1 text-sm text-slate-500">Le centre se met à jour automatiquement toutes les 15 secondes.</p>
+            <p className="mt-1 text-sm text-slate-500">Le centre se met à jour automatiquement toutes les 10 secondes.</p>
           </div>
         ) : filteredIncidents.map((incident) => (
           <article key={incident.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -310,11 +403,21 @@ const CompanyIncidentsPage: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${severityStyles[incident.severity]}`}>{incident.severity_label}</span>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusStyles[incident.status]}`}>{incident.status_label}</span>
+                  {incident.requires_verification && incident.status === 'reported' && (
+                    <span className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-800">
+                      Signalement passager à vérifier
+                    </span>
+                  )}
                   <span className="text-xs text-slate-400">Réf. {incident.id.slice(0, 8)}</span>
                 </div>
                 <h2 className="mt-3 text-lg font-bold text-slate-900">{incident.incident_type_label} · {incident.route_label}</h2>
                 <p className="mt-1 text-sm text-slate-500">Voyage du {incident.travel_date} · signalé {formatDateTime(incident.occurred_at)} par {incident.reporter_name || 'un membre du personnel'}</p>
                 <p className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">{incident.public_message}</p>
+                {incident.requires_verification && incident.status === 'reported' && (
+                  <p className="mt-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800">
+                    Déclaration envoyée par un passager titulaire d’un billet. Vérifiez-la avant de la prendre en charge ; les ventes restent ouvertes jusque-là.
+                  </p>
+                )}
                 {incident.description && <p className="mt-3 text-sm leading-6 text-slate-600"><strong>Détail interne :</strong> {incident.description}</p>}
                 <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500">
                   <span>{incident.travel_state_label}</span>

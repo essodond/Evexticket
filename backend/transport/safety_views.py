@@ -2,13 +2,14 @@ import uuid
 from datetime import timedelta
 
 from django.db import IntegrityError
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Booking, SafetyIncident, ScheduledTrip, TripTrackingSession
+from .models import Booking, Reservation, SafetyIncident, ScheduledTrip, TripTrackingSession
 from .models.audit import log_action
 from .safety_serializers import PublicSafetyIncidentSerializer, SafetyIncidentSerializer
 from .services.access import (
@@ -25,6 +26,9 @@ ACTIVE_STATUSES = [
     SafetyIncident.Status.ACKNOWLEDGED,
 ]
 MAX_ACTIVE_INCIDENTS_PER_TRIP = 10
+MAX_ACTIVE_INCIDENTS_PER_PASSENGER = 2
+MAX_UNVERIFIED_PASSENGER_INCIDENTS_PER_TRIP = 50
+PASSENGER_REPORT_COOLDOWN = timedelta(minutes=5)
 
 
 class ActiveIncidentLimitReached(Exception):
@@ -36,6 +40,22 @@ class IdempotencyKeyCollision(Exception):
 
 
 class IncidentWindowClosed(Exception):
+    pass
+
+
+class PassengerIncidentLimitReached(Exception):
+    pass
+
+
+class PassengerIncidentCooldown(Exception):
+    pass
+
+
+class PassengerIncidentQueueFull(Exception):
+    pass
+
+
+class PassengerEligibilityLost(Exception):
     pass
 
 
@@ -62,11 +82,29 @@ def _scheduled_trip(pk):
 
 
 def _passenger_can_view(user, scheduled_trip):
-    return Booking.objects.filter(
+    if Booking.objects.filter(
         user=user,
         scheduled_trip=scheduled_trip,
         status__in=['confirmed', 'completed'],
+    ).exists():
+        return True
+    return Reservation.objects.filter(
+        user=user,
+        voyage=scheduled_trip,
+        statut_paiement=Reservation.STATUT_PAYE,
     ).exists()
+
+
+def _report_serializer(incident, passenger_report):
+    serializer_class = PublicSafetyIncidentSerializer if passenger_report else SafetyIncidentSerializer
+    return serializer_class(incident).data
+
+
+def _visible_to_passengers(incidents):
+    return incidents.filter(
+        Q(requires_verification=False)
+        | Q(status=SafetyIncident.Status.ACKNOWLEDGED)
+    )
 
 
 def _severity_for(incident_type, travel_state):
@@ -239,6 +277,15 @@ class SafetyIncidentListView(APIView):
         incidents = _incident_queryset()
         if company_ids is not None:
             incidents = incidents.filter(scheduled_trip__trip__company_id__in=company_ids)
+        requested_company = request.query_params.get('company')
+        if requested_company:
+            if not str(requested_company).isdigit():
+                return Response({'detail': 'Compagnie invalide.'}, status=status.HTTP_400_BAD_REQUEST)
+            if company_ids is not None and str(requested_company) not in {
+                str(company_id) for company_id in company_ids
+            }:
+                return Response({'detail': 'Accès non autorisé.'}, status=status.HTTP_403_FORBIDDEN)
+            incidents = incidents.filter(scheduled_trip__trip__company_id=requested_company)
 
         requested_status = request.query_params.get('status')
         if requested_status == 'active':
@@ -275,11 +322,13 @@ class ScheduledTripIncidentView(APIView):
         incidents = _incident_queryset().filter(scheduled_trip=scheduled_trip)
         if can_administer_company(request.user, scheduled_trip.trip.company_id):
             return Response(SafetyIncidentSerializer(incidents, many=True).data)
-        if (
-            can_manage_scheduled_trip(request.user, scheduled_trip)
-            or _passenger_can_view(request.user, scheduled_trip)
-        ):
+        if can_manage_scheduled_trip(request.user, scheduled_trip):
             incidents = incidents.filter(status__in=ACTIVE_STATUSES)
+            return Response(PublicSafetyIncidentSerializer(incidents, many=True).data)
+        if _passenger_can_view(request.user, scheduled_trip):
+            incidents = _visible_to_passengers(
+                incidents.filter(status__in=ACTIVE_STATUSES)
+            )
             return Response(PublicSafetyIncidentSerializer(incidents, many=True).data)
         return Response({'detail': 'Accès non autorisé.'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -287,7 +336,9 @@ class ScheduledTripIncidentView(APIView):
         scheduled_trip = _scheduled_trip(pk)
         if not scheduled_trip:
             return Response({'detail': 'Voyage introuvable.'}, status=status.HTTP_404_NOT_FOUND)
-        if not can_manage_scheduled_trip(request.user, scheduled_trip):
+        can_manage = can_manage_scheduled_trip(request.user, scheduled_trip)
+        passenger_report = not can_manage and _passenger_can_view(request.user, scheduled_trip)
+        if not can_manage and not passenger_report:
             return Response({'detail': 'Accès non autorisé.'}, status=status.HTTP_403_FORBIDDEN)
 
         try:
@@ -306,7 +357,10 @@ class ScheduledTripIncidentView(APIView):
                     {'detail': 'Cette clé de déduplication appartient à un autre signalement.'},
                     status=status.HTTP_409_CONFLICT,
                 )
-            return Response(SafetyIncidentSerializer(existing).data, status=status.HTTP_200_OK)
+            return Response(
+                _report_serializer(existing, passenger_report),
+                status=status.HTTP_200_OK,
+            )
 
         if not is_incident_reportable_now(scheduled_trip):
             return Response(
@@ -326,6 +380,8 @@ class ScheduledTripIncidentView(APIView):
             )
             if not is_incident_reportable_now(locked_trip):
                 raise IncidentWindowClosed
+            if passenger_report and not _passenger_can_view(request.user, locked_trip):
+                raise PassengerEligibilityLost
             duplicate = SafetyIncident.objects.filter(idempotency_key=idempotency_key).first()
             if duplicate:
                 if (
@@ -334,12 +390,34 @@ class ScheduledTripIncidentView(APIView):
                 ):
                     raise IdempotencyKeyCollision
                 return duplicate, False
-            active_count = SafetyIncident.objects.filter(
+            trusted_active_count = SafetyIncident.objects.filter(
                 scheduled_trip=scheduled_trip,
                 status__in=ACTIVE_STATUSES,
+            ).filter(
+                Q(requires_verification=False)
+                | Q(status=SafetyIncident.Status.ACKNOWLEDGED)
             ).count()
-            if active_count >= MAX_ACTIVE_INCIDENTS_PER_TRIP:
+            if trusted_active_count >= MAX_ACTIVE_INCIDENTS_PER_TRIP:
                 raise ActiveIncidentLimitReached
+            if passenger_report:
+                passenger_incidents = SafetyIncident.objects.filter(
+                    scheduled_trip=scheduled_trip,
+                    reported_by=request.user,
+                )
+                unverified_count = SafetyIncident.objects.filter(
+                    scheduled_trip=scheduled_trip,
+                    status=SafetyIncident.Status.REPORTED,
+                    requires_verification=True,
+                ).count()
+                if unverified_count >= MAX_UNVERIFIED_PASSENGER_INCIDENTS_PER_TRIP:
+                    raise PassengerIncidentQueueFull
+                if passenger_incidents.filter(status__in=ACTIVE_STATUSES).count() >= MAX_ACTIVE_INCIDENTS_PER_PASSENGER:
+                    raise PassengerIncidentLimitReached
+                if passenger_incidents.filter(
+                    incident_type=values['incident_type'],
+                    created_at__gte=timezone.now() - PASSENGER_REPORT_COOLDOWN,
+                ).exists():
+                    raise PassengerIncidentCooldown
             session = TripTrackingSession.objects.filter(scheduled_trip=locked_trip).first()
             new_incident = SafetyIncident.objects.create(
                 **values,
@@ -348,6 +426,7 @@ class ScheduledTripIncidentView(APIView):
                 tracking_session=session,
                 reported_by=request.user,
                 status=SafetyIncident.Status.REPORTED,
+                requires_verification=passenger_report,
             )
             log_action(
                 request.user,
@@ -376,6 +455,26 @@ class ScheduledTripIncidentView(APIView):
                 {'detail': 'Trop d’incidents sont déjà ouverts pour ce voyage. Traitez-les avant un nouveau signalement.'},
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
+        except PassengerIncidentLimitReached:
+            return Response(
+                {'detail': 'Vous avez déjà deux incidents ouverts pour ce voyage.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        except PassengerIncidentCooldown:
+            return Response(
+                {'detail': 'Ce type d’incident vient déjà d’être signalé. Attendez quelques minutes avant de réessayer.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        except PassengerIncidentQueueFull:
+            return Response(
+                {'detail': 'La file de signalements passagers est pleine. Prévenez directement le personnel de bord.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        except PassengerEligibilityLost:
+            return Response(
+                {'detail': 'Votre billet ne permet plus de signaler un incident sur ce voyage.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         except IncidentWindowClosed:
             return Response(
                 {'detail': 'Ce voyage n’est plus dans sa fenêtre d’exploitation active.'},
@@ -396,7 +495,7 @@ class ScheduledTripIncidentView(APIView):
             incident, created = duplicate, False
 
         return Response(
-            SafetyIncidentSerializer(incident).data,
+            _report_serializer(incident, passenger_report),
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 

@@ -101,6 +101,7 @@ export interface TrackingStop {
 
 export interface TrackingSnapshot {
   scheduled_trip_id: ApiId;
+  incident_reportable?: boolean;
   status: TrackingStatus;
   is_active: boolean;
   is_stale: boolean;

@@ -11,11 +11,13 @@ from datetime import datetime, timedelta
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import Sum, Q, Count, ProtectedError
+from django.db.models.functions import TruncDate
 from django.core.serializers.json import DjangoJSONEncoder
 from django.forms.models import model_to_dict
 from rest_framework import generics, status, permissions, viewsets, serializers
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from django.contrib.auth.models import User
 from rest_framework.permissions import AllowAny
 from rest_framework.authtoken.models import Token
@@ -24,7 +26,7 @@ from .models import ScheduledTrip
 from .serializers import ScheduledTripSerializer
 from .serializers import RegisterSerializer, UserSerializer, CompanySerializer, TripSerializer, BookingSerializer, PaymentSerializer, ReviewSerializer, NotificationSerializer, ScheduledTripSerializer, CompanyStatsSerializer, TripStopSerializer, BoardingZoneSerializer, CitySerializer, TripSearchSerializer, BookingCreateSerializer, DashboardStatsSerializer
 from django.http import Http404
-from .models import Company, City, Trip, Booking, Payment, Review, Notification, Reservation, ScheduledTrip, UserProfile, TripStop, BoardingZone
+from .models import Company, City, Trip, Booking, Payment, Review, Notification, Reservation, ScheduledTrip, Siege, UserProfile, TripStop, BoardingZone
 from .models.audit import log_action
 from .services.loyalty import get_loyalty_summary
 from django.contrib.auth import authenticate
@@ -39,8 +41,21 @@ from .services.tracking import (
 )
 from .services.access import can_manage_scheduled_trip, company_ids_for_user
 from .services.safety import is_incident_reportable_now
+from .services.seat_inventory import occupied_booking_seat_numbers
 
 logger = logging.getLogger(__name__)
+
+
+class PaymentInitiationThrottle(UserRateThrottle):
+    rate = '6/min'
+
+
+class PaymentVerificationThrottle(UserRateThrottle):
+    rate = '30/min'
+
+
+class PaymentWebhookThrottle(AnonRateThrottle):
+    rate = '120/min'
 
 
 def get_client_ip(request):
@@ -106,33 +121,22 @@ def get_occupied_seats(scheduled_trip, origin_stop=None, destination_stop=None):
     Returns:
         set[str] — numéros de sièges occupés
     """
-    qs = (
-        Booking.objects
-        .filter(scheduled_trip=scheduled_trip, status__in=['pending', 'confirmed'])
-        .select_related('origin_stop', 'destination_stop')
+    occupied = {
+        str(number)
+        for number in occupied_booking_seat_numbers(
+            scheduled_trip,
+            origin_stop=origin_stop,
+            destination_stop=destination_stop,
+        )
+    }
+
+    occupied.update(
+        str(number)
+        for number in Siege.objects.filter(
+            voyage=scheduled_trip,
+            statut__in=[Siege.STATUT_RESERVE_TEMP, Siege.STATUT_OCCUPE],
+        ).values_list('numero', flat=True)
     )
-
-    occupied = set()
-
-    if origin_stop and destination_stop:
-        for b in qs:
-            try:
-                if b.origin_stop and b.destination_stop:
-                    # Chevauchement: NOT (b.dest_seq <= origin_seq OR b.orig_seq >= dest_seq)
-                    if not (
-                        b.destination_stop.sequence <= origin_stop.sequence
-                        or b.origin_stop.sequence >= destination_stop.sequence
-                    ):
-                        occupied.add(b.seat_number)
-                else:
-                    # Réservation sans escales = trajet complet = occupe tous les segments
-                    occupied.add(b.seat_number)
-            except Exception:
-                occupied.add(b.seat_number)
-    else:
-        # Pas de segment précisé: tous les sièges réservés sont occupés
-        occupied = set(qs.values_list('seat_number', flat=True))
-
     return occupied
 
 
@@ -544,29 +548,67 @@ class ScheduledTripViewSet(viewsets.ModelViewSet):
             )
 
 
-class MyBookingsView(generics.ListAPIView):
+class MyBookingsView(APIView):
     """
     Renvoie la liste des réservations pour l'utilisateur actuellement authentifié.
     Retourne directement un tableau sans pagination.
     """
-    serializer_class = BookingSerializer
     permission_classes = [permissions.IsAuthenticated]
-    pagination_class = None  # Désactiver la pagination
 
-    def get_queryset(self):
-        """
-        Cette vue doit retourner une liste de toutes les réservations
-        pour l'utilisateur actuellement authentifié.
-        """
-        user = self.request.user
-        # Filter bookings by user, and prefetch related trip details for efficiency
-        return Booking.objects.filter(user=user).select_related(
-            'trip', 
-            'trip__company', 
-            'trip__departure_city', 
+    def get(self, request, *args, **kwargs):
+        """Réunir les billets de réservation et les paiements mobiles confirmés."""
+        bookings = Booking.objects.filter(user=request.user).select_related(
+            'trip',
+            'trip__company',
+            'trip__departure_city',
             'trip__arrival_city',
-            'scheduled_trip'
-        ).order_by('-booking_date')
+            'scheduled_trip',
+        )
+        mobile_reservations = Reservation.objects.filter(
+            user=request.user,
+            statut_paiement=Reservation.STATUT_PAYE,
+        ).select_related(
+            'voyage__trip__company',
+            'voyage__trip__departure_city',
+            'voyage__trip__arrival_city',
+            'siege',
+            'user',
+        )
+
+        tickets = [
+            (booking.booking_date, BookingSerializer(booking).data)
+            for booking in bookings
+        ]
+        for reservation in mobile_reservations:
+            trip = reservation.voyage.trip
+            tickets.append((reservation.created_at, {
+                'id': str(reservation.id),
+                'reference': reservation.reference_evex,
+                'ticket_reference': reservation.reference_evex,
+                'trip': trip.id,
+                'trip_details': TripSerializer(trip).data,
+                'scheduled_trip': reservation.voyage_id,
+                'scheduled_trip_date': str(reservation.voyage.date),
+                'travel_date': str(reservation.voyage.date),
+                'passenger_name': reservation.client_nom,
+                'passenger_full_name': reservation.client_nom,
+                'passenger_email': reservation.user.email if reservation.user else '',
+                'passenger_phone': reservation.client_telephone,
+                'seat_number': str(reservation.siege.numero),
+                'origin_stop': None,
+                'destination_stop': None,
+                'status': 'confirmed',
+                'payment_status': reservation.statut_paiement,
+                'payment_method': 'mobile_money',
+                'operator': reservation.operateur.lower(),
+                'total_price': reservation.montant_total,
+                'booking_date': reservation.created_at,
+                'user': reservation.user_id,
+                'source': 'mobile',
+            }))
+
+        tickets.sort(key=lambda ticket: ticket[0], reverse=True)
+        return Response([payload for _, payload in tickets])
 
 
 
@@ -651,10 +693,16 @@ def _can_manage_tracking(user, scheduled_trip):
 def _can_view_tracking(user, scheduled_trip):
     if _can_manage_tracking(user, scheduled_trip):
         return True
-    return Booking.objects.filter(
+    if Booking.objects.filter(
         user=user,
         scheduled_trip=scheduled_trip,
         status__in=['confirmed', 'completed'],
+    ).exists():
+        return True
+    return Reservation.objects.filter(
+        user=user,
+        voyage=scheduled_trip,
+        statut_paiement=Reservation.STATUT_PAYE,
     ).exists()
 
 
@@ -689,6 +737,15 @@ class ManageableTrackingTripsView(APIView):
         )
         if company_ids is not None:
             trips = trips.filter(trip__company_id__in=company_ids)
+        requested_company = request.query_params.get('company')
+        if requested_company:
+            if not str(requested_company).isdigit():
+                return Response({'detail': 'Compagnie invalide.'}, status=status.HTTP_400_BAD_REQUEST)
+            if company_ids is not None and str(requested_company) not in {
+                str(company_id) for company_id in company_ids
+            }:
+                return Response({'detail': 'Accès non autorisé.'}, status=status.HTTP_403_FORBIDDEN)
+            trips = trips.filter(trip__company_id=requested_company)
 
         return Response([
             {
@@ -718,12 +775,14 @@ class TripTrackingView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         session = TripTrackingSession.objects.filter(scheduled_trip=scheduled_trip).first()
-        return Response(serialize_tracking(
+        payload = serialize_tracking(
             scheduled_trip,
             session,
             user=request.user,
             include_history=_can_manage_tracking(request.user, scheduled_trip),
-        ))
+        )
+        payload['incident_reportable'] = is_incident_reportable_now(scheduled_trip)
+        return Response(payload)
 
 
 class StartTripTrackingView(APIView):
@@ -1003,7 +1062,7 @@ class CompanyStatsView(APIView):
         valid_sale_statuses = ['valide', 'utilise']
         confirmed_bookings_qs = Booking.objects.filter(
             trip__company=company,
-            status='confirmed',
+            status__in=['confirmed', 'completed'],
         )
         paid_reservations_qs = Reservation.objects.filter(
             voyage__trip__company=company,
@@ -1014,30 +1073,36 @@ class CompanyStatsView(APIView):
             statut__in=valid_sale_statuses,
         )
 
-        mobile_bookings = confirmed_bookings_qs.count() + paid_reservations_qs.count()
-        guichet_sales = guichet_sales_qs.count()
-        mobile_revenue = (
-            confirmed_bookings_qs.aggregate(total=Sum('total_price'))['total']
-            or Decimal('0')
-        ) + Decimal(
-            paid_reservations_qs.aggregate(total=Sum('montant_billet'))['total']
-            or 0
+        booking_summary = confirmed_bookings_qs.aggregate(
+            tickets=Count('id'),
+            revenue=Sum('total_price'),
         )
-        guichet_revenue = guichet_sales_qs.aggregate(total=Sum('montant_billet'))['total'] or 0
+        reservation_summary = paid_reservations_qs.aggregate(
+            tickets=Count('id'),
+            revenue=Sum('montant_billet'),
+        )
+        guichet_summary = guichet_sales_qs.aggregate(
+            tickets=Count('id'),
+            revenue=Sum('montant_billet'),
+        )
+        mobile_bookings = booking_summary['tickets'] + reservation_summary['tickets']
+        guichet_sales = guichet_summary['tickets']
+        mobile_revenue = Decimal(booking_summary['revenue'] or 0) + Decimal(
+            reservation_summary['revenue'] or 0
+        )
+        guichet_revenue = guichet_summary['revenue'] or 0
         total_bookings = mobile_bookings + guichet_sales
         total_revenue = mobile_revenue + Decimal(guichet_revenue)
 
-        mobile_clients = Booking.objects.filter(
-            trip__company=company,
-        ).exclude(passenger_email='').values('passenger_email').distinct().count()
-        mobile_clients += Reservation.objects.filter(
-            voyage__trip__company=company,
-            statut_paiement=Reservation.STATUT_PAYE,
-        ).exclude(client_telephone='').values('client_telephone').distinct().count()
-        guichet_clients = VenteGuichet.objects.filter(
-            voyage__trip__company=company,
-            statut__in=valid_sale_statuses,
-        ).exclude(client_telephone='').values('client_telephone').distinct().count()
+        mobile_clients = confirmed_bookings_qs.exclude(
+            passenger_email='',
+        ).values('passenger_email').distinct().count()
+        mobile_clients += paid_reservations_qs.exclude(
+            client_telephone='',
+        ).values('client_telephone').distinct().count()
+        guichet_clients = guichet_sales_qs.exclude(
+            client_telephone='',
+        ).values('client_telephone').distinct().count()
         active_clients = mobile_clients + guichet_clients
 
         upcoming_trips = ScheduledTrip.objects.filter(
@@ -1045,11 +1110,15 @@ class CompanyStatsView(APIView):
             date__gte=today,
             is_active=True,
         )
-        scheduled_trips = upcoming_trips.count()
-        total_seats = upcoming_trips.aggregate(total=Sum('trip__capacity'))['total'] or 0
+        upcoming_summary = upcoming_trips.aggregate(
+            trips=Count('id'),
+            seats=Sum('trip__capacity'),
+        )
+        scheduled_trips = upcoming_summary['trips']
+        total_seats = upcoming_summary['seats'] or 0
         occupied_upcoming = Booking.objects.filter(
             scheduled_trip__in=upcoming_trips,
-            status='confirmed',
+            status__in=['confirmed', 'completed'],
         ).count() + Reservation.objects.filter(
             voyage__in=upcoming_trips,
             statut_paiement=Reservation.STATUT_PAYE,
@@ -1059,45 +1128,78 @@ class CompanyStatsView(APIView):
         ).count()
         average_occupancy = min(occupied_upcoming / total_seats, 1) if total_seats > 0 else 0
 
-        agency_performance = []
-        for agence in Agence.objects.filter(compagnie=company):
-            valid_sales = agence.ventes.filter(statut__in=valid_sale_statuses)
-            agency_performance.append({
+        agency_performance = [
+            {
                 'id': str(agence.id),
                 'name': agence.nom,
-                'tickets': valid_sales.count(),
-                'revenue': valid_sales.aggregate(total=Sum('montant_billet'))['total'] or 0,
+                'tickets': agence.valid_tickets,
+                'revenue': agence.valid_revenue or 0,
                 'active': agence.is_active,
-            })
-        unassigned_sales = guichet_sales_qs.filter(agence=None)
-        if unassigned_sales.exists():
+            }
+            for agence in Agence.objects.filter(compagnie=company).annotate(
+                valid_tickets=Count(
+                    'ventes',
+                    filter=Q(ventes__statut__in=valid_sale_statuses),
+                ),
+                valid_revenue=Sum(
+                    'ventes__montant_billet',
+                    filter=Q(ventes__statut__in=valid_sale_statuses),
+                ),
+            )
+        ]
+        unassigned_summary = guichet_sales_qs.filter(agence=None).aggregate(
+            tickets=Count('id'),
+            revenue=Sum('montant_billet'),
+        )
+        if unassigned_summary['tickets']:
             agency_performance.append({
                 'id': 'sans-agence',
                 'name': 'Sans agence',
-                'tickets': unassigned_sales.count(),
-                'revenue': unassigned_sales.aggregate(total=Sum('montant_billet'))['total'] or 0,
+                'tickets': unassigned_summary['tickets'],
+                'revenue': unassigned_summary['revenue'] or 0,
                 'active': False,
             })
         agency_performance.sort(key=lambda item: item['tickets'], reverse=True)
 
+        analytics_start = today - timedelta(days=6)
+        daily_channels = [
+            (
+                confirmed_bookings_qs.filter(booking_date__date__gte=analytics_start)
+                .annotate(day=TruncDate('booking_date'))
+                .values('day')
+                .annotate(tickets=Count('id'), revenue=Sum('total_price'))
+            ),
+            (
+                paid_reservations_qs.filter(created_at__date__gte=analytics_start)
+                .annotate(day=TruncDate('created_at'))
+                .values('day')
+                .annotate(tickets=Count('id'), revenue=Sum('montant_billet'))
+            ),
+            (
+                guichet_sales_qs.filter(created_at__date__gte=analytics_start)
+                .annotate(day=TruncDate('created_at'))
+                .values('day')
+                .annotate(tickets=Count('id'), revenue=Sum('montant_billet'))
+            ),
+        ]
+        daily_totals = {}
+        for channel in daily_channels:
+            for row in channel:
+                day_totals = daily_totals.setdefault(
+                    row['day'],
+                    {'tickets': 0, 'revenue': Decimal('0')},
+                )
+                day_totals['tickets'] += row['tickets']
+                day_totals['revenue'] += Decimal(row['revenue'] or 0)
+
         sales_analytics = []
         for offset in range(6, -1, -1):
             day = today - timedelta(days=offset)
-            day_bookings = confirmed_bookings_qs.filter(booking_date__date=day)
-            day_reservations = paid_reservations_qs.filter(created_at__date=day)
-            day_guichet_sales = guichet_sales_qs.filter(created_at__date=day)
-            day_mobile_revenue = (
-                day_bookings.aggregate(total=Sum('total_price'))['total']
-                or Decimal('0')
-            ) + Decimal(
-                day_reservations.aggregate(total=Sum('montant_billet'))['total']
-                or 0
-            )
-            day_guichet_revenue = day_guichet_sales.aggregate(total=Sum('montant_billet'))['total'] or 0
+            day_totals = daily_totals.get(day, {'tickets': 0, 'revenue': Decimal('0')})
             sales_analytics.append({
                 'date': day.isoformat(),
-                'tickets': day_bookings.count() + day_reservations.count() + day_guichet_sales.count(),
-                'revenue': day_mobile_revenue + Decimal(day_guichet_revenue),
+                'tickets': day_totals['tickets'],
+                'revenue': day_totals['revenue'],
             })
 
         recent_guichet_sales = [
@@ -1814,7 +1916,8 @@ def availability_view(request):
 
 
 class InitierPaiementView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [PaymentInitiationThrottle]
 
     def post(self, request, *args, **kwargs):
         from .models import Reservation
@@ -1833,26 +1936,129 @@ class InitierPaiementView(APIView):
             return Response({'erreur': 'CHAMPS_REQUIS', 'champs': missing}, status=status.HTTP_400_BAD_REQUEST)
 
         voyage_id = request.data.get('voyage_id')
-        numero_siege = request.data.get('numero_siege')
         try:
-            siege_id = reservation_service.reserver_siege_temporaire(voyage_id, numero_siege)
-        except reservation_service.SafetyBookingSuspended:
+            voyage = ScheduledTrip.objects.select_related('trip__company').get(pk=voyage_id)
+        except (ScheduledTrip.DoesNotExist, ValueError, TypeError):
+            return Response({'erreur': 'VOYAGE_INTROUVABLE'}, status=status.HTTP_404_NOT_FOUND)
+
+        departure_datetime = timezone.make_aware(
+            datetime.combine(voyage.date, voyage.trip.departure_time),
+            timezone.get_current_timezone(),
+        )
+        if (
+            not voyage.is_active
+            or not voyage.trip.is_active
+            or not voyage.trip.company.is_active
+            or departure_datetime <= timezone.now() + timedelta(hours=1)
+        ):
             return Response(
-                {'erreur': 'VOYAGE_SUSPENDU_SECURITE', 'detail': 'Les réservations sont suspendues en raison d’un incident de sécurité.'},
+                {
+                    'erreur': 'VOYAGE_FERME',
+                    'detail': 'Ce voyage est fermé à la réservation ou son départ est imminent.',
+                },
                 status=status.HTTP_409_CONFLICT,
             )
-        if not siege_id:
-            return Response({'erreur': 'SIEGE_INDISPONIBLE'}, status=status.HTTP_409_CONFLICT)
 
         try:
-            reservation = reservation_service.creer_reservation(
-                voyage_id=voyage_id,
-                siege_id=siege_id,
-                client_nom=request.data.get('client_nom'),
-                client_telephone=request.data.get('client_telephone'),
-                montant_billet=request.data.get('montant_billet'),
-                operateur=request.data.get('operateur'),
+            numero_siege = int(request.data.get('numero_siege'))
+        except (TypeError, ValueError):
+            return Response({'erreur': 'SIEGE_INVALIDE'}, status=status.HTTP_400_BAD_REQUEST)
+        if numero_siege < 1 or numero_siege > voyage.trip.capacity:
+            return Response({'erreur': 'SIEGE_INVALIDE'}, status=status.HTTP_400_BAD_REQUEST)
+
+        client_nom = str(request.data.get('client_nom') or '').strip()
+        client_telephone = normalize_phone(request.data.get('client_telephone'))
+        if not client_nom or not client_telephone or len(client_nom) > 200:
+            return Response(
+                {
+                    'erreur': 'CLIENT_INVALIDE',
+                    'detail': 'Le nom (200 caractères maximum) et un numéro togolais valide sont requis.',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
+
+        operator_aliases = {
+            'FLOOZ': Reservation.OPERATEUR_FLOOZ,
+            'MOOV': Reservation.OPERATEUR_FLOOZ,
+            'TMONEY': Reservation.OPERATEUR_TMONEY,
+            'T-MONEY': Reservation.OPERATEUR_TMONEY,
+            'TOGOCEL': Reservation.OPERATEUR_TMONEY,
+        }
+        operateur = operator_aliases.get(str(request.data.get('operateur') or '').strip().upper())
+        if not operateur:
+            return Response({'erreur': 'OPERATEUR_INVALIDE'}, status=status.HTTP_400_BAD_REQUEST)
+
+        montant_billet = int(voyage.trip.price)
+        try:
+            montant_demande = int(request.data.get('montant_billet'))
+        except (TypeError, ValueError):
+            return Response({'erreur': 'MONTANT_INVALIDE'}, status=status.HTTP_400_BAD_REQUEST)
+        if montant_demande != montant_billet:
+            return Response(
+                {'erreur': 'MONTANT_INVALIDE', 'montant_attendu': montant_billet},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        reservation = Reservation.objects.filter(
+            user=request.user,
+            voyage=voyage,
+            siege__numero=numero_siege,
+            statut_paiement=Reservation.STATUT_EN_ATTENTE,
+            expires_at__gt=timezone.now(),
+        ).select_related('siege').first()
+        if reservation and (
+            reservation.client_nom != client_nom
+            or reservation.client_telephone != client_telephone
+            or reservation.operateur != operateur
+        ):
+            return Response(
+                {
+                    'erreur': 'PAIEMENT_DEJA_INITIE',
+                    'detail': (
+                        'Un paiement est déjà en attente pour ce siège avec d’autres coordonnées. '
+                        'Réutilisez les mêmes informations ou attendez son expiration.'
+                    ),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        if reservation and reservation.transaction_id_qos:
+            return Response({
+                'reference_evex': reservation.reference_evex,
+                'transaction_id': reservation.transaction_id_qos,
+                'montant_billet': reservation.montant_billet,
+                'frais_evex': reservation.frais_evex,
+                'montant_total': reservation.montant_total,
+                'operateur': reservation.operateur.lower(),
+                'siege': reservation.siege.numero,
+                'expires_dans': 'paiement déjà initié',
+                'reutilisee': True,
+            })
+
+        if reservation:
+            siege_id = reservation.siege_id
+        else:
+            try:
+                siege_id = reservation_service.reserver_siege_temporaire(voyage_id, numero_siege)
+            except reservation_service.SafetyBookingSuspended:
+                return Response(
+                    {'erreur': 'VOYAGE_SUSPENDU_SECURITE', 'detail': 'Les réservations sont suspendues en raison d’un incident de sécurité.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if not siege_id:
+                return Response({'erreur': 'SIEGE_INDISPONIBLE'}, status=status.HTTP_409_CONFLICT)
+
+        qos_started_or_unknown = False
+        try:
+            if reservation is None:
+                reservation = reservation_service.creer_reservation(
+                    voyage_id=voyage_id,
+                    siege_id=siege_id,
+                    client_nom=client_nom,
+                    client_telephone=client_telephone,
+                    montant_billet=montant_billet,
+                    operateur=operateur,
+                    user=request.user,
+                )
 
             description = (
                 f"Billet EVEX {request.data.get('ville_depart', '')} "
@@ -1866,14 +2072,29 @@ class InitierPaiementView(APIView):
                 description,
             )
             if not paiement.get('succes'):
-                reservation_service.liberer_siege(siege_id)
-                reservation.statut_paiement = Reservation.STATUT_ECHOUE
-                reservation.save(update_fields=['statut_paiement'])
+                if paiement.get('indetermine'):
+                    qos_started_or_unknown = True
+                    return Response({
+                        'reference_evex': reservation.reference_evex,
+                        'transaction_id': reservation.reference_evex,
+                        'montant_billet': reservation.montant_billet,
+                        'frais_evex': reservation.frais_evex,
+                        'montant_total': reservation.montant_total,
+                        'operateur': reservation.operateur.lower(),
+                        'siege': numero_siege,
+                        'expires_dans': '5 minutes',
+                        'confirmation': 'en_attente',
+                    }, status=status.HTTP_202_ACCEPTED)
+                reservation_service.terminer_paiement(
+                    reservation.reference_evex,
+                    Reservation.STATUT_ECHOUE,
+                )
                 return Response(
-                    {'erreur': 'QOS_INIT_ECHOUE', 'detail': paiement.get('erreur')},
+                    {'erreur': 'QOS_INIT_ECHOUE', 'detail': 'Impossible de démarrer le paiement mobile.'},
                     status=status.HTTP_502_BAD_GATEWAY,
                 )
 
+            qos_started_or_unknown = True
             reservation.transaction_id_qos = paiement.get('transaction_id')
             reservation.reference_qos = paiement.get('reference_qos')
             reservation.save(update_fields=['transaction_id_qos', 'reference_qos'])
@@ -1883,25 +2104,53 @@ class InitierPaiementView(APIView):
                 'montant_billet': reservation.montant_billet,
                 'frais_evex': reservation.frais_evex,
                 'montant_total': reservation.montant_total,
-                'operateur': reservation.operateur,
+                'operateur': reservation.operateur.lower(),
                 'siege': numero_siege,
                 'expires_dans': '5 minutes',
             })
         except reservation_service.SafetyBookingSuspended:
-            reservation_service.liberer_siege(siege_id)
+            if reservation is not None:
+                reservation_service.terminer_paiement(
+                    reservation.reference_evex,
+                    Reservation.STATUT_ECHOUE,
+                )
+            else:
+                reservation_service.liberer_siege(siege_id)
             return Response(
                 {'erreur': 'VOYAGE_SUSPENDU_SECURITE', 'detail': 'Les réservations sont suspendues en raison d’un incident de sécurité.'},
                 status=status.HTTP_409_CONFLICT,
             )
         except Exception as exc:
             logger.exception("Payment init endpoint failed")
-            reservation_service.liberer_siege(siege_id)
-            return Response({'erreur': 'ERREUR_INTERNE', 'detail': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            if reservation is not None and qos_started_or_unknown:
+                return Response({
+                    'reference_evex': reservation.reference_evex,
+                    'transaction_id': reservation.reference_evex,
+                    'montant_billet': reservation.montant_billet,
+                    'frais_evex': reservation.frais_evex,
+                    'montant_total': reservation.montant_total,
+                    'operateur': reservation.operateur.lower(),
+                    'siege': numero_siege,
+                    'expires_dans': '5 minutes',
+                    'confirmation': 'en_attente',
+                }, status=status.HTTP_202_ACCEPTED)
+            if reservation is not None:
+                reservation_service.terminer_paiement(
+                    reservation.reference_evex,
+                    Reservation.STATUT_ECHOUE,
+                )
+            else:
+                reservation_service.liberer_siege(siege_id)
+            return Response(
+                {'erreur': 'ERREUR_INTERNE', 'detail': 'Impossible de démarrer le paiement.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class WebhookQOSView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [PaymentWebhookThrottle]
 
     def post(self, request, *args, **kwargs):
         from .models import Reservation
@@ -1913,49 +2162,114 @@ class WebhookQOSView(APIView):
             return Response({'erreur': 'SIGNATURE_INVALIDE'}, status=status.HTTP_401_UNAUTHORIZED)
 
         payload = request.data
-        reference = payload.get('reference')
-        qos_status = str(payload.get('status') or '').upper()
-        transaction_id = payload.get('transactionId') or payload.get('transaction_id')
-
+        reference = payload.get('reference') or payload.get('transref')
         try:
             reservation = Reservation.objects.get(reference_evex=reference)
         except Reservation.DoesNotExist:
             return Response({'erreur': 'RESERVATION_INTROUVABLE'}, status=status.HTTP_404_NOT_FOUND)
 
-        if qos_status == 'SUCCESS':
-            reservation_service.confirmer_paiement(reference, transaction_id)
-        elif qos_status in ['FAILED', 'CANCELLED', 'EXPIRED']:
-            reservation_service.liberer_siege(reservation.siege_id)
-            reservation.statut_paiement = Reservation.STATUT_ECHOUE
-            reservation.save(update_fields=['statut_paiement'])
+        if reservation.statut_paiement == Reservation.STATUT_PAYE:
+            return Response({'received': True, 'confirmation': 'already_paid'})
+        if reservation.statut_paiement == Reservation.STATUT_A_RAPPROCHER:
+            return Response({'received': True, 'confirmation': 'manual_review'})
+        if reservation.statut_paiement == Reservation.STATUT_REMBOURSE:
+            return Response({'received': True, 'confirmation': 'already_refunded'})
 
-        return Response({'received': True})
+        # Le contenu du callback varie selon les versions QOS et n'est pas
+        # toujours signé. La source de vérité reste donc une lecture de statut
+        # auprès de QOS pour toute notification reconnue.
+        transaction_reference = reservation.transaction_id_qos or reservation.reference_evex
+        verification = qos_service.verifier_paiement(
+            transaction_reference,
+            reservation.operateur,
+        )
+        verified_status = verification.get('statut')
+        if verified_status == Reservation.STATUT_PAYE:
+            try:
+                reservation_service.confirmer_paiement(
+                    reference,
+                    transaction_reference,
+                )
+            except reservation_service.PaymentReconciliationRequired:
+                return Response({'received': True, 'confirmation': 'manual_review'})
+            except reservation_service.PaymentStateConflict:
+                return Response(
+                    {'erreur': 'CONFLIT_STATUT_PAIEMENT', 'detail': 'Ce paiement nécessite une vérification manuelle.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
+        elif verified_status in [Reservation.STATUT_ECHOUE, Reservation.STATUT_EXPIRE]:
+            reservation_service.terminer_paiement(reference, verified_status)
+        else:
+            # Un code 2xx ferait croire au prestataire que la notification est
+            # définitivement traitée. Un 503 lui demande explicitement de la
+            # renvoyer tant que le statut reste indéterminé.
+            return Response(
+                {'received': True, 'confirmation': 'pending_verification'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        return Response({'received': True, 'status': verified_status})
 
 
 class VerifierPaiementView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [PaymentVerificationThrottle]
 
     def get(self, request, ref, *args, **kwargs):
         from .models import Reservation
         from .services import qos_service, reservation_service
 
         try:
-            reservation = Reservation.objects.select_related('siege').get(reference_evex=ref)
+            reservation = Reservation.objects.select_related('siege').get(
+                reference_evex=ref,
+                user=request.user,
+            )
         except Reservation.DoesNotExist:
             return Response({'erreur': 'RESERVATION_INTROUVABLE'}, status=status.HTTP_404_NOT_FOUND)
 
-        if reservation.statut_paiement == Reservation.STATUT_EN_ATTENTE and reservation.transaction_id_qos:
-            verification = qos_service.verifier_paiement(reservation.transaction_id_qos)
+        was_pending = reservation.statut_paiement == Reservation.STATUT_EN_ATTENTE
+        recently_terminal = (
+            reservation.statut_paiement in [
+                Reservation.STATUT_ECHOUE,
+                Reservation.STATUT_EXPIRE,
+            ]
+            and reservation.created_at >= timezone.now() - timedelta(days=1)
+        )
+        if was_pending or recently_terminal:
+            transaction_reference = reservation.transaction_id_qos or reservation.reference_evex
+            verification = qos_service.verifier_paiement(
+                transaction_reference,
+                reservation.operateur,
+            )
             nouveau_statut = verification.get('statut')
             if nouveau_statut == Reservation.STATUT_PAYE:
-                reservation = reservation_service.confirmer_paiement(
+                try:
+                    reservation = reservation_service.confirmer_paiement(
+                        reservation.reference_evex,
+                        transaction_reference,
+                    )
+                except reservation_service.PaymentReconciliationRequired as exc:
+                    return Response(
+                        {
+                            'erreur': 'PAIEMENT_A_RAPPROCHER',
+                            'statut': exc.reservation.statut_paiement,
+                            'detail': 'Le paiement est confirmé, mais le siège n’est plus disponible. Le support doit traiter le remboursement.',
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                except reservation_service.PaymentStateConflict:
+                    return Response(
+                        {
+                            'erreur': 'CONFLIT_STATUT_PAIEMENT',
+                            'detail': 'Le paiement est confirmé par QOS mais le siège a déjà été libéré. Contactez le support.',
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
+            elif was_pending and nouveau_statut in [Reservation.STATUT_ECHOUE, Reservation.STATUT_EXPIRE]:
+                reservation = reservation_service.terminer_paiement(
                     reservation.reference_evex,
-                    reservation.transaction_id_qos,
+                    nouveau_statut,
                 )
-            elif nouveau_statut in [Reservation.STATUT_ECHOUE, Reservation.STATUT_EXPIRE]:
-                reservation_service.liberer_siege(reservation.siege_id)
-                reservation.statut_paiement = nouveau_statut
-                reservation.save(update_fields=['statut_paiement'])
 
         reservation.refresh_from_db()
         return Response({
@@ -1966,7 +2280,13 @@ class VerifierPaiementView(APIView):
             'montant_billet': reservation.montant_billet,
             'siege': reservation.siege.numero,
             'paye': reservation.statut_paiement == Reservation.STATUT_PAYE,
-            'message': 'Paiement confirme' if reservation.statut_paiement == Reservation.STATUT_PAYE else 'Paiement en attente',
+            'message': (
+                'Paiement confirme'
+                if reservation.statut_paiement == Reservation.STATUT_PAYE
+                else 'Paiement à vérifier par le support'
+                if reservation.statut_paiement == Reservation.STATUT_A_RAPPROCHER
+                else 'Paiement en attente'
+            ),
         })
 
 

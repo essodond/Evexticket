@@ -514,6 +514,7 @@ class Reservation(models.Model):
     STATUT_ECHOUE = 'echoue'
     STATUT_EXPIRE = 'expire'
     STATUT_REMBOURSE = 'rembourse'
+    STATUT_A_RAPPROCHER = 'a_rapprocher'
 
     STATUT_PAIEMENT_CHOICES = [
         (STATUT_EN_ATTENTE, 'En attente'),
@@ -521,9 +522,18 @@ class Reservation(models.Model):
         (STATUT_ECHOUE, 'Echoue'),
         (STATUT_EXPIRE, 'Expire'),
         (STATUT_REMBOURSE, 'Rembourse'),
+        (STATUT_A_RAPPROCHER, 'Paiement à rapprocher'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='mobile_reservations',
+        verbose_name='Utilisateur',
+    )
     voyage = models.ForeignKey(
         ScheduledTrip,
         on_delete=models.PROTECT,
@@ -647,18 +657,21 @@ def create_scheduled_trips_on_trip_creation(sender, instance, created, **kwargs)
 
 def _recalculate_scheduled_trip_seats(scheduled_trip):
     """Recalcule available_seats pour un ScheduledTrip en comptant les sièges uniques
-    des réservations actives (pending + confirmed)."""
+    de tous les canaux de vente encore actifs."""
     try:
-        booked_count = (
-            Booking.objects.filter(
-                scheduled_trip=scheduled_trip,
-                status__in=['pending', 'confirmed'],
-            )
-            .values_list('seat_number', flat=True)
-            .distinct()
-            .count()
+        # Import local : le module de service dépend lui-même des modèles.
+        from transport.services.seat_inventory import occupied_booking_seat_numbers
+
+        occupied_numbers = occupied_booking_seat_numbers(scheduled_trip)
+        occupied_numbers.update(
+            int(number)
+            for number in Siege.objects.filter(
+                voyage=scheduled_trip,
+                statut__in=[Siege.STATUT_RESERVE_TEMP, Siege.STATUT_OCCUPE],
+            ).values_list('numero', flat=True)
+            if 1 <= int(number) <= scheduled_trip.trip.capacity
         )
-        available = max(scheduled_trip.trip.capacity - booked_count, 0)
+        available = max(scheduled_trip.trip.capacity - len(occupied_numbers), 0)
         ScheduledTrip.objects.filter(pk=scheduled_trip.pk).update(available_seats=available)
     except Exception:
         pass

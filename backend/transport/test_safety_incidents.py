@@ -13,13 +13,16 @@ from .models import (
     Booking,
     City,
     Company,
+    Reservation,
     SafetyIncident,
     ScheduledTrip,
+    Siege,
     Trip,
     TripTrackingSession,
 )
 from .serializers import BookingCreateSerializer, ScheduledTripSerializer
 from .services import reservation_service
+from .services.safety import is_booking_suspended_for_safety
 
 
 @override_settings(PASSWORD_HASHERS=['django.contrib.auth.hashers.MD5PasswordHasher'])
@@ -146,18 +149,42 @@ class SafetyIncidentApiTests(TestCase):
         self.assertEqual(rendered['status'], 'reported')
         self.assertEqual(rendered['severity'], 'critical')
 
-    def test_only_same_company_personnel_can_report(self):
+    def test_ticket_holder_can_report_but_unverified_alert_does_not_suspend_sales(self):
         anonymous = self.report()
         self.assertEqual(anonymous.status_code, status.HTTP_403_FORBIDDEN)
 
         self.authenticate(self.passenger)
         passenger = self.report({**self.payload, 'idempotency_key': str(uuid.uuid4())})
-        self.assertEqual(passenger.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(passenger.status_code, status.HTTP_201_CREATED)
+        incident = SafetyIncident.objects.get()
+        self.assertTrue(incident.requires_verification)
+        self.assertNotIn('description', passenger.data)
+        self.assertFalse(is_booking_suspended_for_safety(self.scheduled_trip))
+        self.assertEqual(self.client.get(self.report_url).data, [])
+        hidden_tracking = self.client.get(
+            f'/api/scheduled_trips/{self.scheduled_trip.id}/tracking/',
+        )
+        self.assertEqual(hidden_tracking.data['safety'], {'status': 'normal', 'alerts': []})
 
         self.authenticate(self.other_admin)
         other_company = self.report({**self.payload, 'idempotency_key': str(uuid.uuid4())})
         self.assertEqual(other_company.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(SafetyIncident.objects.count(), 0)
+        self.assertEqual(SafetyIncident.objects.count(), 1)
+
+        self.authenticate(self.admin)
+        acknowledged = self.client.patch(
+            f'/api/safety/incidents/{incident.id}/',
+            {'status': 'acknowledged'},
+            format='json',
+        )
+        self.assertEqual(acknowledged.status_code, status.HTTP_200_OK)
+        self.assertTrue(is_booking_suspended_for_safety(self.scheduled_trip))
+        self.authenticate(self.passenger)
+        self.assertEqual(len(self.client.get(self.report_url).data), 1)
+        visible_tracking = self.client.get(
+            f'/api/scheduled_trips/{self.scheduled_trip.id}/tracking/',
+        )
+        self.assertEqual(visible_tracking.data['safety']['status'], 'incident_active')
 
     def test_recent_tracking_position_is_used_and_invalid_coordinates_are_rejected(self):
         TripTrackingSession.objects.create(
@@ -261,6 +288,28 @@ class SafetyIncidentApiTests(TestCase):
         )
         self.assertEqual(cannot_reopen.status_code, status.HTTP_409_CONFLICT)
 
+    def test_multi_company_admin_can_scope_incidents_and_tracking_trips(self):
+        self.other_company.admins.add(self.admin)
+        self.authenticate(self.admin)
+        own_incident = self.report()
+        self.assertEqual(own_incident.status_code, status.HTTP_201_CREATED)
+        other_incident = self.client.post(
+            f'/api/scheduled_trips/{self.other_scheduled_trip.id}/incidents/',
+            {**self.payload, 'idempotency_key': str(uuid.uuid4())},
+            format='json',
+        )
+        self.assertEqual(other_incident.status_code, status.HTTP_201_CREATED)
+
+        incidents = self.client.get(f'/api/safety/incidents/?company={self.company.id}')
+        self.assertEqual(incidents.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(incidents.data), 1)
+        self.assertEqual(incidents.data[0]['scheduled_trip'], self.scheduled_trip.id)
+
+        trips = self.client.get(f'/api/tracking/trips/?company={self.company.id}')
+        self.assertEqual(trips.status_code, status.HTTP_200_OK)
+        self.assertTrue(trips.data)
+        self.assertTrue(all(item['company_name'] == self.company.name for item in trips.data))
+
     def test_critical_incident_suspends_app_and_mobile_payment_bookings(self):
         self.authenticate(self.admin)
         created = self.report()
@@ -360,6 +409,71 @@ class SafetyIncidentApiTests(TestCase):
                 idempotency_key=uuid.uuid4(),
             )
 
+    def test_paid_mobile_reservation_holder_can_report(self):
+        paid_passenger = get_user_model().objects.create_user(
+            'paid-safety-passenger',
+            password='secret',
+        )
+        seat = Siege.objects.create(
+            voyage=self.scheduled_trip,
+            numero=12,
+            statut=Siege.STATUT_OCCUPE,
+        )
+        Reservation.objects.create(
+            user=paid_passenger,
+            voyage=self.scheduled_trip,
+            siege=seat,
+            client_nom='Passager payé',
+            client_telephone='22890123450',
+            montant_billet=7000,
+            frais_evex=300,
+            montant_total=7300,
+            frais_qos=124,
+            revenu_net_evex=176,
+            montant_reverse_compagnie=7000,
+            operateur=Reservation.OPERATEUR_FLOOZ,
+            reference_evex='EVEX-SAFETY-PAID-001',
+            statut_paiement=Reservation.STATUT_PAYE,
+        )
+        self.authenticate(paid_passenger)
+
+        response = self.report({
+            **self.payload,
+            'idempotency_key': str(uuid.uuid4()),
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(SafetyIncident.objects.get().requires_verification)
+
+    def test_passenger_reports_have_cooldown_and_active_limit(self):
+        self.authenticate(self.passenger)
+        first = self.report({
+            **self.payload,
+            'incident_type': 'breakdown',
+            'idempotency_key': str(uuid.uuid4()),
+        })
+        repeated = self.report({
+            **self.payload,
+            'incident_type': 'breakdown',
+            'idempotency_key': str(uuid.uuid4()),
+        })
+        second = self.report({
+            **self.payload,
+            'incident_type': 'road_hazard',
+            'idempotency_key': str(uuid.uuid4()),
+        })
+        over_limit = self.report({
+            **self.payload,
+            'incident_type': 'other',
+            'idempotency_key': str(uuid.uuid4()),
+        })
+
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(repeated.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(second.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(over_limit.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(SafetyIncident.objects.count(), 2)
+
     def test_active_incident_cap_limits_duplicate_spam(self):
         for index in range(10):
             SafetyIncident.objects.create(
@@ -382,3 +496,27 @@ class SafetyIncidentApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
         self.assertEqual(SafetyIncident.objects.count(), 10)
+
+    def test_unverified_passenger_queue_does_not_block_staff_report(self):
+        for index in range(10):
+            SafetyIncident.objects.create(
+                scheduled_trip=self.scheduled_trip,
+                reported_by=self.passenger,
+                incident_type=SafetyIncident.IncidentType.OTHER,
+                travel_state=SafetyIncident.TravelState.CONTINUING,
+                severity=SafetyIncident.Severity.LOW,
+                public_message=f'Signalement passager {index}.',
+                idempotency_key=uuid.uuid4(),
+                requires_verification=True,
+            )
+        self.authenticate(self.admin)
+
+        response = self.report({
+            **self.payload,
+            'incident_type': 'other',
+            'travel_state': 'continuing',
+            'idempotency_key': str(uuid.uuid4()),
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(SafetyIncident.objects.count(), 11)

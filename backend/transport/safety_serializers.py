@@ -29,6 +29,7 @@ class SafetyIncidentSerializer(serializers.ModelSerializer):
             'id', 'company', 'company_name', 'scheduled_trip', 'route_label', 'travel_date',
             'incident_type', 'incident_type_label', 'travel_state', 'travel_state_label',
             'severity', 'severity_label', 'status', 'status_label', 'description',
+            'requires_verification',
             'public_message', 'latitude', 'longitude', 'accuracy_m', 'location_recorded_at',
             'location_source', 'injured_count', 'emergency_services_contacted', 'occurred_at',
             'created_at', 'updated_at', 'reporter_name', 'acknowledged_at',

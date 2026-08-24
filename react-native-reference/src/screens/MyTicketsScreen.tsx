@@ -1,20 +1,24 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  AppState,
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  RefreshControl,
   StatusBar,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { ApiId, RootStackParamList } from '../types';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
 import { formatCurrency } from '../utils/mockData';
 import { getMyBookings } from '../services/api';
+import { subscribeToTicketChanges } from '../utils/ticketEvents';
 
 interface TicketItem {
   id: ApiId;
@@ -42,20 +46,53 @@ type Props = NativeStackScreenProps<RootStackParamList, 'MainTabs'>;
 export default function MyTicketsScreen({ navigation }: Props) {
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [hiddenTickets, setHiddenTickets] = useState<Set<ApiId>>(new Set());
   const { user } = useAuth();
+  const isFocused = useIsFocused();
+  const requestInFlight = useRef(false);
+  const refreshQueued = useRef(false);
+  const mountedRef = useRef(true);
+  const hasLoaded = useRef(false);
+  const [appState, setAppState] = useState(AppState.currentState);
+  const userId = user?.id == null ? null : String(user.id);
+  const activeUserIdRef = useRef(userId);
+  const loadTicketsRef = useRef<(mode?: 'initial' | 'refresh' | 'silent') => Promise<void>>(async () => undefined);
+  activeUserIdRef.current = userId;
 
   useEffect(() => {
-    loadTickets();
-  }, [user]);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
-  const loadTickets = async () => {
+  useEffect(() => {
+    hasLoaded.current = false;
+    setTickets([]);
+    setLoading(true);
+  }, [userId]);
+
+  const loadTickets = useCallback(async (mode: 'initial' | 'refresh' | 'silent' = 'silent') => {
+    if (!mountedRef.current) return;
+    if (requestInFlight.current) {
+      refreshQueued.current = true;
+      return;
+    }
+    if (!user) {
+      setTickets([]);
+      setLoading(false);
+      return;
+    }
+    const requestedUserId = userId;
+    requestInFlight.current = true;
+    if (mode === 'initial') setLoading(true);
+    if (mode === 'refresh') setRefreshing(true);
     try {
-      setLoading(true);
-      if (!user) return setTickets([]);
       const bookings = await getMyBookings();
-      
-      if (!Array.isArray(bookings)) return setTickets([]);
+      if (!Array.isArray(bookings)) throw new Error('Réponse de billets invalide.');
+      if (!mountedRef.current || activeUserIdRef.current !== requestedUserId) return;
 
       const transformedTickets = bookings.map((booking: any) => {
         const tripDetails = booking.trip_details || booking.trip_info || {};
@@ -66,7 +103,7 @@ export default function MyTicketsScreen({ navigation }: Props) {
           date: booking.scheduled_trip_date || booking.travel_date || 'Date non disponible',
           company: tripDetails.company_name || 'Compagnie inconnue',
           company_logo: tripDetails.company_logo || tripDetails.company_logo_url || null,
-          price: booking.total_price || tripDetails.price || 0,
+          price: Number(booking.total_price ?? tripDetails.price ?? 0) || 0,
           from: tripDetails.departure_city_name || 'Ville de départ',
           to: tripDetails.arrival_city_name || 'Ville d\'arrivée',
           departure: tripDetails.departure_time || '00:00',
@@ -80,12 +117,55 @@ export default function MyTicketsScreen({ navigation }: Props) {
         };
       });
       setTickets(transformedTickets);
+      hasLoaded.current = true;
+      setLoadError(null);
     } catch (error) {
-      setTickets([]);
+      if (mountedRef.current && activeUserIdRef.current === requestedUserId) {
+        setLoadError(error instanceof Error ? error.message : 'Impossible d’actualiser les billets.');
+      }
     } finally {
-      setLoading(false);
+      requestInFlight.current = false;
+      if (mountedRef.current && activeUserIdRef.current === requestedUserId) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+      if (mountedRef.current && refreshQueued.current) {
+        refreshQueued.current = false;
+        setTimeout(() => void loadTicketsRef.current('silent'), 0);
+      }
     }
-  };
+  }, [user, userId]);
+
+  loadTicketsRef.current = loadTickets;
+
+  useFocusEffect(useCallback(() => {
+    void loadTickets(hasLoaded.current ? 'silent' : 'initial');
+  }, [loadTickets]));
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', setAppState);
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    if (!isFocused || appState !== 'active') return undefined;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      if (cancelled) return;
+      await loadTickets('silent');
+      if (!cancelled) timer = setTimeout(poll, 8000);
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [appState, isFocused, loadTickets]);
+
+  useEffect(() => subscribeToTicketChanges(() => {
+    void loadTickets('silent');
+  }), [loadTickets]);
 
   const isTravelPassed = (travelDate: string): boolean => {
     try {
@@ -121,7 +201,21 @@ export default function MyTicketsScreen({ navigation }: Props) {
         style={styles.content} 
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={(
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void loadTickets('refresh')}
+            tintColor={COLORS.primary}
+            colors={[COLORS.primary]}
+          />
+        )}
       >
+        {loadError && (
+          <View style={styles.refreshError}>
+            <Ionicons name="cloud-offline-outline" size={18} color="#B45309" />
+            <Text style={styles.refreshErrorText}>{loadError}</Text>
+          </View>
+        )}
         <Text style={styles.sectionTitle}>BILLETS ACTIFS</Text>
 
         {visibleTickets.length === 0 ? (
@@ -299,6 +393,17 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     marginBottom: 15,
   },
+  refreshError: {
+    marginBottom: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    backgroundColor: '#FFFBEB',
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  refreshErrorText: { flex: 1, marginLeft: 8, color: '#92400E', fontSize: 12, lineHeight: 17 },
   ticketWrapper: {
     marginBottom: 20,
     shadowColor: "#000",

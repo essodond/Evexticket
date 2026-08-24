@@ -15,7 +15,9 @@ const RecentReservations: React.FC<{ reservations?: any[] }> = ({ reservations =
           const route = reservation.trip_details
             ? `${reservation.trip_details.departure_city_name} → ${reservation.trip_details.arrival_city_name}`
             : reservation.route || 'Trajet non renseigné';
-          const source = reservation.source === 'guichet' ? 'Guichet' : 'Mobile';
+          const source = reservation.source === 'guichet'
+            ? 'Guichet'
+            : reservation.source === 'booking' ? 'Application' : 'Paiement mobile';
           const rawDate = reservation.booking_date || reservation.created_at || reservation.travel_date;
           const parsedDate = rawDate ? new Date(rawDate) : null;
           const displayDate = parsedDate && !Number.isNaN(parsedDate.getTime())
@@ -27,7 +29,7 @@ const RecentReservations: React.FC<{ reservations?: any[] }> = ({ reservations =
             <div key={`${reservation.id || 'vente'}-${index}`} className="rounded-2xl border border-slate-100 px-4 py-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-slate-900">{reservation.passenger_name || reservation.name || 'Client'}</div>
+                  <div className="truncate text-sm font-semibold text-slate-900">{reservation.client_name || reservation.passenger_name || reservation.name || 'Client'}</div>
                   <div className="mt-1 truncate text-xs text-slate-500">{route}</div>
                   <div className="mt-1 text-xs text-slate-400">{displayDate}</div>
                 </div>

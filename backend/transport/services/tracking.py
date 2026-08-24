@@ -2,7 +2,7 @@ import math
 from datetime import datetime, timedelta
 
 from django.db import transaction
-from django.db.models import Case, IntegerField, Value, When
+from django.db.models import Case, IntegerField, Q, Value, When
 from django.utils import timezone
 
 from transport.models import Booking, BusPosition, SafetyIncident, TripTrackingSession
@@ -20,6 +20,9 @@ def _safety_snapshot(scheduled_trip):
             SafetyIncident.Status.REPORTED,
             SafetyIncident.Status.ACKNOWLEDGED,
         ],
+    ).filter(
+        Q(requires_verification=False)
+        | Q(status=SafetyIncident.Status.ACKNOWLEDGED)
     ).annotate(
         safety_priority=Case(
             When(severity=SafetyIncident.Severity.CRITICAL, then=Value(0)),

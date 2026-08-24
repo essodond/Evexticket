@@ -1,24 +1,29 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
+import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
-import { getTripTracking } from '../services/api';
-import { RootStackParamList, TrackingSnapshot } from '../types';
+import IncidentReportModal from '../components/IncidentReportModal';
+import { getTripTracking, reportTripIncident } from '../services/api';
+import { RootStackParamList, SafetyIncidentReportPayload, TrackingSnapshot } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TrackBus'>;
 
@@ -38,7 +43,14 @@ const safetyPriority = { critical: 4, high: 3, medium: 2, low: 1 } as const;
 
 export default function TrackBusScreen({ route }: Props) {
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
+  const { width, height } = useWindowDimensions();
   const mapRef = useRef<MapView>(null);
+  const mountedRef = useRef(true);
+  const pollingActiveRef = useRef(false);
+  const requestInFlightRef = useRef(false);
+  const refreshQueuedRef = useRef(false);
+  const loadTrackingRef = useRef<(silent?: boolean) => Promise<void>>(async () => undefined);
   const notifiedAlertRef = useRef<string | null>(null);
   const notifiedIncidentRefs = useRef<Set<string>>(new Set());
   const tripId = route.params?.tripId;
@@ -47,37 +59,118 @@ export default function TrackBusScreen({ route }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
+  const [appState, setAppState] = useState(AppState.currentState);
+  const [incidentModalVisible, setIncidentModalVisible] = useState(false);
   const [incidentNotificationsReady, setIncidentNotificationsReady] = useState(false);
   const incidentNotificationStorageKey = `evex:notified-safety-incidents:${String(tripId ?? 'unknown')}`;
+  const compactHeader = width < 390;
+  const singleColumnMetrics = width < 350;
+  const mapHeight = Math.max(220, Math.min(330, Math.round(width * 0.7), Math.round(height * 0.42)));
+  pollingActiveRef.current = isFocused && appState === 'active';
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      pollingActiveRef.current = false;
+      refreshQueuedRef.current = false;
+    };
+  }, []);
 
   const loadTracking = useCallback(async (silent = false) => {
+    if (!mountedRef.current) return;
     if (!tripId) {
       setError('Identifiant du voyage introuvable.');
       setLoading(false);
       return;
     }
+    if (requestInFlightRef.current) {
+      refreshQueuedRef.current = true;
+      return;
+    }
+    requestInFlightRef.current = true;
     if (!silent) setRefreshing(true);
     try {
       const nextSnapshot = await getTripTracking(tripId);
-      setSnapshot(nextSnapshot);
-      setError(null);
+      if (mountedRef.current) {
+        setSnapshot(nextSnapshot);
+        setError(null);
+      }
     } catch (trackingError) {
-      setError(
-        trackingError instanceof Error
-          ? trackingError.message
-          : 'Impossible de récupérer la position du bus.',
-      );
+      if (mountedRef.current) {
+        setError(
+          trackingError instanceof Error
+            ? trackingError.message
+            : 'Impossible de récupérer la position du bus.',
+        );
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      requestInFlightRef.current = false;
+      if (mountedRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+      if (mountedRef.current && pollingActiveRef.current && refreshQueuedRef.current) {
+        refreshQueuedRef.current = false;
+        setTimeout(() => void loadTrackingRef.current(true), 0);
+      } else {
+        refreshQueuedRef.current = false;
+      }
     }
   }, [tripId]);
 
+  loadTrackingRef.current = loadTracking;
+
   useEffect(() => {
-    void loadTracking(true);
-    const poller = setInterval(() => void loadTracking(true), 8000);
-    return () => clearInterval(poller);
-  }, [loadTracking]);
+    const subscription = AppState.addEventListener('change', setAppState);
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    if (!isFocused || appState !== 'active') return undefined;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      if (cancelled) return;
+      await loadTracking(true);
+      if (!cancelled) timer = setTimeout(poll, 8000);
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [appState, isFocused, loadTracking]);
+
+  const reportIncident = useCallback(async (
+    payload: Omit<SafetyIncidentReportPayload, 'latitude' | 'longitude' | 'accuracy_m' | 'occurred_at'>,
+  ) => {
+    if (!tripId) throw new Error('Identifiant du voyage introuvable.');
+    let location: Location.LocationObject | null = null;
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status === Location.PermissionStatus.GRANTED) {
+        location = await Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+        ]);
+        if (location?.coords.accuracy != null && location.coords.accuracy > 150) location = null;
+      }
+    } catch {
+      location = null;
+    }
+    const incident = await reportTripIncident(tripId, {
+      ...payload,
+      occurred_at: location ? new Date(location.timestamp).toISOString() : new Date().toISOString(),
+      ...(location ? {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        accuracy_m: location.coords.accuracy,
+      } : {}),
+    });
+    await loadTracking(true);
+    return incident.id;
+  }, [loadTracking, tripId]);
 
   useEffect(() => {
     const alert = snapshot?.approach_alert;
@@ -92,6 +185,8 @@ export default function TrackBusScreen({ route }: Props) {
         sound: 'default',
       },
       trigger: null,
+    }).catch(() => {
+      if (notifiedAlertRef.current === alertKey) notifiedAlertRef.current = null;
     });
   }, [snapshot?.approach_alert, tripId]);
 
@@ -205,17 +300,34 @@ export default function TrackBusScreen({ route }: Props) {
   const activeSafetyAlert = [...(snapshot.safety?.alerts ?? [])].sort(
     (first, second) => safetyPriority[second.severity] - safetyPriority[first.severity],
   )[0] ?? null;
+  const incidentReportable = snapshot.incident_reportable === true;
 
   return (
-    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
-      <View style={styles.header}>
-        <View>
+    <View style={styles.container}>
+      <ScrollView
+        style={styles.pageScroll}
+        contentContainerStyle={[
+          styles.pageScrollContent,
+          { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 28 },
+        ]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => void loadTracking()} tintColor={COLORS.primary} />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.pageContent}>
+      <View style={[styles.header, compactHeader && styles.headerCompact]}>
+        <View style={[styles.headerCopy, compactHeader && styles.headerCopyCompact]}>
           <Text style={styles.title}>Suivre mon bus</Text>
           <Text style={styles.subtitle}>
             {snapshot.route.departure_city} → {snapshot.route.arrival_city}
           </Text>
         </View>
-        <View style={[styles.livePill, snapshot.status !== 'live' && styles.offlinePill]}>
+        <View style={[
+          styles.livePill,
+          snapshot.status !== 'live' && styles.offlinePill,
+          compactHeader && styles.livePillCompact,
+        ]}>
           <View style={[styles.liveDot, snapshot.status !== 'live' && styles.offlineDot]} />
           <Text style={styles.liveText}>{trackingLabel(snapshot)}</Text>
         </View>
@@ -248,7 +360,7 @@ export default function TrackBusScreen({ route }: Props) {
         </View>
       )}
 
-      <View style={styles.mapContainer}>
+      <View style={[styles.mapContainer, { height: mapHeight }]}>
         <MapView
           ref={mapRef}
           style={StyleSheet.absoluteFill}
@@ -301,13 +413,31 @@ export default function TrackBusScreen({ route }: Props) {
         )}
       </View>
 
-      <ScrollView
-        style={styles.infoArea}
-        contentContainerStyle={styles.infoContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => void loadTracking()} tintColor={COLORS.primary} />
-        }
-      >
+      <View style={styles.infoContent}>
+        <TouchableOpacity
+          style={[styles.reportButton, !incidentReportable && styles.reportButtonDisabled]}
+          onPress={() => setIncidentModalVisible(true)}
+          disabled={!incidentReportable}
+          accessibilityRole="button"
+          accessibilityLabel="Signaler un incident pendant ce trajet"
+          accessibilityState={{ disabled: !incidentReportable }}
+        >
+          <View style={styles.reportIcon}>
+            <Ionicons name="warning" size={22} color="#B91C1C" />
+          </View>
+          <View style={styles.reportCopy}>
+            <Text style={styles.reportTitle}>
+              {incidentReportable ? 'Signaler un incident' : 'Signalement indisponible'}
+            </Text>
+            <Text style={styles.reportText}>
+              {incidentReportable
+                ? 'Accident, panne, crevaison ou problème à bord'
+                : 'Disponible uniquement pendant la fenêtre active du voyage'}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#B91C1C" />
+        </TouchableOpacity>
+
         {snapshot.approach_alert.active && (
           <View style={styles.approachCard}>
             <Ionicons name="notifications" size={22} color="#8A4B00" />
@@ -321,32 +451,32 @@ export default function TrackBusScreen({ route }: Props) {
         )}
 
         <View style={styles.metricsGrid}>
-          <View style={styles.metricCard}>
+          <View style={[styles.metricCard, singleColumnMetrics && styles.metricCardSingle]}>
             <Text style={styles.metricLabel}>Arrivée estimée</Text>
             <Text style={styles.metricValue}>{formatClock(snapshot.estimated_arrival_at)}</Text>
           </View>
-          <View style={styles.metricCard}>
+          <View style={[styles.metricCard, singleColumnMetrics && styles.metricCardSingle]}>
             <Text style={styles.metricLabel}>Vitesse actuelle</Text>
             <Text style={styles.metricValue}>{Math.round(snapshot.current_position?.speed_kmh ?? 0)} km/h</Text>
           </View>
-          <View style={styles.metricCard}>
+          <View style={[styles.metricCard, singleColumnMetrics && styles.metricCardSingle]}>
             <Text style={styles.metricLabel}>Temps restant</Text>
             <Text style={styles.metricValue}>{snapshot.eta_minutes ?? '--'} min</Text>
           </View>
-          <View style={styles.metricCard}>
+          <View style={[styles.metricCard, singleColumnMetrics && styles.metricCardSingle]}>
             <Text style={styles.metricLabel}>Distance restante</Text>
             <Text style={styles.metricValue}>{snapshot.distance_remaining_km ?? '--'} km</Text>
           </View>
         </View>
 
-        <View style={styles.delayCard}>
+        <View style={[styles.delayCard, compactHeader && styles.delayCardCompact]}>
           <Ionicons
             name={snapshot.delay_minutes > 5 ? 'time-outline' : 'checkmark-circle-outline'}
             size={21}
             color={snapshot.delay_minutes > 5 ? COLORS.warning : COLORS.success}
           />
           <Text style={[styles.delayText, snapshot.delay_minutes > 5 && styles.delayedText]}>{delayText}</Text>
-          <Text style={styles.lastUpdate}>GPS : {formatClock(snapshot.updated_at)}</Text>
+          <Text style={[styles.lastUpdate, compactHeader && styles.lastUpdateCompact]}>GPS : {formatClock(snapshot.updated_at)}</Text>
         </View>
 
         <View style={styles.timelineCard}>
@@ -377,23 +507,41 @@ export default function TrackBusScreen({ route }: Props) {
             </View>
           ))}
         </View>
+      </View>
+        </View>
       </ScrollView>
+      <IncidentReportModal
+        visible={incidentModalVisible}
+        tripId={tripId ?? null}
+        tripLabel={`${snapshot.route.departure_city} → ${snapshot.route.arrival_city}`}
+        locationStatus="GPS du téléphone si disponible, sinon dernière position connue du bus"
+        reporterMode="passenger"
+        onClose={() => setIncidentModalVisible(false)}
+        onSubmit={reportIncident}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F1F5F9' },
+  pageScroll: { flex: 1 },
+  pageScrollContent: { flexGrow: 1 },
+  pageContent: { width: '100%', maxWidth: 760, alignSelf: 'center' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, backgroundColor: COLORS.background },
   loadingText: { marginTop: 14, color: COLORS.textSecondary },
   errorTitle: { marginTop: 14, fontSize: FONT_SIZES.xl, fontWeight: FONT_WEIGHTS.bold, color: COLORS.text },
   errorText: { marginTop: 8, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 21 },
   retryButton: { marginTop: 20, backgroundColor: COLORS.primary, paddingHorizontal: 22, paddingVertical: 12, borderRadius: 12 },
   retryText: { color: COLORS.white, fontWeight: FONT_WEIGHTS.bold },
-  header: { paddingTop: 18, paddingHorizontal: 20, paddingBottom: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  header: { paddingTop: 4, paddingHorizontal: 20, paddingBottom: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerCompact: { flexDirection: 'column', alignItems: 'flex-start' },
+  headerCopy: { flex: 1, minWidth: 0, paddingRight: 10 },
+  headerCopyCompact: { flex: 0, width: '100%', paddingRight: 0 },
   title: { fontSize: FONT_SIZES['2xl'], fontWeight: FONT_WEIGHTS.bold, color: COLORS.text },
   subtitle: { color: COLORS.textSecondary, marginTop: 4 },
   livePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#DCFCE7', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 7, maxWidth: 155 },
+  livePillCompact: { marginTop: 11, maxWidth: '100%', alignSelf: 'flex-start' },
   offlinePill: { backgroundColor: '#FEF3C7' },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.success, marginRight: 6 },
   offlineDot: { backgroundColor: COLORS.warning },
@@ -406,26 +554,34 @@ const styles = StyleSheet.create({
   safetyBannerText: { marginTop: 3, fontSize: FONT_SIZES.xs, lineHeight: 18 },
   safetyTextCritical: { color: '#991B1B' },
   safetyTextWarning: { color: '#92400E' },
-  mapContainer: { height: 310, marginHorizontal: 16, borderRadius: 20, overflow: 'hidden', backgroundColor: COLORS.gray },
+  mapContainer: { marginHorizontal: 16, borderRadius: 20, overflow: 'hidden', backgroundColor: COLORS.gray },
   mapTypeButton: { position: 'absolute', top: 12, right: 12, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.94)', paddingHorizontal: 11, paddingVertical: 9, borderRadius: 12 },
   mapTypeText: { marginLeft: 6, fontSize: FONT_SIZES.xs, fontWeight: FONT_WEIGHTS.semibold, color: COLORS.text },
   staleBanner: { position: 'absolute', left: 12, right: 12, bottom: 12, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', padding: 10, borderRadius: 12 },
   staleText: { marginLeft: 7, color: '#92400E', fontSize: FONT_SIZES.xs, flex: 1 },
   busMarker: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.primary, borderWidth: 3, borderColor: COLORS.white, alignItems: 'center', justifyContent: 'center', shadowColor: COLORS.black, shadowOpacity: 0.25, shadowRadius: 5, elevation: 5 },
-  infoArea: { flex: 1 },
   infoContent: { padding: 16, paddingBottom: 30 },
+  reportButton: { minHeight: 70, marginBottom: 14, padding: 13, borderRadius: 17, borderWidth: 1, borderColor: '#FCA5A5', backgroundColor: '#FEF2F2', flexDirection: 'row', alignItems: 'center' },
+  reportButtonDisabled: { opacity: 0.55 },
+  reportIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center' },
+  reportCopy: { flex: 1, minWidth: 0, marginHorizontal: 11 },
+  reportTitle: { color: '#991B1B', fontSize: FONT_SIZES.base, fontWeight: FONT_WEIGHTS.bold },
+  reportText: { marginTop: 3, color: '#B91C1C', fontSize: FONT_SIZES.xs, lineHeight: 17 },
   approachCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF7D6', borderColor: '#F4D86B', borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 14 },
   approachContent: { marginLeft: 11, flex: 1 },
   approachTitle: { color: '#5F3A00', fontWeight: FONT_WEIGHTS.bold },
   approachText: { color: '#8A5B13', fontSize: FONT_SIZES.sm, marginTop: 3 },
   metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   metricCard: { width: '48%', backgroundColor: COLORS.white, borderRadius: 15, padding: 14, marginBottom: 12 },
+  metricCardSingle: { width: '100%' },
   metricLabel: { fontSize: FONT_SIZES.xs, color: COLORS.textSecondary },
   metricValue: { marginTop: 7, fontSize: FONT_SIZES.lg, fontWeight: FONT_WEIGHTS.bold, color: COLORS.text },
   delayCard: { backgroundColor: COLORS.white, borderRadius: 15, padding: 14, marginBottom: 12, flexDirection: 'row', alignItems: 'center' },
+  delayCardCompact: { flexWrap: 'wrap' },
   delayText: { color: COLORS.success, fontWeight: FONT_WEIGHTS.semibold, marginLeft: 8, flex: 1 },
   delayedText: { color: COLORS.warning },
   lastUpdate: { color: COLORS.textSecondary, fontSize: FONT_SIZES.xs },
+  lastUpdateCompact: { flexBasis: '100%', marginTop: 9, paddingLeft: 29 },
   timelineCard: { backgroundColor: COLORS.white, borderRadius: 16, padding: 16 },
   sectionTitle: { fontSize: FONT_SIZES.lg, fontWeight: FONT_WEIGHTS.bold, color: COLORS.text, marginBottom: 15 },
   timelineItem: { flexDirection: 'row', minHeight: 76 },

@@ -33,6 +33,9 @@ def is_booking_suspended_for_safety(scheduled_trip):
         scheduled_trip=scheduled_trip,
         status__in=ACTIVE_INCIDENT_STATUSES,
     ).filter(
+        Q(requires_verification=False)
+        | Q(status=SafetyIncident.Status.ACKNOWLEDGED)
+    ).filter(
         Q(severity=SafetyIncident.Severity.CRITICAL)
         | Q(travel_state=SafetyIncident.TravelState.STOPPED)
     ).exists()

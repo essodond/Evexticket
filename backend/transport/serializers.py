@@ -9,8 +9,14 @@ from rest_framework.authtoken.models import Token
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.utils import timezone
-from .models import Company, City, Trip, TripStop, Booking, Payment, Review, Notification, ScheduledTrip, BoardingZone
+from .models import Company, City, Trip, TripStop, Booking, Payment, Review, Notification, ScheduledTrip, BoardingZone, Siege
+from .services.db_retry import run_in_transaction
 from .services.safety import is_booking_suspended_for_safety
+from .services.seat_inventory import (
+    booking_seat_is_occupied,
+    canonical_seat_number,
+    occupied_booking_seat_numbers,
+)
 import unicodedata
 import re
 from datetime import datetime, timedelta
@@ -322,10 +328,10 @@ class TripSerializer(serializers.ModelSerializer):
 
 
     def get_bookings_count(self, obj):
-        return obj.bookings.filter(status__in=['confirmed', 'pending']).count()
+        return obj.bookings.filter(status__in=['confirmed', 'pending', 'completed']).count()
 
     def get_available_seats(self, obj):
-        confirmed_bookings = obj.bookings.filter(status='confirmed').count()
+        confirmed_bookings = obj.bookings.filter(status__in=['confirmed', 'completed']).count()
         return obj.capacity - confirmed_bookings
 
     def get_departure_station(self, obj):
@@ -483,7 +489,21 @@ class BookingSerializer(serializers.ModelSerializer):
             'total_price', 'booking_date', 'user',
             'passenger_full_name'
         ]
-        read_only_fields = ['id', 'booking_date', 'passenger_full_name', 'scheduled_trip_date']
+        read_only_fields = [
+            'id',
+            'booking_date',
+            'passenger_full_name',
+            'scheduled_trip_date',
+            'trip',
+            'scheduled_trip',
+            'seat_number',
+            'origin_stop',
+            'destination_stop',
+            'status',
+            'payment_method',
+            'total_price',
+            'user',
+        ]
 
     def get_passenger_full_name(self, obj):
         return f"{obj.passenger_name}"
@@ -495,88 +515,90 @@ class BookingSerializer(serializers.ModelSerializer):
         return None
 
     def validate_seat_number(self, value):
-        # Valider que le siège est numérique et dans la bonne plage
-        if not value:
-            raise serializers.ValidationError("Seat number is required")
-        
         try:
-            seat_num = int(value)
+            seat_num = canonical_seat_number(value)
         except (ValueError, TypeError):
-            raise serializers.ValidationError("Seat number must be numeric")
-        
-        if seat_num < 1 or seat_num > 100:
-            raise serializers.ValidationError("Seat number must be between 1 and 100")
-        
-        # Vérifier que le siège n'est pas déjà pris pour ce voyage programmé
-        # If booking includes origin/destination stops, we must check overlap by sequence indices
-        origin = None
-        destination = None
-        if self.initial_data.get('origin_stop'):
+            raise serializers.ValidationError("Le numéro de siège doit être un entier valide.")
+
+        scheduled_trip = self.instance.scheduled_trip if self.instance else None
+        if scheduled_trip is None and self.initial_data.get('scheduled_trip'):
+            try:
+                scheduled_trip = ScheduledTrip.objects.select_related('trip').get(
+                    pk=self.initial_data.get('scheduled_trip'),
+                )
+            except (ScheduledTrip.DoesNotExist, ValueError, TypeError):
+                scheduled_trip = None
+
+        capacity = (
+            scheduled_trip.trip.capacity
+            if scheduled_trip is not None
+            else self.instance.trip.capacity
+            if self.instance is not None
+            else None
+        )
+        if capacity is not None and not 1 <= seat_num <= capacity:
+            raise serializers.ValidationError(
+                f"Le numéro de siège doit être compris entre 1 et {capacity}."
+            )
+
+        origin = self.instance.origin_stop if self.instance else None
+        destination = self.instance.destination_stop if self.instance else None
+        if 'origin_stop' in self.initial_data:
             try:
                 origin = TripStop.objects.get(pk=self.initial_data.get('origin_stop'))
-            except TripStop.DoesNotExist:
+            except (TripStop.DoesNotExist, ValueError, TypeError):
                 origin = None
-        if self.initial_data.get('destination_stop'):
+        if 'destination_stop' in self.initial_data:
             try:
                 destination = TripStop.objects.get(pk=self.initial_data.get('destination_stop'))
-            except TripStop.DoesNotExist:
+            except (TripStop.DoesNotExist, ValueError, TypeError):
                 destination = None
 
-        if self.instance:
-            # Mode édition
-            existing_booking = Booking.objects.filter(
-                scheduled_trip=self.instance.scheduled_trip,
-                seat_number=value,
-                status__in=['confirmed', 'pending']
-            ).exclude(id=self.instance.id)
-        else:
-            # Mode création
-            scheduled_trip_id = self.initial_data.get('scheduled_trip')
-            if scheduled_trip_id:
-                # If origin/destination provided, determine overlapping bookings by stop sequence
-                qs = Booking.objects.filter(scheduled_trip=scheduled_trip_id, seat_number=value, status__in=['confirmed', 'pending'])
-                if origin and destination:
-                    # bookings that overlap segment [origin.sequence, destination.sequence)
-                    overlapping = []
-                    for b in qs.select_related('origin_stop', 'destination_stop'):
-                        if b.origin_stop and b.destination_stop:
-                            if not (b.destination_stop.sequence <= origin.sequence or b.origin_stop.sequence >= destination.sequence):
-                                overlapping.append(b)
-                        else:
-                            # If existing booking has no stops, treat as full-journey conflict
-                            overlapping.append(b)
-                    existing_booking = Trip.objects.none() if not overlapping else qs.filter(id__in=[bb.id for bb in overlapping])
-                else:
-                    existing_booking = qs
-            else:
-                existing_booking = Booking.objects.none()
-
-        if existing_booking.exists():
-            raise serializers.ValidationError("Ce siège est déjà réservé pour ce voyage.")
+        if scheduled_trip is not None:
+            if booking_seat_is_occupied(
+                scheduled_trip,
+                seat_num,
+                exclude_booking_id=self.instance.pk if self.instance else None,
+                origin_stop=origin,
+                destination_stop=destination,
+            ) or Siege.objects.filter(
+                voyage=scheduled_trip,
+                numero=seat_num,
+                statut__in=[Siege.STATUT_RESERVE_TEMP, Siege.STATUT_OCCUPE],
+            ).exists():
+                raise serializers.ValidationError("Ce siège est déjà réservé pour ce voyage.")
+        return str(seat_num)
 
     def create(self, validated_data):
-        from django.db import transaction
-
-        with transaction.atomic():
-            # Verrouiller le ScheduledTrip pour éviter les réservations concurrentes du même siège
+        def create_booking():
             scheduled_trip = validated_data.get('scheduled_trip')
             if scheduled_trip:
-                ScheduledTrip.objects.select_for_update().get(pk=scheduled_trip.pk)
+                scheduled_trip = ScheduledTrip.objects.select_for_update().select_related('trip').get(
+                    pk=scheduled_trip.pk,
+                )
 
-            # Vérifier une dernière fois que le siège est encore disponible (inside the lock)
-            seat_number = validated_data.get('seat_number')
+            seat_number = canonical_seat_number(validated_data.get('seat_number'))
             if scheduled_trip and seat_number:
-                conflict = Booking.objects.filter(
-                    scheduled_trip=scheduled_trip,
-                    seat_number=seat_number,
-                    status__in=['confirmed', 'pending'],
-                ).exists()
-                if conflict:
+                if not 1 <= seat_number <= scheduled_trip.trip.capacity:
+                    raise serializers.ValidationError({
+                        'seat_number': f'Le siège doit être compris entre 1 et {scheduled_trip.trip.capacity}.'
+                    })
+                if booking_seat_is_occupied(
+                    scheduled_trip,
+                    seat_number,
+                    origin_stop=validated_data.get('origin_stop'),
+                    destination_stop=validated_data.get('destination_stop'),
+                ) or Siege.objects.filter(
+                    voyage=scheduled_trip,
+                    numero=seat_number,
+                    statut__in=[Siege.STATUT_RESERVE_TEMP, Siege.STATUT_OCCUPE],
+                ).exists():
                     raise serializers.ValidationError(
                         {'seat_number': 'Ce siège vient d\'être réservé. Veuillez en choisir un autre.'}
                     )
+                validated_data['seat_number'] = str(seat_number)
 
-            booking = super().create(validated_data)
+            booking = serializers.ModelSerializer.create(self, validated_data)
 
             total_price = booking.total_price
             commission_rate = Decimal(booking.trip.company.commission_rate) / Decimal('100')
@@ -593,9 +615,9 @@ class BookingSerializer(serializers.ModelSerializer):
                 company_revenue=company_revenue,
                 transaction_id=str(uuid.uuid4())
             )
+            return booking
 
-        return booking
-
+        return run_in_transaction(create_booking)
 
 class PaymentSerializer(serializers.ModelSerializer):
     """Serializer pour les paiements"""
@@ -765,6 +787,15 @@ class ScheduledTripSerializer(serializers.ModelSerializer):
     def get_available_seats(self, obj):
         if self._is_safety_blocked(obj):
             return 0
+        full_trip_seats = {
+            int(number)
+            for number in Siege.objects.filter(
+                voyage=obj,
+                statut__in=[Siege.STATUT_RESERVE_TEMP, Siege.STATUT_OCCUPE],
+            ).values_list('numero', flat=True)
+            if 1 <= int(number) <= obj.trip.capacity
+        }
+        booked_seats = occupied_booking_seat_numbers(obj)
         request = self.context.get('request')
         if request:
             departure_city_id = request.query_params.get('departure_city')
@@ -776,42 +807,22 @@ class ScheduledTripSerializer(serializers.ModelSerializer):
                     departure_city_id = int(departure_city_id)
                     arrival_city_id = int(arrival_city_id)
                 except ValueError:
-                    return obj.trip.capacity # Ou gérer l'erreur différemment
+                    return max(obj.trip.capacity - len(booked_seats | full_trip_seats), 0)
 
                 # Trouver les objets TripStop pour les villes de départ et d'arrivée du segment
                 departure_stop = obj.trip.stops.filter(city__id=departure_city_id).first()
                 arrival_stop = obj.trip.stops.filter(city__id=arrival_city_id).first()
 
                 if departure_stop and arrival_stop:
-                    # Récupérer toutes les réservations confirmées ou en attente pour ce voyage planifié
-                    all_bookings = Booking.objects.filter(
-                        scheduled_trip=obj,
-                        status__in=['confirmed', 'pending']
-                    ).select_related('origin_stop', 'destination_stop')
+                    occupied_seats = full_trip_seats | occupied_booking_seat_numbers(
+                        obj,
+                        origin_stop=departure_stop,
+                        destination_stop=arrival_stop,
+                    )
+                    return max(obj.trip.capacity - len(occupied_seats), 0)
 
-                    overlapping_bookings_count = 0
-                    for booking in all_bookings:
-                        # Si la réservation n'a pas d'arrêts spécifiques, elle couvre tout le trajet
-                        if not booking.origin_stop or not booking.destination_stop:
-                            overlapping_bookings_count += 1
-                            continue
-
-                        # Vérifier si la réservation chevauche le segment demandé
-                        # Un chevauchement se produit si :
-                        # (départ_réservation < arrivée_segment ET arrivée_réservation > départ_segment)
-                        if (booking.origin_stop.sequence < arrival_stop.sequence and
-                                booking.destination_stop.sequence > departure_stop.sequence):
-                            overlapping_bookings_count += 1
-
-                    return obj.trip.capacity - overlapping_bookings_count
-
-            # Logique par défaut si pas de segment ou d'erreur
-            confirmed_bookings = Booking.objects.filter(
-                scheduled_trip=obj,
-                status__in=['confirmed', 'pending']
-            ).count()
-            return obj.trip.capacity - confirmed_bookings
-        return obj.trip.capacity
+            return max(obj.trip.capacity - len(booked_seats | full_trip_seats), 0)
+        return max(obj.trip.capacity - len(booked_seats | full_trip_seats), 0)
 
     def get_seats(self, obj):
         """
@@ -820,19 +831,15 @@ class ScheduledTripSerializer(serializers.ModelSerializer):
         - status: 'available' ou 'occupied'
         - number: numéro du siège (1 à capacity)
         """
-        # Récupérer tous les sièges réservés pour ce voyage planifié
-        booked_seats = set()
-        booked_bookings = Booking.objects.filter(
-            scheduled_trip=obj,
-            status__in=['confirmed', 'pending']
-        ).values_list('seat_number', flat=True)
-        # Convertir les numéros de siège en entiers pour la comparaison
-        for seat_num in booked_bookings:
-            if seat_num:
-                try:
-                    booked_seats.add(int(seat_num))
-                except (ValueError, TypeError):
-                    pass
+        booked_seats = occupied_booking_seat_numbers(obj)
+        booked_seats.update(
+            int(number)
+            for number in Siege.objects.filter(
+                voyage=obj,
+                statut__in=[Siege.STATUT_RESERVE_TEMP, Siege.STATUT_OCCUPE],
+            ).values_list('numero', flat=True)
+            if 1 <= int(number) <= obj.trip.capacity
+        )
 
         # Créer la liste de tous les sièges
         seats = []
@@ -904,15 +911,34 @@ class BookingCreateSerializer(serializers.ModelSerializer):
                 'scheduled_trip': 'Les réservations sont suspendues : un incident de sécurité grave est en cours sur ce voyage.'
             })
         
-        # Vérifier la disponibilité du siège pour ce voyage programmé spécifique
-        if seat_number:
-            # Vérifier si le siège est déjà pris pour ce voyage programmé
-            if Booking.objects.filter(
-                scheduled_trip=scheduled_trip,
-                seat_number=seat_number,
-                status__in=['confirmed', 'pending']
-            ).exists():
-                raise serializers.ValidationError(f"Le siège {seat_number} est déjà réservé pour ce voyage.")
+        try:
+            seat_number = canonical_seat_number(seat_number)
+        except (TypeError, ValueError):
+            raise serializers.ValidationError({
+                'seat_number': 'Le numéro de siège doit être un entier valide.'
+            })
+        if not 1 <= seat_number <= scheduled_trip.trip.capacity:
+            raise serializers.ValidationError({
+                'seat_number': (
+                    f'Le numéro de siège doit être compris entre 1 et '
+                    f'{scheduled_trip.trip.capacity}.'
+                )
+            })
+        data['seat_number'] = str(seat_number)
+
+        if booking_seat_is_occupied(
+            scheduled_trip,
+            seat_number,
+            origin_stop=origin_stop,
+            destination_stop=destination_stop,
+        ) or Siege.objects.filter(
+            voyage=scheduled_trip,
+            numero=seat_number,
+            statut__in=[Siege.STATUT_RESERVE_TEMP, Siege.STATUT_OCCUPE],
+        ).exists():
+            raise serializers.ValidationError({
+                'seat_number': f'Le siège {seat_number} est déjà réservé pour ce voyage.'
+            })
 
         # Vérifier si le voyage programmé a des places disponibles
         if scheduled_trip.available_seats <= 0:
@@ -950,33 +976,58 @@ class BookingCreateSerializer(serializers.ModelSerializer):
         data['trip'] = scheduled_trip.trip # Associer le trip réel
         return data
 
-    @transaction.atomic
     def create(self, validated_data):
-        scheduled_trip = validated_data.pop('scheduled_trip')
-        scheduled_trip = ScheduledTrip.objects.select_for_update().select_related('trip').get(
-            pk=scheduled_trip.pk
-        )
-        if is_booking_suspended_for_safety(scheduled_trip):
-            raise serializers.ValidationError({
-                'scheduled_trip': 'Les réservations sont suspendues : un incident de sécurité grave est en cours sur ce voyage.'
-            })
-        validated_data['trip'] = scheduled_trip.trip
-        validated_data['scheduled_trip'] = scheduled_trip
-        # EN MODE DEVELOPPEMENT: créer la réservation directement en statut 'confirmed'
-        # (sans attendre la confirmation de paiement)
-        validated_data['status'] = 'confirmed'
-        # Assigner l'utilisateur connecté à la réservation
-        # (pour pouvoir retrouver ses réservations avec GET /bookings/)
-        validated_data['user'] = self.context['request'].user
+        scheduled_trip_value = validated_data.pop('scheduled_trip')
 
-        # Créer la réservation
-        booking = super().create(validated_data)
-        
-        # Mettre à jour le nombre de places disponibles
-        scheduled_trip.available_seats = max(0, scheduled_trip.available_seats - 1)
-        scheduled_trip.save()
-        
-        return booking
+        def create_booking():
+            scheduled_trip = ScheduledTrip.objects.select_for_update().select_related('trip').get(
+                pk=scheduled_trip_value.pk
+            )
+            if is_booking_suspended_for_safety(scheduled_trip):
+                raise serializers.ValidationError({
+                    'scheduled_trip': 'Les réservations sont suspendues : un incident de sécurité grave est en cours sur ce voyage.'
+                })
+            try:
+                seat_number = canonical_seat_number(validated_data.get('seat_number'))
+            except (TypeError, ValueError):
+                raise serializers.ValidationError({
+                    'seat_number': 'Le numéro de siège doit être un entier valide.'
+                })
+            if not 1 <= seat_number <= scheduled_trip.trip.capacity:
+                raise serializers.ValidationError({
+                    'seat_number': (
+                        f'Le numéro de siège doit être compris entre 1 et '
+                        f'{scheduled_trip.trip.capacity}.'
+                    )
+                })
+            if booking_seat_is_occupied(
+                scheduled_trip,
+                seat_number,
+                origin_stop=validated_data.get('origin_stop'),
+                destination_stop=validated_data.get('destination_stop'),
+            ) or Siege.objects.filter(
+                voyage=scheduled_trip,
+                numero=seat_number,
+                statut__in=[Siege.STATUT_RESERVE_TEMP, Siege.STATUT_OCCUPE],
+            ).exists():
+                raise serializers.ValidationError({
+                    'seat_number': f'Le siège {seat_number} est déjà réservé pour ce voyage.'
+                })
+            validated_data['seat_number'] = str(seat_number)
+            validated_data['trip'] = scheduled_trip.trip
+            validated_data['scheduled_trip'] = scheduled_trip
+            # EN MODE DEVELOPPEMENT: créer la réservation directement en statut 'confirmed'
+            # (sans attendre la confirmation de paiement)
+            validated_data['status'] = 'confirmed'
+            # Assigner l'utilisateur connecté à la réservation
+            # (pour pouvoir retrouver ses réservations avec GET /bookings/)
+            validated_data['user'] = self.context['request'].user
+
+            booking = serializers.ModelSerializer.create(self, validated_data)
+            scheduled_trip.refresh_from_db(fields=['available_seats'])
+            return booking
+
+        return run_in_transaction(create_booking)
 
 
 class CompanyStatsSerializer(serializers.Serializer):

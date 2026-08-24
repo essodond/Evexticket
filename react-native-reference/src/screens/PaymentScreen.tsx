@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Image,
@@ -21,13 +21,18 @@ import Button from '../components/Button';
 import Input from '../components/Input';
 import {
   createBooking,
+  ApiError,
   initiateQosPayment,
   MOBILE_PAYMENTS_ENABLED,
   verifyQosPayment,
 } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { notifyTicketsChanged } from '../utils/ticketEvents';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Payment'>;
+
+class PaymentPendingError extends Error {}
+class PaymentCancelledError extends Error {}
 
 const paymentMethods = [
   { id: 'flooz' as PaymentMethod, name: 'Flooz', icon: 'wallet-outline', color: COLORS.flooz, image: 'https://th.bing.com/th/id/OIP._7XYS8QkoiudNZBiWMGWvwAAAA?w=184&h=180&c=7&r=0&o=7&cb=ucfimg2&dpr=1.5&pid=1.7&rm=3&ucfimg=1' },
@@ -44,6 +49,14 @@ export default function PaymentScreen({ navigation, route }: Props) {
   const [phoneNumber, setPhoneNumber] = useState(user?.phone_number || '');
   const [processing, setProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const fromCity = trip.trip_info.departure_city_name || 'Ville de depart inconnue';
   const toCity = trip.trip_info.arrival_city_name || 'Ville d arrivee inconnue';
@@ -61,17 +74,50 @@ export default function PaymentScreen({ navigation, route }: Props) {
 
   const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+  const ensureMounted = () => {
+    if (!mountedRef.current) throw new PaymentCancelledError();
+  };
+
   const waitForPaymentConfirmation = async (reference: string) => {
     for (let attempt = 0; attempt < 24; attempt += 1) {
-      const verification = await verifyQosPayment(reference);
+      ensureMounted();
+      let verification;
+      try {
+        verification = await verifyQosPayment(reference);
+        ensureMounted();
+      } catch (verificationError) {
+        ensureMounted();
+        if (verificationError instanceof ApiError && verificationError.status < 500) {
+          throw verificationError;
+        }
+        if (mountedRef.current) {
+          setStatusMessage('Connexion temporairement interrompue. Nouvelle vérification…');
+        }
+        await wait(5000);
+        continue;
+      }
       if (verification.paye || verification.statut === 'paye') return verification;
-      if (verification.statut === 'echoue' || verification.statut === 'expire') {
+      if (verification.statut === 'a_rapprocher') {
+        throw new Error(verification.message || 'Le paiement est confirmé, mais le support doit organiser votre remboursement.');
+      }
+      if (['echoue', 'expire', 'rembourse'].includes(verification.statut)) {
         throw new Error(verification.message || 'Le paiement a echoue ou a expire.');
       }
-      setStatusMessage('Paiement en attente de confirmation...');
+      if (mountedRef.current) setStatusMessage('Paiement en attente de confirmation...');
       await wait(5000);
     }
-    throw new Error('Paiement initie, mais la confirmation QOS prend trop de temps. Verifiez le statut dans quelques instants.');
+    throw new PaymentPendingError('Le paiement est toujours en cours de confirmation. Le billet apparaîtra automatiquement dès sa validation.');
+  };
+
+  const sendConfirmationNotification = async (title: string, body: string) => {
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: { title, body, sound: 'default', data: { screen: 'Ticket' } },
+        trigger: null,
+      });
+    } catch (notificationError) {
+      console.warn('Notification locale de billet indisponible', notificationError);
+    }
   };
 
   const handlePayment = async () => {
@@ -108,15 +154,13 @@ export default function PaymentScreen({ navigation, route }: Props) {
           destination_stop: null,
         });
 
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: 'EVEX : réservation test confirmée',
-            body: `${fromCity} - ${toCity}\n${dateLabel} à ${departureTimeLabel}\nSiège ${seatNumber} - ${companyName}`,
-            sound: 'default',
-            data: { screen: 'Ticket' },
-          },
-          trigger: null,
-        });
+        notifyTicketsChanged();
+        ensureMounted();
+        await sendConfirmationNotification(
+          'EVEX : réservation test confirmée',
+          `${fromCity} - ${toCity}\n${dateLabel} à ${departureTimeLabel}\nSiège ${seatNumber} - ${companyName}`,
+        );
+        ensureMounted();
 
         const tripForTicket = {
           ...trip,
@@ -134,16 +178,21 @@ export default function PaymentScreen({ navigation, route }: Props) {
         Alert.alert('Réservation confirmée', 'Le billet a été réservé sans paiement en mode test.');
         navigation.navigate('Ticket', { trip: tripForTicket as any });
       } catch (error: any) {
-        Alert.alert('Erreur', error.message || 'Impossible de créer la réservation de test.');
+        if (!(error instanceof PaymentCancelledError) && mountedRef.current) {
+          Alert.alert('Erreur', error.message || 'Impossible de créer la réservation de test.');
+        }
       } finally {
-        setProcessing(false);
-        setStatusMessage(null);
+        if (mountedRef.current) {
+          setProcessing(false);
+          setStatusMessage(null);
+        }
       }
       return;
     }
 
     setStatusMessage('Initialisation du paiement QOS...');
 
+    let paymentReference: string | null = null;
     try {
       const seatNumber = selectedSeat.replace('seat-', '');
       const initiated = await initiateQosPayment({
@@ -157,19 +206,19 @@ export default function PaymentScreen({ navigation, route }: Props) {
         ville_depart: fromCity,
         ville_arrivee: toCity,
       });
+      paymentReference = initiated.reference_evex;
+      ensureMounted();
 
       setStatusMessage('Paiement lance. Confirmez la demande sur votre telephone.');
       const confirmed = await waitForPaymentConfirmation(initiated.reference_evex);
 
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'EVEX: Reservation confirmee',
-          body: `${fromCity} - ${toCity}\n${dateLabel} a ${departureTimeLabel}\nSiege ${seatNumber} - ${companyName}`,
-          sound: 'default',
-          data: { screen: 'Ticket' },
-        },
-        trigger: null,
-      });
+      notifyTicketsChanged();
+      ensureMounted();
+      await sendConfirmationNotification(
+        'EVEX : réservation confirmée',
+        `${fromCity} - ${toCity}\n${dateLabel} à ${departureTimeLabel}\nSiège ${seatNumber} - ${companyName}`,
+      );
+      ensureMounted();
 
       const tripForTicket = {
         ...trip,
@@ -189,10 +238,18 @@ export default function PaymentScreen({ navigation, route }: Props) {
       Alert.alert('Succes', 'Votre paiement a ete confirme avec succes!');
       navigation.navigate('Ticket', { trip: tripForTicket as any });
     } catch (error: any) {
-      Alert.alert('Erreur', error.message || 'Une erreur est survenue lors du paiement.');
+      if (paymentReference) notifyTicketsChanged();
+      if (!(error instanceof PaymentCancelledError) && mountedRef.current) {
+        Alert.alert(
+          error instanceof PaymentPendingError ? 'Paiement en cours' : 'Erreur',
+          error.message || 'Une erreur est survenue lors du paiement.',
+        );
+      }
     } finally {
-      setProcessing(false);
-      setStatusMessage(null);
+      if (mountedRef.current) {
+        setProcessing(false);
+        setStatusMessage(null);
+      }
     }
   };
 

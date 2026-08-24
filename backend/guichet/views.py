@@ -19,6 +19,7 @@ from .permissions import (
 from .utils_qr import generer_qr_code_base64
 from transport.models.audit import log_action
 from transport.services.safety import is_booking_suspended_for_safety
+from transport.services.seat_inventory import booking_seat_is_occupied, occupied_booking_seat_numbers
 from transport.ticketing import (
     filter_ticket_collection,
     perform_ticket_action,
@@ -734,14 +735,7 @@ class SiegesVoyageView(APIView):
             return Response({'detail':'Voyage introuvable'}, status=404)
         safety_blocked = is_booking_suspended_for_safety(voyage)
         existing_seats = {seat.numero: seat for seat in voyage.sieges.all()}
-        booked_seats = {
-            int(number)
-            for number in Booking.objects.filter(
-                scheduled_trip=voyage,
-                status__in=['confirmed', 'pending'],
-            ).values_list('seat_number', flat=True)
-            if str(number).isdigit()
-        }
+        booked_seats = occupied_booking_seat_numbers(voyage)
         seat_list = []
         for number in range(1, voyage.trip.capacity + 1):
             seat = existing_seats.get(number)
@@ -818,11 +812,7 @@ class CreerVenteView(APIView):
                     )
                 if seat_number < 1 or seat_number > voyage.trip.capacity:
                     return Response({'detail': 'Numéro de siège hors capacité.'}, status=400)
-                if Booking.objects.filter(
-                    scheduled_trip=voyage,
-                    seat_number=str(seat_number),
-                    status__in=['confirmed', 'pending'],
-                ).exists():
+                if booking_seat_is_occupied(voyage, seat_number):
                     return Response({'detail': 'Siège non disponible.'}, status=400)
 
                 siege, _ = Siege.objects.select_for_update().get_or_create(
@@ -1145,11 +1135,19 @@ class BilletsCompagnieView(APIView):
 
     def get(self, request):
         company = request_company(request)
+        try:
+            limit = int(request.query_params.get('limit', 500))
+        except (TypeError, ValueError):
+            limit = 500
+        limit = max(1, min(limit, 500))
+        valid_sales = str(request.query_params.get('valid_sales') or '').lower() in {
+            '1', 'true', 'yes',
+        }
         items = filter_ticket_collection(
-            ticket_collection(company=company),
+            ticket_collection(company=company, limit=limit, valid_sales=valid_sales),
             request.query_params,
         )
-        return Response(items[:500])
+        return Response(items[:limit])
 
 
 class ActionBilletView(APIView):

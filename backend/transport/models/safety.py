@@ -70,6 +70,10 @@ class SafetyIncident(models.Model):
         choices=Status.choices,
         default=Status.REPORTED,
     )
+    requires_verification = models.BooleanField(
+        default=False,
+        help_text='Vrai pour un signalement passager, jusqu’à sa prise en charge par la compagnie.',
+    )
     description = models.TextField(blank=True, max_length=1000)
     public_message = models.CharField(max_length=300)
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)

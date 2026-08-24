@@ -59,6 +59,7 @@ export interface SafetyIncident {
   location_source: 'device' | 'tracking' | 'unavailable';
   injured_count: number;
   emergency_services_contacted: boolean;
+  requires_verification: boolean;
   occurred_at: string;
   created_at: string;
   updated_at: string;
@@ -184,7 +185,7 @@ export interface InitiateQosPaymentResponse {
 
 export interface VerifyQosPaymentResponse {
   reference: string;
-  statut: 'en_attente' | 'paye' | 'echoue' | 'expire' | 'rembourse';
+  statut: 'en_attente' | 'paye' | 'echoue' | 'expire' | 'rembourse' | 'a_rapprocher';
   montant_total: number;
   frais_evex: number;
   montant_billet: number;
@@ -1014,58 +1015,16 @@ class ApiService {
   }
 
   async initiateQosPayment(payload: InitiateQosPaymentPayload): Promise<InitiateQosPaymentResponse> {
-    const [firstname = '', ...lastnameParts] = String(payload.client_nom || '').trim().split(' ');
-    const amount = Number(payload.montant_total ?? payload.montant_billet);
-    const ticketAmount = Number(payload.montant_billet);
-    const operator = payload.operateur === 'flooz' ? 'MOOV' : 'TOGOCEL';
-    const method = payload.operateur === 'flooz' ? 'moov' : 'togocel';
-
-    const response = await this.request<any>('/payments/pay/', {
+    return this.request<InitiateQosPaymentResponse>('/payment/initier/', {
       method: 'POST',
-      body: JSON.stringify({
-        operator,
-        phone_number: payload.client_telephone,
-        method,
-        phone: payload.client_telephone,
-        amount,
-        firstname: firstname || payload.client_nom || 'Client',
-        lastname: lastnameParts.join(' ') || 'EvexTicket',
-      }),
+      body: JSON.stringify(payload),
     });
-    const transaction = response.transaction || {};
-    const paidAmount = Number(transaction.amount || amount);
-
-    return {
-      reference_evex: transaction.transref,
-      transaction_id: transaction.transref,
-      montant_billet: ticketAmount,
-      frais_evex: Math.max(paidAmount - ticketAmount, 0),
-      montant_total: paidAmount,
-      operateur: payload.operateur,
-      siege: String(payload.numero_siege),
-      expires_dans: '5 minutes',
-    };
   }
 
   async verifyQosPayment(reference: string): Promise<VerifyQosPaymentResponse> {
-    const response = await this.request<any>('/payments/status/', {
-      method: 'POST',
-      body: JSON.stringify({ transref: reference }),
-    });
-    const transaction = response.transaction || {};
-    const amount = Number(transaction.amount || 0);
-    const isPaid = transaction.status === 'success';
-
-    return {
-      reference,
-      statut: isPaid ? 'paye' : transaction.status === 'pending' ? 'en_attente' : 'echoue',
-      montant_total: amount,
-      frais_evex: 0,
-      montant_billet: amount,
-      siege: '',
-      paye: isPaid,
-      message: isPaid ? 'Paiement confirme' : 'Paiement en attente',
-    };
+    return this.request<VerifyQosPaymentResponse>(
+      `/payment/verifier/${encodeURIComponent(reference)}/`,
+    );
   }
 
   async updateBooking(id: ApiId, booking: Partial<Booking>): Promise<Booking> {
@@ -1275,9 +1234,11 @@ class ApiService {
     return this.request<GuichetControlsHistory>(`/guichet/controle/historique/${query ? `?${query}` : ''}`);
   }
 
-  async getCompanyTickets(filters?: { q?: string; source?: string; status?: string; date?: string; voyage?: string }): Promise<UnifiedTicket[]> {
+  async getCompanyTickets(filters?: { q?: string; source?: string; status?: string; date?: string; voyage?: string; limit?: number; valid_sales?: boolean }): Promise<UnifiedTicket[]> {
     const params = new URLSearchParams();
-    Object.entries(filters || {}).forEach(([key, value]) => { if (value) params.set(key, value); });
+    Object.entries(filters || {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') params.set(key, String(value));
+    });
     return this.request<UnifiedTicket[]>(`/guichet/billets/${params.size ? `?${params}` : ''}`);
   }
 
@@ -1394,19 +1355,22 @@ class ApiService {
     return this.request<CompanyStats>(`/companies/${id}/stats/`);
   }
 
-  async getManageableTrackingTrips(): Promise<ManageableTrackingTrip[]> {
-    return this.request<ManageableTrackingTrip[]>('/tracking/trips/');
+  async getManageableTrackingTrips(company?: ApiId): Promise<ManageableTrackingTrip[]> {
+    const query = company == null || company === '' ? '' : `?company=${encodeURIComponent(String(company))}`;
+    return this.request<ManageableTrackingTrip[]>(`/tracking/trips/${query}`);
   }
 
   async getSafetyIncidents(filters: {
     status?: 'active' | SafetyIncidentStatus;
     severity?: SafetySeverity;
     scheduled_trip?: ApiId;
+    company?: ApiId;
   } = {}): Promise<SafetyIncident[]> {
     const params = new URLSearchParams();
     if (filters.status) params.set('status', filters.status);
     if (filters.severity) params.set('severity', filters.severity);
     if (filters.scheduled_trip != null) params.set('scheduled_trip', String(filters.scheduled_trip));
+    if (filters.company != null && filters.company !== '') params.set('company', String(filters.company));
     const query = params.toString();
     return this.request<SafetyIncident[]>(`/safety/incidents/${query ? `?${query}` : ''}`);
   }
