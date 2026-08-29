@@ -15,7 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Location from 'expo-location';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import StarRating from '../components/StarRating';
 import { COLORS } from '../constants/colors';
@@ -28,6 +28,7 @@ import {
   ratePartnerCompany,
 } from '../services/api';
 import { ApiId, RootStackParamList, StationDestination } from '../types';
+import { zoomMapRegion } from '../utils/mapRegion';
 import { distanceBetweenCoordinatesKm } from '../utils/station';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CompanyDetails'>;
@@ -64,6 +65,7 @@ export default function CompanyDetailsScreen({ navigation, route }: Props) {
   const { companyId, preferredCityName } = route.params;
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView | null>(null);
+  const lastMapRegionRef = useRef<Region | null>(null);
   const [company, setCompany] = useState<PartnerCompany | null>(null);
   const [position, setPosition] = useState<Coordinate | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,6 +75,7 @@ export default function CompanyDetailsScreen({ navigation, route }: Props) {
   const [selectedBookingId, setSelectedBookingId] = useState<ApiId | null>(null);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
+  const [satelliteMode, setSatelliteMode] = useState(false);
 
   const selectBooking = useCallback((booking: PartnerEligibleBooking) => {
     setSelectedBookingId(booking.id);
@@ -158,7 +161,10 @@ export default function CompanyDetailsScreen({ navigation, route }: Props) {
       });
   }, [company, position, preferredCityName]);
 
-  const mappedStations = stationsWithDistance.filter((item) => item.coordinate);
+  const mappedStations = useMemo(
+    () => stationsWithDistance.filter((item) => item.coordinate),
+    [stationsWithDistance],
+  );
 
   useEffect(() => {
     if (!mappedStations.length) return;
@@ -171,7 +177,7 @@ export default function CompanyDetailsScreen({ navigation, route }: Props) {
       });
     }, 400);
     return () => clearTimeout(timeout);
-  }, [mappedStations.length, position, company?.id]);
+  }, [mappedStations, position]);
 
   const openStation = (station: PartnerStation) => {
     const destination = toDestination(station);
@@ -183,6 +189,15 @@ export default function CompanyDetailsScreen({ navigation, route }: Props) {
       return;
     }
     navigation.navigate('StationMap', { station: destination });
+  };
+
+  const changeMapZoom = (delta: number) => {
+    const map = mapRef.current;
+    const region = lastMapRegionRef.current;
+    if (!map || !region) return;
+    const nextRegion = zoomMapRegion(region, delta);
+    lastMapRegionRef.current = nextRegion;
+    map.animateToRegion(nextRegion, 250);
   };
 
   const submitReview = async () => {
@@ -331,10 +346,23 @@ export default function CompanyDetailsScreen({ navigation, route }: Props) {
             <MapView
               ref={mapRef}
               style={styles.map}
+              mapType={satelliteMode ? 'hybrid' : 'standard'}
               initialRegion={{
                 ...firstCoordinate,
                 latitudeDelta: 2.5,
                 longitudeDelta: 2.5,
+              }}
+              onMapReady={() => {
+                if (!lastMapRegionRef.current) {
+                  lastMapRegionRef.current = {
+                    ...firstCoordinate,
+                    latitudeDelta: 2.5,
+                    longitudeDelta: 2.5,
+                  };
+                }
+              }}
+              onRegionChangeComplete={(region) => {
+                lastMapRegionRef.current = region;
               }}
               toolbarEnabled={false}
             >
@@ -356,6 +384,46 @@ export default function CompanyDetailsScreen({ navigation, route }: Props) {
                 />
               )}
             </MapView>
+            <View style={styles.mapControls} pointerEvents="box-none">
+              <TouchableOpacity
+                style={styles.mapLayerButton}
+                onPress={() => setSatelliteMode((current) => !current)}
+                hitSlop={4}
+                accessibilityRole="button"
+                accessibilityLabel={satelliteMode ? 'Afficher le plan classique' : 'Afficher la vue satellite'}
+                accessibilityState={{ selected: satelliteMode }}
+              >
+                <Ionicons
+                  name={satelliteMode ? 'map-outline' : 'layers-outline'}
+                  size={18}
+                  color={COLORS.primary}
+                />
+                <Text style={styles.mapLayerButtonText}>
+                  {satelliteMode ? 'Plan' : 'Satellite'}
+                </Text>
+              </TouchableOpacity>
+              <View style={styles.mapZoomControls}>
+                <TouchableOpacity
+                  style={styles.mapZoomButton}
+                  onPress={() => changeMapZoom(1)}
+                  hitSlop={4}
+                  accessibilityRole="button"
+                  accessibilityLabel="Zoomer sur la carte des agences"
+                >
+                  <Ionicons name="add" size={24} color={COLORS.text} />
+                </TouchableOpacity>
+                <View style={styles.mapZoomDivider} />
+                <TouchableOpacity
+                  style={styles.mapZoomButton}
+                  onPress={() => changeMapZoom(-1)}
+                  hitSlop={4}
+                  accessibilityRole="button"
+                  accessibilityLabel="Dézoomer la carte des agences"
+                >
+                  <Ionicons name="remove" size={24} color={COLORS.text} />
+                </TouchableOpacity>
+              </View>
+            </View>
             <View style={styles.mapLegend}>
               <Ionicons name="navigate" size={15} color="#15803D" />
               <Text style={styles.mapLegendText}>
@@ -706,6 +774,59 @@ const styles = StyleSheet.create({
     borderColor: '#E5EDF7',
   },
   map: { height: 260 },
+  mapControls: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 5,
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  mapLayerButton: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.38)',
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.16,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  mapLayerButtonText: {
+    color: COLORS.text,
+    fontSize: FONT_SIZES.xs,
+    fontWeight: FONT_WEIGHTS.semibold,
+  },
+  mapZoomControls: {
+    width: 44,
+    overflow: 'hidden',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.38)',
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.16,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  mapZoomButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapZoomDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 8,
+    backgroundColor: '#CBD5E1',
+  },
   mapLegend: {
     paddingHorizontal: 13,
     paddingVertical: 11,

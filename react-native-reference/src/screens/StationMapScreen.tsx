@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Location from 'expo-location';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
@@ -24,6 +24,7 @@ import {
   formatRouteDuration,
   getDrivingRoute,
 } from '../services/routing';
+import { zoomMapRegion } from '../utils/mapRegion';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'StationMap'>;
 
@@ -133,6 +134,13 @@ export default function StationMapScreen({ navigation, route }: Props) {
   const { station } = route.params;
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView | null>(null);
+  const cameraZoomRef = useRef(17);
+  const lastMapRegionRef = useRef<Region>({
+    latitude: station.latitude,
+    longitude: station.longitude,
+    latitudeDelta: 0.035,
+    longitudeDelta: 0.035,
+  });
   const lastDeviationRecalculationRef = useRef(0);
   const arrivalNotifiedRef = useRef(false);
   const [position, setPosition] = useState<Coordinate | null>(null);
@@ -277,12 +285,17 @@ export default function StationMapScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     if (!navigationActive || !position) return;
+    lastMapRegionRef.current = {
+      ...lastMapRegionRef.current,
+      latitude: position.latitude,
+      longitude: position.longitude,
+    };
     mapRef.current?.animateCamera(
       {
         center: position,
         heading,
         pitch: 52,
-        zoom: 17,
+        zoom: cameraZoomRef.current,
       },
       { duration: 700 },
     );
@@ -334,6 +347,15 @@ export default function StationMapScreen({ navigation, route }: Props) {
     });
   };
 
+  const changeMapZoom = (delta: number) => {
+    const map = mapRef.current;
+    if (!map) return;
+    const nextRegion = zoomMapRegion(lastMapRegionRef.current, delta);
+    lastMapRegionRef.current = nextRegion;
+    cameraZoomRef.current = Math.max(3, Math.min(20, cameraZoomRef.current + delta));
+    map.animateToRegion(nextRegion, 250);
+  };
+
   const retryRoute = () => setRouteRefreshKey((current) => current + 1);
 
   const toggleNavigation = () => {
@@ -373,6 +395,9 @@ export default function StationMapScreen({ navigation, route }: Props) {
           ...stationCoordinate,
           latitudeDelta: 0.035,
           longitudeDelta: 0.035,
+        }}
+        onRegionChangeComplete={(region) => {
+          lastMapRegionRef.current = region;
         }}
         showsCompass
         showsScale
@@ -428,21 +453,47 @@ export default function StationMapScreen({ navigation, route }: Props) {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity
-        style={[styles.mapTypeButton, { top: insets.top + 82 }]}
-        onPress={() => setSatelliteMode((current) => !current)}
-        accessibilityRole="button"
-        accessibilityLabel={satelliteMode ? 'Afficher le plan classique' : 'Afficher la carte satellite'}
-      >
-        <Ionicons
-          name={satelliteMode ? 'map-outline' : 'layers-outline'}
-          size={19}
-          color={COLORS.primary}
-        />
-        <Text style={styles.mapTypeButtonText}>
-          {satelliteMode ? 'Plan' : 'Satellite'}
-        </Text>
-      </TouchableOpacity>
+      <View style={[styles.mapFloatingControls, { top: insets.top + 82 }]}>
+        <TouchableOpacity
+          style={styles.mapTypeButton}
+          onPress={() => setSatelliteMode((current) => !current)}
+          hitSlop={4}
+          accessibilityRole="button"
+          accessibilityLabel={satelliteMode ? 'Afficher le plan classique' : 'Afficher la carte satellite'}
+          accessibilityState={{ selected: satelliteMode }}
+        >
+          <Ionicons
+            name={satelliteMode ? 'map-outline' : 'layers-outline'}
+            size={19}
+            color={COLORS.primary}
+          />
+          <Text style={styles.mapTypeButtonText}>
+            {satelliteMode ? 'Plan' : 'Satellite'}
+          </Text>
+        </TouchableOpacity>
+
+        <View style={styles.mapZoomControls}>
+          <TouchableOpacity
+            style={styles.mapZoomButton}
+            onPress={() => changeMapZoom(-1)}
+            hitSlop={4}
+            accessibilityRole="button"
+            accessibilityLabel="Dézoomer la carte"
+          >
+            <Ionicons name="remove" size={25} color={COLORS.text} />
+          </TouchableOpacity>
+          <View style={styles.mapZoomDivider} />
+          <TouchableOpacity
+            style={styles.mapZoomButton}
+            onPress={() => changeMapZoom(1)}
+            hitSlop={4}
+            accessibilityRole="button"
+            accessibilityLabel="Zoomer sur la carte"
+          >
+            <Ionicons name="add" size={25} color={COLORS.text} />
+          </TouchableOpacity>
+        </View>
+      </View>
 
       <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 18) }]}>
         <View style={styles.handle} />
@@ -762,11 +813,16 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontWeight: FONT_WEIGHTS.bold,
   },
-  mapTypeButton: {
+  mapFloatingControls: {
     position: 'absolute',
     right: 16,
-    zIndex: 10,
-    minHeight: 42,
+    zIndex: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  mapTypeButton: {
+    minHeight: 44,
     paddingHorizontal: 12,
     borderRadius: 15,
     borderWidth: 1,
@@ -779,12 +835,39 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.14,
     shadowRadius: 8,
-    elevation: 6,
+    elevation: 13,
   },
   mapTypeButtonText: {
     color: COLORS.text,
     fontSize: FONT_SIZES.xs,
     fontWeight: FONT_WEIGHTS.semibold,
+  },
+  mapZoomControls: {
+    width: 90,
+    height: 44,
+    overflow: 'hidden',
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    elevation: 13,
+  },
+  mapZoomButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapZoomDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 28,
+    backgroundColor: '#CBD5E1',
   },
   sheet: {
     position: 'absolute',
