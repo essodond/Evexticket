@@ -148,7 +148,10 @@ export default function AppNavigator() {
       <Stack.Screen
         name="TrackBus"
         component={TrackBusScreen}
-        options={{ animation: 'slide_from_bottom' }}
+        options={{
+          animation: 'slide_from_bottom',
+          gestureEnabled: true,
+        }}
       />
       <Stack.Screen
         name="StartTracking"

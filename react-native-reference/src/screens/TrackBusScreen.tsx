@@ -41,7 +41,7 @@ const trackingLabel = (snapshot: TrackingSnapshot) => {
 
 const safetyPriority = { critical: 4, high: 3, medium: 2, low: 1 } as const;
 
-export default function TrackBusScreen({ route }: Props) {
+export default function TrackBusScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const { width, height } = useWindowDimensions();
@@ -67,6 +67,31 @@ export default function TrackBusScreen({ route }: Props) {
   const singleColumnMetrics = width < 350;
   const mapHeight = Math.max(220, Math.min(330, Math.round(width * 0.7), Math.round(height * 0.42)));
   pollingActiveRef.current = isFocused && appState === 'active';
+
+  const handleBack = useCallback(() => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    navigation.navigate('MainTabs');
+  }, [navigation]);
+
+  const renderBackButton = (floating = false) => (
+    <TouchableOpacity
+      style={[
+        styles.backButton,
+        floating && styles.floatingBackButton,
+        floating && { top: insets.top + 8 },
+      ]}
+      onPress={handleBack}
+      hitSlop={10}
+      accessibilityRole="button"
+      accessibilityLabel="Retour"
+      accessibilityHint="Revenir à l’écran précédent"
+    >
+      <Ionicons name="chevron-back" size={25} color={COLORS.text} />
+    </TouchableOpacity>
+  );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -271,6 +296,7 @@ export default function TrackBusScreen({ route }: Props) {
   if (loading) {
     return (
       <View style={styles.centered}>
+        {renderBackButton(true)}
         <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.loadingText}>Connexion au GPS du bus…</Text>
       </View>
@@ -280,6 +306,7 @@ export default function TrackBusScreen({ route }: Props) {
   if (error && !snapshot) {
     return (
       <View style={styles.centered}>
+        {renderBackButton(true)}
         <Ionicons name="location-outline" size={52} color={COLORS.textMuted} />
         <Text style={styles.errorTitle}>Suivi indisponible</Text>
         <Text style={styles.errorText}>{error}</Text>
@@ -317,11 +344,14 @@ export default function TrackBusScreen({ route }: Props) {
       >
         <View style={styles.pageContent}>
       <View style={[styles.header, compactHeader && styles.headerCompact]}>
-        <View style={[styles.headerCopy, compactHeader && styles.headerCopyCompact]}>
-          <Text style={styles.title}>Suivre mon bus</Text>
-          <Text style={styles.subtitle}>
-            {snapshot.route.departure_city} → {snapshot.route.arrival_city}
-          </Text>
+        <View style={[styles.headerLeading, compactHeader && styles.headerLeadingCompact]}>
+          {renderBackButton()}
+          <View style={[styles.headerCopy, compactHeader && styles.headerCopyCompact]}>
+            <Text style={styles.title}>Suivre mon bus</Text>
+            <Text style={styles.subtitle}>
+              {snapshot.route.departure_city} → {snapshot.route.arrival_city}
+            </Text>
+          </View>
         </View>
         <View style={[
           styles.livePill,
@@ -534,14 +564,18 @@ const styles = StyleSheet.create({
   errorText: { marginTop: 8, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 21 },
   retryButton: { marginTop: 20, backgroundColor: COLORS.primary, paddingHorizontal: 22, paddingVertical: 12, borderRadius: 12 },
   retryText: { color: COLORS.white, fontWeight: FONT_WEIGHTS.bold },
+  backButton: { width: 42, height: 42, flexShrink: 0, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#E2E8F0', marginRight: 10, shadowColor: COLORS.black, shadowOpacity: 0.08, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  floatingBackButton: { position: 'absolute', left: 16, zIndex: 10, marginRight: 0 },
   header: { paddingTop: 4, paddingHorizontal: 20, paddingBottom: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerCompact: { flexDirection: 'column', alignItems: 'flex-start' },
+  headerLeading: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
+  headerLeadingCompact: { flex: 0, width: '100%' },
   headerCopy: { flex: 1, minWidth: 0, paddingRight: 10 },
-  headerCopyCompact: { flex: 0, width: '100%', paddingRight: 0 },
+  headerCopyCompact: { paddingRight: 0 },
   title: { fontSize: FONT_SIZES['2xl'], fontWeight: FONT_WEIGHTS.bold, color: COLORS.text },
   subtitle: { color: COLORS.textSecondary, marginTop: 4 },
   livePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#DCFCE7', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 7, maxWidth: 155 },
-  livePillCompact: { marginTop: 11, maxWidth: '100%', alignSelf: 'flex-start' },
+  livePillCompact: { marginTop: 11, marginLeft: 52, alignSelf: 'flex-start' },
   offlinePill: { backgroundColor: '#FEF3C7' },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.success, marginRight: 6 },
   offlineDot: { backgroundColor: COLORS.warning },
