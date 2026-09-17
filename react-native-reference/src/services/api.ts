@@ -68,11 +68,9 @@ const resolveApiBase = () => {
     const clean = String(raw).trim().replace(/\/$/, '');
     return clean.endsWith('/api') ? clean : `${clean}/api`;
   }
-  // Default to local dev server on your machine IP for testing
-  return 'http://172.20.10.2:8000/api';
+  return 'https://api.evex-tg.com/api';
 };
 const API_BASE_URL = resolveApiBase();
-console.log('API_BASE_URL utilisée:', API_BASE_URL);
 console.log('API_BASE_URL utilisée:', API_BASE_URL);
 const TIMEOUT = 60000; // 60s pour gérer les cold starts Render (30s+ de démarrage)
 

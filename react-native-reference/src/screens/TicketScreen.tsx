@@ -16,7 +16,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import ViewShot, { captureRef } from 'react-native-view-shot';
-import * as MediaLibrary from 'expo-media-library';
+import * as MediaLibrary from 'expo-media-library/legacy';
 import * as Sharing from 'expo-sharing';
 import { RootStackParamList } from '../types';
 import { COLORS } from '../constants/colors';

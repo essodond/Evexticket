@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import * as Notifications from 'expo-notifications';
+import * as Notifications from '../services/notifications';
 import { RootStackParamList, PaymentMethod } from '../types';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';

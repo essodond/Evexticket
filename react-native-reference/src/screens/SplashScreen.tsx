@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { ResizeMode, Video } from 'expo-av';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -17,6 +17,13 @@ export default function SplashScreen() {
   const logoRotate = useSharedValue(-3);
   const textOpacity = useSharedValue(0);
   const textTranslateY = useSharedValue(20);
+
+  const player = useVideoPlayer(require('../../assets/splash-animation.mp4'), (p) => {
+    p.loop = false;
+    p.muted = false;
+    p.volume = 1.0;
+    p.play();
+  });
 
   useEffect(() => {
     // Vidéo : apparition douce + légère entrée
@@ -51,15 +58,11 @@ export default function SplashScreen() {
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.videoContainer, videoAnimatedStyle]}>
-        <Video
-          source={require('../../assets/splash-animation.mp4')}
+        <VideoView
+          player={player}
           style={styles.video}
-          resizeMode={ResizeMode.CONTAIN}
-          shouldPlay
-          isLooping={false}
-          useNativeControls={false}
-          isMuted={false}
-          volume={1.0}
+          contentFit="contain"
+          nativeControls={false}
         />
       </Animated.View>
 

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { StatusBar, Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import * as Notifications from './src/services/notifications';
 
 import { NavigationContainer } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';

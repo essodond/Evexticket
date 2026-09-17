@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
-import * as Notifications from 'expo-notifications';
+import * as Notifications from '../services/notifications';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useIsFocused } from '@react-navigation/native';

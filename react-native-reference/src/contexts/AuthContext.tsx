@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as api from '../services/api';
 import { User } from '../types';
-import * as Notifications from 'expo-notifications';
+import * as Notifications from '../services/notifications';
 
 interface AuthContextType {
   user: User | null;
