@@ -1,3 +1,4 @@
+import { COLORS } from '../constants/colors';
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 
@@ -145,7 +146,8 @@ const styles = StyleSheet.create({
   container: {
     padding: 10,
     alignItems: 'center',
-    backgroundColor: '#f0f0f0', // Light background for the bus interior
+    backgroundColor: COLORS.canvas,
+    borderRadius: 26,
     flexGrow: 1,
   },
   busFront: {
@@ -203,15 +205,15 @@ const styles = StyleSheet.create({
     width: 45,
     height: 45,
     margin: 4,
-    backgroundColor: '#87CEEB', // SkyBlue for available
+    backgroundColor: COLORS.softBlue,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#4682B4', // SteelBlue
+    borderColor: '#B5D6F5',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.05,
     shadowRadius: 1,
     elevation: 2,
   },

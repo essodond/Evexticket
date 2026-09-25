@@ -16,6 +16,7 @@ module.exports = {
   ...appConfig,
   expo: {
     ...appConfig.expo,
+    plugins: [...(appConfig.expo.plugins || []), 'expo-secure-store'],
     extra: {
       ...appConfig.expo.extra,
       EXPO_PUBLIC_API_BASE_URL: apiBaseUrl,

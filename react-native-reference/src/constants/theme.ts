@@ -1,10 +1,11 @@
 import { Platform } from 'react-native';
+import { COLORS } from './colors';
 
 export const RADII = {
   sm: 12,
-  md: 18,
-  lg: 24,
-  xl: 30,
+  md: 20,
+  lg: 26,
+  xl: 28,
   pill: 999,
 };
 
@@ -51,10 +52,10 @@ export const SHADOWS = {
 };
 
 export const GRADIENTS = {
-  primary: ['#1247C7', '#246BFD', '#55B9FF'] as const,
-  hero: ['#071A3A', '#103D83', '#246BFD'] as const,
-  canvas: ['#F9FCFF', '#EDF5FF', '#F5F9FF'] as const,
-  glass: ['rgba(255,255,255,0.76)', 'rgba(255,255,255,0.42)'] as const,
+  primary: [COLORS.primary, COLORS.action] as const,
+  hero: [COLORS.primary, COLORS.primary] as const,
+  canvas: [COLORS.canvas, COLORS.canvas, COLORS.canvas] as const,
+  glass: ['#FFFFFF', '#FAFCFF'] as const,
   success: ['#0F9F6E', '#38C793'] as const,
 };
 

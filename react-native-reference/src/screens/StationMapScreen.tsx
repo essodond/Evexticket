@@ -1,3 +1,8 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import * as Location from 'expo-location';
+import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -9,22 +14,19 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import * as Location from 'expo-location';
 import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
-import { RootStackParamList } from '../types';
-import { distanceBetweenCoordinatesKm } from '../utils/station';
 import type { DrivingRoute, RouteInstruction } from '../services/routing';
 import {
   formatRouteDistance,
   formatRouteDuration,
   getDrivingRoute,
 } from '../services/routing';
+import { RootStackParamList } from '../types';
 import { zoomMapRegion } from '../utils/mapRegion';
+import { distanceBetweenCoordinatesKm } from '../utils/station';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'StationMap'>;
 
@@ -61,7 +63,7 @@ const distanceAlongRouteMeters = (
   let distanceMeters = 0;
   const safeStart = Math.max(0, Math.min(startIndex, coordinates.length - 1));
   const safeEnd = Math.max(safeStart, Math.min(endIndex, coordinates.length - 1));
-  for (let index = safeStart; index < safeEnd; index += 1) {
+  for (let index = safeStart;index < safeEnd;index += 1) {
     distanceMeters += distanceBetweenCoordinatesKm(
       coordinates[index],
       coordinates[index + 1],
@@ -131,6 +133,7 @@ const getNavigationProgress = (
 };
 
 export default function StationMapScreen({ navigation, route }: Props) {
+  const isFocused = useIsFocused();
   const { station } = route.params;
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView | null>(null);
@@ -438,9 +441,10 @@ export default function StationMapScreen({ navigation, route }: Props) {
         )}
       </MapView>
 
+      {isFocused && <StatusBar style="light" />}
       <View style={[styles.topBar, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity style={styles.iconButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+          <Ionicons name="arrow-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
         <View style={styles.topTitleBlock}>
           <Text style={styles.topEyebrow}>
@@ -449,7 +453,7 @@ export default function StationMapScreen({ navigation, route }: Props) {
           <Text style={styles.topTitle} numberOfLines={1}>{station.name}</Text>
         </View>
         <TouchableOpacity style={styles.iconButton} onPress={centerMap}>
-          <Ionicons name="locate" size={22} color={COLORS.primary} />
+          <Ionicons name="locate" size={22} color={COLORS.white} />
         </TouchableOpacity>
       </View>
 
@@ -712,9 +716,8 @@ export default function StationMapScreen({ navigation, route }: Props) {
             {locationError
               ? locationError
               : position
-                ? `${navigationActive ? 'Navigation EVEX active' : 'Position GPS en direct'}${
-                    accuracy ? ` · précision ${Math.round(accuracy)} m` : ''
-                  }`
+                ? `${navigationActive ? 'Navigation EVEX active' : 'Position GPS en direct'}${accuracy ? ` · précision ${Math.round(accuracy)} m` : ''
+                }`
                 : 'Recherche de votre position…'}
           </Text>
         </View>
@@ -752,7 +755,7 @@ export default function StationMapScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#E8EEF7' },
+  container: { flex: 1, backgroundColor: COLORS.canvas },
   userMarker: {
     width: 34,
     height: 34,
@@ -783,9 +786,9 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.94)',
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    backgroundColor: COLORS.primary,
+    borderBottomLeftRadius: 26,
+    borderBottomRightRadius: 26,
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.12,
@@ -795,22 +798,22 @@ const styles = StyleSheet.create({
   iconButton: {
     width: 44,
     height: 44,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   topTitleBlock: { flex: 1, marginHorizontal: 12 },
   topEyebrow: {
     fontSize: 9,
-    color: COLORS.primary,
+    color: COLORS.white,
     fontWeight: FONT_WEIGHTS.bold,
     letterSpacing: 1.1,
   },
   topTitle: {
     marginTop: 3,
     fontSize: FONT_SIZES.base,
-    color: COLORS.text,
+    color: COLORS.white,
     fontWeight: FONT_WEIGHTS.bold,
   },
   mapFloatingControls: {
@@ -824,7 +827,7 @@ const styles = StyleSheet.create({
   mapTypeButton: {
     minHeight: 44,
     paddingHorizontal: 12,
-    borderRadius: 15,
+    borderRadius: 28,
     borderWidth: 1,
     borderColor: 'rgba(148,163,184,0.35)',
     flexDirection: 'row',
@@ -928,7 +931,7 @@ const styles = StyleSheet.create({
   routeCard: {
     marginTop: 14,
     padding: 12,
-    borderRadius: 18,
+    borderRadius: 26,
     borderWidth: 1,
     borderColor: '#DBEAFE',
     backgroundColor: '#F8FBFF',
@@ -1160,7 +1163,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     paddingHorizontal: 10,
     paddingVertical: 7,
-    borderRadius: 12,
+    borderRadius: 28,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -1192,7 +1195,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 14,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.canvas,
   },
   liveDot: {
     width: 8,
@@ -1224,8 +1227,8 @@ const styles = StyleSheet.create({
   navigateButton: {
     marginTop: 14,
     minHeight: 60,
-    borderRadius: 19,
-    backgroundColor: COLORS.primary,
+    borderRadius: 28,
+    backgroundColor: COLORS.action,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

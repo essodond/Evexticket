@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -23,9 +23,18 @@ import {
 interface Props {
   cities: City[];
   onResults: (response: AISearchResponse) => void;
+  /** Masque le bouton flottant + bulle (utilisé quand un déclencheur inline existe ailleurs sur l'écran). */
+  hideTrigger?: boolean;
 }
 
-export default function FloatingTravelAssistant({ cities, onResults }: Props) {
+export interface FloatingTravelAssistantHandle {
+  open: () => void;
+}
+
+const FloatingTravelAssistant = forwardRef<FloatingTravelAssistantHandle, Props>(function FloatingTravelAssistant(
+  { cities, onResults, hideTrigger }: Props,
+  ref
+) {
   const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -160,23 +169,29 @@ export default function FloatingTravelAssistant({ cities, onResults }: Props) {
     setVisible(false);
   };
 
+  useImperativeHandle(ref, () => ({
+    open: () => setVisible(true),
+  }));
+
   return (
     <>
-      <View pointerEvents="box-none" style={styles.floatingLayer}>
-        <View style={styles.hintBubble}>
-          <Text style={styles.hintText}>Rechercher avec l’IA</Text>
+      {!hideTrigger && (
+        <View pointerEvents="box-none" style={styles.floatingLayer}>
+          <View style={styles.hintBubble}>
+            <Text style={styles.hintText}>Rechercher avec l’IA</Text>
+          </View>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Ouvrir l’agent de recherche EVEX"
+            activeOpacity={0.9}
+            style={styles.floatingButton}
+            onPress={() => setVisible(true)}
+          >
+            <View style={styles.onlineDot} />
+            <Ionicons name="sparkles" size={27} color={COLORS.white} />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Ouvrir l’agent de recherche EVEX"
-          activeOpacity={0.9}
-          style={styles.floatingButton}
-          onPress={() => setVisible(true)}
-        >
-          <View style={styles.onlineDot} />
-          <Ionicons name="sparkles" size={27} color={COLORS.white} />
-        </TouchableOpacity>
-      </View>
+      )}
 
       <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
         <KeyboardAvoidingView
@@ -283,7 +298,9 @@ export default function FloatingTravelAssistant({ cities, onResults }: Props) {
       </Modal>
     </>
   );
-}
+});
+
+export default FloatingTravelAssistant;
 
 const styles = StyleSheet.create({
   floatingLayer: {
@@ -307,12 +324,12 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
-  hintText: { color: COLORS.white, fontSize: 11, fontWeight: '800' },
+  hintText: { color: COLORS.white, fontSize: 11, fontWeight: '700' },
   floatingButton: {
     width: 62,
     height: 62,
-    borderRadius: 22,
-    backgroundColor: COLORS.primary,
+    borderRadius: 31,
+    backgroundColor: COLORS.action,
     borderWidth: 4,
     borderColor: 'rgba(255,255,255,0.9)',
     alignItems: 'center',
@@ -335,7 +352,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.white,
   },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(7, 20, 40, 0.58)' },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(7, 20, 40, 0.58)' },
   sheet: {
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
@@ -378,12 +395,12 @@ const styles = StyleSheet.create({
     borderColor: '#F8FBFF',
   },
   headerCopy: { flex: 1, marginLeft: 13 },
-  eyebrow: { color: COLORS.primary, fontSize: 10, fontWeight: '900', letterSpacing: 1.25 },
-  title: { color: '#102A48', fontSize: 19, fontWeight: '900', marginTop: 3 },
+  eyebrow: { color: COLORS.primary, fontSize: 10, fontWeight: '700', letterSpacing: 1.25 },
+  title: { color: '#102A48', fontSize: 19, fontWeight: '700', marginTop: 3 },
   closeButton: {
     width: 40,
     height: 40,
-    borderRadius: 14,
+    borderRadius: 20,
     backgroundColor: '#EAF0F8',
     alignItems: 'center',
     justifyContent: 'center',
@@ -422,7 +439,7 @@ const styles = StyleSheet.create({
   micButton: {
     width: 50,
     height: 50,
-    borderRadius: 17,
+    borderRadius: 25,
     backgroundColor: '#E8F1FF',
     alignItems: 'center',
     justifyContent: 'center',
@@ -453,14 +470,14 @@ const styles = StyleSheet.create({
   searchButton: {
     marginTop: 16,
     minHeight: 56,
-    borderRadius: 18,
-    backgroundColor: COLORS.primary,
+    borderRadius: 28,
+    backgroundColor: COLORS.action,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 9,
   },
   searchButtonDisabled: { opacity: 0.42 },
-  searchButtonText: { color: COLORS.white, fontSize: 15, fontWeight: '900' },
+  searchButtonText: { color: COLORS.white, fontSize: 15, fontWeight: '700' },
   provider: { textAlign: 'center', color: '#97A6BA', fontSize: 10, marginTop: 10 },
 });

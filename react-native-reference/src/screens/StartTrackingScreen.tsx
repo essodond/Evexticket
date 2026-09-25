@@ -1,3 +1,6 @@
+import { Ionicons } from '@expo/vector-icons';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import * as Location from 'expo-location';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -9,30 +12,28 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import * as Location from 'expo-location';
-import { Ionicons } from '@expo/vector-icons';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ScreenHeader from '../components/ScreenHeader';
 
+import IncidentReportModal from '../components/IncidentReportModal';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
 import {
   getManageableTrackingTrips,
   getTripTracking,
-  sendTripPosition,
   reportTripIncident,
+  sendTripPosition,
   startTripTracking,
   stopTripTracking,
 } from '../services/api';
 import {
-  ManageableTrackingTrip,
   ApiId,
+  ManageableTrackingTrip,
   RootStackParamList,
+  SafetyIncidentReportPayload,
   TrackingPosition,
   TrackingSnapshot,
-  SafetyIncidentReportPayload,
 } from '../types';
-import IncidentReportModal from '../components/IncidentReportModal';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'StartTracking'>;
 
@@ -73,7 +74,7 @@ const PositionItem = ({ item }: { item: TrackingPosition }) => (
   </View>
 );
 
-export default function StartTrackingScreen({ route }: Props) {
+export default function StartTrackingScreen({ route, navigation }: Props) {
   const insets = useSafeAreaInsets();
   const subscriptionRef = useRef<Location.LocationSubscription | null>(null);
   const sendingRef = useRef(false);
@@ -257,10 +258,7 @@ export default function StartTrackingScreen({ route }: Props) {
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Mode chauffeur</Text>
-        <Text style={styles.subtitle}>Transmettez la position réelle du bus aux voyageurs</Text>
-      </View>
+      <ScreenHeader title="Mode chauffeur" subtitle="Transmettez la position réelle du bus aux voyageurs." onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>VOYAGE À SUIVRE</Text>
@@ -437,16 +435,13 @@ export default function StartTrackingScreen({ route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F1F5F9' },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.background },
+  container: { flex: 1, backgroundColor: COLORS.canvas },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.canvas },
   loadingText: { marginTop: 12, color: COLORS.textSecondary },
-  header: { paddingTop: 18, paddingHorizontal: 20, paddingBottom: 14 },
-  title: { fontSize: FONT_SIZES['2xl'], fontWeight: FONT_WEIGHTS.bold, color: COLORS.text },
-  subtitle: { color: COLORS.textSecondary, marginTop: 5 },
   content: { paddingBottom: 30 },
   sectionLabel: { marginHorizontal: 20, marginBottom: 9, marginTop: 4, fontSize: FONT_SIZES.xs, color: COLORS.textSecondary },
   tripList: { paddingHorizontal: 20, paddingBottom: 14 },
-  tripCard: { width: 245, backgroundColor: COLORS.white, borderRadius: 16, padding: 15, marginRight: 12, borderWidth: 1, borderColor: COLORS.border },
+  tripCard: { width: 245, backgroundColor: COLORS.white, borderRadius: 26, padding: 15, marginRight: 12, borderWidth: 1, borderColor: COLORS.border },
   tripCardSelected: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   tripTopRow: { flexDirection: 'row', alignItems: 'center' },
   tripCompany: { flex: 1, fontSize: FONT_SIZES.xs, color: COLORS.textSecondary, fontWeight: FONT_WEIGHTS.semibold },
@@ -455,22 +450,22 @@ const styles = StyleSheet.create({
   tripMeta: { fontSize: FONT_SIZES.xs, color: COLORS.textSecondary, marginTop: 7 },
   tripSelectedText: { color: COLORS.white },
   tripSelectedMeta: { color: 'rgba(255,255,255,0.75)' },
-  emptyCard: { marginHorizontal: 20, backgroundColor: COLORS.white, borderRadius: 16, padding: 22, alignItems: 'center', marginBottom: 14 },
+  emptyCard: { marginHorizontal: 20, backgroundColor: COLORS.white, borderRadius: 26, padding: 22, alignItems: 'center', marginBottom: 14 },
   emptyTitle: { marginTop: 9, color: COLORS.text, fontWeight: FONT_WEIGHTS.bold },
   emptyText: { marginTop: 4, color: COLORS.textSecondary, textAlign: 'center', fontSize: FONT_SIZES.sm },
-  infoCard: { backgroundColor: COLORS.white, marginHorizontal: 20, borderRadius: 16, padding: 15, marginBottom: 12, flexDirection: 'row', alignItems: 'center' },
+  infoCard: { backgroundColor: COLORS.white, marginHorizontal: 20, borderRadius: 26, padding: 15, marginBottom: 12, flexDirection: 'row', alignItems: 'center' },
   infoIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#EAF4FF', alignItems: 'center', justifyContent: 'center' },
   infoCopy: { flex: 1, marginLeft: 12 },
   infoValue: { fontSize: FONT_SIZES.base, fontWeight: FONT_WEIGHTS.bold, color: COLORS.text },
   infoSmall: { fontSize: FONT_SIZES.xs, color: COLORS.textSecondary, marginTop: 5 },
   controlsRow: { flexDirection: 'row', paddingHorizontal: 20, marginBottom: 12 },
-  startButton: { flex: 1, height: 50, borderRadius: 14, backgroundColor: COLORS.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  startButton: { flex: 1, height: 50, borderRadius: 28, backgroundColor: COLORS.action, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   disabledButton: { opacity: 0.55 },
   startButtonText: { color: COLORS.white, fontWeight: FONT_WEIGHTS.bold, marginLeft: 7 },
-  stopButton: { flex: 1, height: 50, borderRadius: 14, backgroundColor: COLORS.white, borderColor: '#FECACA', borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  stopButton: { flex: 1, height: 50, borderRadius: 28, backgroundColor: COLORS.white, borderColor: '#FECACA', borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   disabledStopButton: { opacity: 0.45 },
   stopButtonText: { color: COLORS.error, fontWeight: FONT_WEIGHTS.bold, marginLeft: 7 },
-  incidentButton: { minHeight: 64, marginHorizontal: 20, marginBottom: 12, paddingHorizontal: 16, borderRadius: 16, backgroundColor: COLORS.error, flexDirection: 'row', alignItems: 'center' },
+  incidentButton: { minHeight: 64, marginHorizontal: 20, marginBottom: 12, paddingHorizontal: 16, borderRadius: 28, backgroundColor: COLORS.error, flexDirection: 'row', alignItems: 'center' },
   incidentButtonCopy: { flex: 1, marginLeft: 11 },
   incidentButtonTitle: { color: COLORS.white, fontSize: FONT_SIZES.base, fontWeight: FONT_WEIGHTS.bold },
   incidentButtonHint: { color: 'rgba(255,255,255,0.82)', fontSize: FONT_SIZES.xs, marginTop: 3 },
@@ -478,7 +473,7 @@ const styles = StyleSheet.create({
   activeIncidentCopy: { flex: 1, marginLeft: 10 },
   activeIncidentTitle: { color: '#991B1B', fontWeight: FONT_WEIGHTS.bold },
   activeIncidentText: { color: '#B91C1C', fontSize: FONT_SIZES.sm, lineHeight: 19, marginTop: 4 },
-  gpsCard: { backgroundColor: COLORS.white, marginHorizontal: 20, borderRadius: 16, padding: 16, marginBottom: 14 },
+  gpsCard: { backgroundColor: COLORS.white, marginHorizontal: 20, borderRadius: 26, padding: 16, marginBottom: 14 },
   gpsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   gpsLabel: { fontSize: FONT_SIZES.xs, color: COLORS.textSecondary },
   gpsStatus: { fontSize: FONT_SIZES.lg, fontWeight: FONT_WEIGHTS.bold, color: COLORS.error, marginTop: 5 },
@@ -490,7 +485,7 @@ const styles = StyleSheet.create({
   gpsMetric: { fontSize: FONT_SIZES.xs, color: COLORS.textSecondary, marginRight: 18 },
   gpsError: { color: COLORS.error, fontSize: FONT_SIZES.xs, marginTop: 9 },
   foregroundNotice: { backgroundColor: '#EFF6FF', color: '#1D4ED8', fontSize: FONT_SIZES.xs, lineHeight: 18, padding: 10, borderRadius: 10, marginTop: 12 },
-  historyCard: { backgroundColor: COLORS.white, marginHorizontal: 20, borderRadius: 16, padding: 14 },
+  historyCard: { backgroundColor: COLORS.white, marginHorizontal: 20, borderRadius: 26, padding: 14 },
   historyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 },
   sectionTitle: { fontSize: FONT_SIZES.base, fontWeight: FONT_WEIGHTS.bold, color: COLORS.text },
   historyCount: { color: COLORS.primary, backgroundColor: '#EAF4FF', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 10, fontSize: FONT_SIZES.xs },

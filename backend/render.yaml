@@ -16,7 +16,9 @@ services:
       - key: DEBUG
         value: "False"
       - key: CORS_ALLOW_ALL
-        value: "True"
+        value: "False"
+      - key: CORS_EXTRA_ORIGINS
+        value: "https://evex-tg.com,https://www.evex-tg.com"
       - key: PYTHON_VERSION
         value: "3.12.3"
 

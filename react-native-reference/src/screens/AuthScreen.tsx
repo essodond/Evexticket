@@ -1,25 +1,28 @@
+import { Ionicons } from '@expo/vector-icons';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
+  Alert,
   KeyboardAvoidingView,
   Platform,
-  Alert,
-  StatusBar,
+  ScrollView,
+  StyleSheet,
+  Text,
   TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
-import { RootStackParamList } from '../types';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ScreenHeader from '../components/ScreenHeader';
+import { COLORS } from '../constants/colors';
 import { useAuth } from '../contexts/AuthContext';
+import { RootStackParamList } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Auth'>;
 type AuthMode = 'login' | 'register';
 
 export default function AuthScreen({ navigation }: Props) {
+  const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<AuthMode>('login');
   const { login, register, isLoading } = useAuth();
 
@@ -142,7 +145,7 @@ export default function AuthScreen({ navigation }: Props) {
             </View>
           </View>
         );
-             case 3:
+      case 3:
         return (
           <View style={styles.stepContainer}>
             <EvexBusHeader />
@@ -171,7 +174,7 @@ export default function AuthScreen({ navigation }: Props) {
             </View>
           </View>
         );
-             case 4:
+      case 4:
         return (
           <View style={styles.stepContainer}>
             <EvexBusHeader />
@@ -245,27 +248,11 @@ export default function AuthScreen({ navigation }: Props) {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <StatusBar barStyle="light-content" backgroundColor="#007AFF" />
-
-      {/* Header Bleu Supérieur */}
-      <View style={styles.blueHeader}>
-        <View style={styles.headerTopBar}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="chevron-back" size={24} color="#FFF" />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.brandingContainer}>
-          <View style={styles.logoContainer}>
-            <Ionicons name="infinite-outline" size={40} color="#FFF" />
-          </View>
-          <Text style={styles.mainTitle}>{mode === 'login' ? 'Se Connecter' : "S'inscrire"}</Text>
-        </View>
-      </View>
+      <ScreenHeader title={mode === 'login' ? 'Se connecter' : "Créer mon compte"} subtitle="Votre prochain voyage commence ici." onBack={() => navigation.goBack()} />
 
       <View style={styles.formCardContainer}>
-        <ScrollView style={styles.cardScrollView} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scrollContent}>
-          
+        <ScrollView style={styles.cardScrollView} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.scrollContent, { paddingBottom: 24 + insets.bottom }]}>
+
           {mode === 'login' ? (
             /* --- INTERFACE DE CONNEXION (ADAPTÉE TÉLÉPHONE + PIN) --- */
             <View style={styles.loginForm}>
@@ -385,46 +372,26 @@ export default function AuthScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#007AFF',
-  },
-  blueHeader: {
-    backgroundColor: '#007AFF',
-    paddingBottom: 40,
-  },
-  headerTopBar: {
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
-    flexDirection: 'row',
-  },
-  backButton: {
-    padding: 5,
-  },
-  brandingContainer: {
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  logoContainer: {
-    marginBottom: 8,
-  },
-  mainTitle: {
-    fontSize: 26,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    backgroundColor: COLORS.canvas,
   },
   formCardContainer: {
     flex: 1,
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    marginTop: -20,
+    marginTop: 20,
+    marginHorizontal: 20,
+    marginBottom: 12,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
     overflow: 'hidden',
   },
   cardScrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 24,
-    paddingTop: 30,
+    paddingHorizontal: 20,
+    paddingTop: 24,
     paddingBottom: 40,
   },
   form: {
@@ -442,22 +409,22 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#1A1A1A',
+    color: COLORS.text,
     marginBottom: 8,
   },
   grayInput: {
-    backgroundColor: '#F5F7FA',
+    backgroundColor: COLORS.canvas,
     height: 56,
-    borderRadius: 14,
+    borderRadius: 20,
     paddingHorizontal: 16,
     fontSize: 16,
-    color: '#333333',
+    color: COLORS.text,
   },
   phoneInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F7FA',
-    borderRadius: 14,
+    backgroundColor: COLORS.canvas,
+    borderRadius: 20,
   },
   countryCodeBadge: {
     paddingHorizontal: 16,
@@ -469,9 +436,9 @@ const styles = StyleSheet.create({
   countryCodeText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: COLORS.text,
   },
-  
+
   /* --- BOUTONS ET LIENS --- */
   forgotLink: {
     alignSelf: 'flex-end',
@@ -479,13 +446,13 @@ const styles = StyleSheet.create({
   },
   forgotLinkText: {
     fontSize: 14,
-    color: '#007AFF',
+    color: COLORS.action,
     fontWeight: '500',
   },
   primaryButton: {
     height: 56,
-    backgroundColor: '#007AFF',
-    borderRadius: 14,
+    backgroundColor: COLORS.action,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -515,7 +482,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#EAEAEA',
-    borderRadius: 14,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -526,7 +493,7 @@ const styles = StyleSheet.create({
   socialButtonText: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#333333',
+    color: COLORS.text,
   },
   footerContainer: {
     alignItems: 'center',
@@ -534,10 +501,10 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 14,
-    color: '#666666',
+    color: COLORS.textSecondary,
   },
   footerLink: {
-    color: '#007AFF',
+    color: COLORS.action,
     fontWeight: '600',
   },
 
@@ -555,7 +522,7 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 14,
-    color: '#007AFF',
+    color: COLORS.action,
     fontWeight: '700',
     marginLeft: 8,
   },
@@ -572,13 +539,13 @@ const styles = StyleSheet.create({
   evexHeaderText: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#333',
+    color: COLORS.text,
     letterSpacing: 0.5,
   },
   stepTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: COLORS.text,
     marginBottom: 6,
     textAlign: 'center',
   },
@@ -597,11 +564,11 @@ const styles = StyleSheet.create({
   illustrationLabel: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: COLORS.text,
     marginBottom: 10,
   },
   phoneConfirmationBox: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.canvas,
     borderWidth: 2,
     borderColor: '#A0A0A0',
     borderRadius: 12,
@@ -618,7 +585,7 @@ const styles = StyleSheet.create({
   phoneDisplay: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: COLORS.text,
   },
   carouselNavigationRow: {
     flexDirection: 'row',
@@ -629,7 +596,7 @@ const styles = StyleSheet.create({
   navButtonSecondary: {
     flex: 1,
     height: 52,
-    borderRadius: 10,
+    borderRadius: 28,
     backgroundColor: '#E5E9F0',
     justifyContent: 'center',
     alignItems: 'center',
@@ -642,8 +609,8 @@ const styles = StyleSheet.create({
   navButtonPrimary: {
     flex: 1,
     height: 52,
-    borderRadius: 10,
-    backgroundColor: '#007AFF',
+    borderRadius: 28,
+    backgroundColor: COLORS.action,
     justifyContent: 'center',
     alignItems: 'center',
   },

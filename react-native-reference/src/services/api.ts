@@ -1,5 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { getToken, setToken, removeToken } from './secureStorage';
 import {
   User,
   Trip,
@@ -181,7 +181,7 @@ async function request<T>(
   timeoutMs = TIMEOUT,
 ): Promise<T> {
   try {
-    const token = await AsyncStorage.getItem('token');
+    const token = await getToken();
     const primaryUrl = `${API_BASE_URL}${endpoint}`;
     const headers = {
       'Content-Type': 'application/json',
@@ -233,7 +233,7 @@ export async function login(data: LoginData): Promise<AuthResponse> {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    await AsyncStorage.setItem('token', response.token);
+    await setToken(response.token);
     return response;
   } catch (error) {
     console.error('Erreur de connexion:', error);
@@ -272,7 +272,7 @@ export async function register(data: RegisterData): Promise<AuthResponse> {
       throw new Error('Réponse d\'inscription invalide');
     }
 
-    await AsyncStorage.setItem('token', normalizedResponse.token);
+    await setToken(normalizedResponse.token);
     return normalizedResponse;
   } catch (error) {
     console.error('Erreur d\'inscription:', error);
@@ -282,7 +282,7 @@ export async function register(data: RegisterData): Promise<AuthResponse> {
 
 export async function logout(): Promise<void> {
   try {
-    await AsyncStorage.removeItem('token');
+    await removeToken();
   } catch (error) {
     console.error('Erreur de déconnexion:', error);
     throw error;

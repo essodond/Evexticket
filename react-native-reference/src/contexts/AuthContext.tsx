@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as api from '../services/api';
 import { User } from '../types';
 import * as Notifications from '../services/notifications';
+import { getToken, setToken, removeToken } from '../services/secureStorage';
 
 interface AuthContextType {
   user: User | null;
@@ -45,7 +46,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const restoreSession = async () => {
       try {
-        const token = await AsyncStorage.getItem('token');
+        const token = await getToken();
         const storedUser = await AsyncStorage.getItem('user');
 
         if (token && storedUser) {
@@ -96,7 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setUser(response.user);
       await AsyncStorage.setItem('user', JSON.stringify(response.user));
-      await AsyncStorage.setItem('token', response.token);
+      await setToken(response.token);
 
       Notifications.scheduleNotificationAsync({
         content: {
@@ -140,7 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setUser(newUser);
       await AsyncStorage.setItem('user', JSON.stringify(newUser));
-      await AsyncStorage.setItem('token', response.token);
+      await setToken(response.token);
 
       Notifications.scheduleNotificationAsync({
         content: {
@@ -169,13 +170,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await api.logout();
       setUser(null);
       await AsyncStorage.removeItem('user');
-      await AsyncStorage.removeItem('token');
+      await removeToken();
     } catch (error) {
       console.error('Erreur lors de la déconnexion:', error);
       // Même en cas d'erreur, on déconnecte localement
       setUser(null);
       await AsyncStorage.removeItem('user');
-      await AsyncStorage.removeItem('token');
+      await removeToken();
     } finally {
       setIsLoading(false);
     }

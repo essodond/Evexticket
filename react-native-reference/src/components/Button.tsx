@@ -75,19 +75,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 16,
+    borderRadius: 28,
+    minHeight: 52,
     paddingVertical: 14,
     paddingHorizontal: 24,
   },
   button_primary: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.action,
   },
   button_secondary: {
     backgroundColor: COLORS.gray,
   },
   button_outline: {
     backgroundColor: 'transparent',
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: COLORS.primary,
   },
   button_ghost: {
@@ -97,19 +98,22 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   button_sm: {
+    minHeight: 44,
     paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 28,
   },
   button_md: {
+    minHeight: 52,
     paddingVertical: 14,
     paddingHorizontal: 24,
-    borderRadius: 16,
+    borderRadius: 28,
   },
   button_lg: {
+    minHeight: 56,
     paddingVertical: 18,
     paddingHorizontal: 32,
-    borderRadius: 20,
+    borderRadius: 28,
   },
   text: {
     fontSize: FONT_SIZES.base,

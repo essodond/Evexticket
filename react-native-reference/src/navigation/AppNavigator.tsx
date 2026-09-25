@@ -1,74 +1,74 @@
-import React, { useState, useEffect } from 'react';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import React, { useEffect, useState } from 'react';
 
-import { RootStackParamList, MainTabParamList } from '../types';
-import { COLORS } from '../constants/colors';
 import { useAuth } from '../contexts/AuthContext';
+import { MainTabParamList, RootStackParamList } from '../types';
 
 // Screens
-import SplashScreen from '../screens/SplashScreen';
-import OnboardingScreen from '../screens/OnboardingScreen';
-import PublicHomeScreen from '../screens/PublicHomeScreen';
 import AuthScreen from '../screens/AuthScreen';
+import CompaniesScreen from '../screens/CompaniesScreen';
+import CompanyDetailsScreen from '../screens/CompanyDetailsScreen';
 import HomeConnectedScreen from '../screens/HomeConnectedScreen';
-import TripDetailsScreen from '../screens/TripDetailsScreen';
-import PaymentScreen from '../screens/PaymentScreen';
-import TicketScreen from '../screens/TicketScreen';
 import MyTicketsScreen from '../screens/MyTicketsScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
+import OnboardingScreen from '../screens/OnboardingScreen';
+import PaymentScreen from '../screens/PaymentScreen';
 import ProfileScreen from '../screens/ProfileScreen';
-import TrackBusScreen from '../screens/TrackBusScreen';
+import PublicHomeScreen from '../screens/PublicHomeScreen';
+import SplashScreen from '../screens/SplashScreen';
 import StartTrackingScreen from '../screens/StartTrackingScreen';
 import StationMapScreen from '../screens/StationMapScreen';
 import TicketAssistantScreen from '../screens/TicketAssistantScreen';
-import NotificationsScreen from '../screens/NotificationsScreen';
-import CompaniesScreen from '../screens/CompaniesScreen';
-import CompanyDetailsScreen from '../screens/CompanyDetailsScreen';
+import TicketScreen from '../screens/TicketScreen';
+import TrackBusScreen from '../screens/TrackBusScreen';
+import TripDetailsScreen from '../screens/TripDetailsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-import { Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function MainTabs() {
+  const insets = useSafeAreaInsets();
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: '#94A3B8',
+        tabBarActiveTintColor: '#0075E8',
+        tabBarHideOnKeyboard: true,
+        tabBarLabelPosition: 'below-icon',
+        tabBarInactiveTintColor: '#999999',
         tabBarStyle: {
-          backgroundColor: '#ffffff',
-          borderTopColor: '#E5E7EB',
-          borderTopWidth: 1,
-          height: Platform.OS === 'ios' ? 80 : 70,
-          paddingTop: 8,
-          paddingBottom: Platform.OS === 'ios' ? 18 : 10,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -1 },
-          shadowOpacity: 0.06,
-          shadowRadius: 6,
-          elevation: 10,
+          position: 'absolute', left: 20, right: 20, bottom: Math.max(insets.bottom, 20),
+          height: 74, paddingTop: 13, paddingBottom: 12, borderRadius: 32,
+          backgroundColor: '#F5FAFF', borderTopWidth: 0, borderWidth: 1, borderColor: '#FFFFFF',
+          shadowColor: '#203654', shadowOffset: { width: 0, height: 14 },
+          shadowOpacity: 0.16, shadowRadius: 22, elevation: 12,
         },
+        tabBarBackground: () => (
+          <LinearGradient colors={['#EDF6FF', '#FFFFFF']} style={{ flex: 1, borderRadius: 32 }} />
+        ),
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: '700',
+          fontWeight: '600',
           marginTop: 0,
         },
-        tabBarIcon: ({ focused, color }) => {
+        tabBarIcon: ({ color }) => {
           let iconName: any;
           if (route.name === 'Home') {
-            iconName = focused ? 'home' : 'home-outline';
+            iconName = 'home-outline';
           } else if (route.name === 'Companies') {
-            iconName = focused ? 'business' : 'business-outline';
+            iconName = 'business-outline';
           } else if (route.name === 'MyTickets') {
-            iconName = focused ? 'ticket' : 'ticket-outline';
+            iconName = 'ticket-outline';
           } else if (route.name === 'Profile') {
-            iconName = focused ? 'person' : 'person-outline';
+            iconName = 'person-outline';
           } else if (route.name === 'Notifications') {
-            iconName = focused ? 'notifications' : 'notifications-outline';
+            iconName = 'notifications-outline';
           }
           return <Ionicons name={iconName} size={24} color={color} />;
         },
@@ -93,7 +93,7 @@ export default function AppNavigator() {
       try {
         const hasLaunched = await AsyncStorage.getItem('hasLaunched');
         setIsFirstLaunch(hasLaunched === null);
-        
+
         // Splash screen minimum 3s pour laisser l'animation se jouer
         setTimeout(() => {
           setIsLoading(false);
@@ -138,8 +138,8 @@ export default function AppNavigator() {
       <Stack.Screen name="PublicHome" component={PublicHomeScreen} />
       <Stack.Screen name="Auth" component={AuthScreen} />
       <Stack.Screen name="MainTabs" component={MainTabs} />
-      <Stack.Screen 
-        name="TripDetails" 
+      <Stack.Screen
+        name="TripDetails"
         component={TripDetailsScreen}
         options={{
           animation: 'slide_from_bottom',
@@ -168,15 +168,15 @@ export default function AppNavigator() {
         component={CompanyDetailsScreen}
         options={{ animation: 'slide_from_right' }}
       />
-      <Stack.Screen 
-        name="Payment" 
+      <Stack.Screen
+        name="Payment"
         component={PaymentScreen}
         options={{
           animation: 'slide_from_right',
         }}
       />
-      <Stack.Screen 
-        name="Ticket" 
+      <Stack.Screen
+        name="Ticket"
         component={TicketScreen}
         options={{
           animation: 'fade',

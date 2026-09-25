@@ -14,11 +14,18 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+from django.conf import settings
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
+
+# En production, le schema Swagger/Redoc ne doit pas etre expose publiquement :
+# il documente en detail la surface d'API interne. Seul le staff Django peut y acceder hors DEBUG.
+_schema_permission_classes = (
+    (permissions.AllowAny,) if settings.DEBUG else (permissions.IsAdminUser,)
+)
 
 schema_view = get_schema_view(
     openapi.Info(
@@ -27,8 +34,8 @@ schema_view = get_schema_view(
         description="API pour la plateforme de transport TogoTrans",
         contact=openapi.Contact(email="contact@togotrans.tg"),
     ),
-    public=True,
-    permission_classes=(permissions.AllowAny,),
+    public=settings.DEBUG,
+    permission_classes=_schema_permission_classes,
 )
 
 urlpatterns = [

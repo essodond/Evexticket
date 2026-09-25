@@ -1,23 +1,25 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  AppState,
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
+  AppState,
   RefreshControl,
+  ScrollView,
   StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useFocusEffect, useIsFocused } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
-import { ApiId, RootStackParamList } from '../types';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ScreenHeader from '../components/ScreenHeader';
 import { COLORS } from '../constants/colors';
-import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
-import { formatCurrency } from '../utils/mockData';
+import { useAuth } from '../contexts/AuthContext';
 import { getMyBookings } from '../services/api';
+import { ApiId, RootStackParamList } from '../types';
+import { formatCurrency } from '../utils/mockData';
 import { subscribeToTicketChanges } from '../utils/ticketEvents';
 
 interface TicketItem {
@@ -39,11 +41,11 @@ interface TicketItem {
   destination_stop?: ApiId | null;
   trip_info?: any;
 }
-import { useAuth } from '../contexts/AuthContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MainTabs'>;
 
 export default function MyTicketsScreen({ navigation }: Props) {
+  const insets = useSafeAreaInsets();
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -181,8 +183,11 @@ export default function MyTicketsScreen({ navigation }: Props) {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+      <View style={styles.container}>
+        <ScreenHeader title="Mes tickets" subtitle="Retrouvez tous vos voyages." />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
       </View>
     );
   }
@@ -190,16 +195,13 @@ export default function MyTicketsScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      
-      {/* HEADER BLEU ARRONDI */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mes Tickets</Text>
-        <Text style={styles.headerSubtitle}>{visibleTickets.length} voyage(s) enregistré(s)</Text>
-      </View>
 
-      <ScrollView 
-        style={styles.content} 
-        contentContainerStyle={styles.contentContainer}
+      {/* HEADER BLEU ARRONDI */}
+      <ScreenHeader title="Mes tickets" subtitle={`${visibleTickets.length} voyage(s) enregistré(s)`} />
+
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: 110 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
         refreshControl={(
           <RefreshControl
@@ -231,7 +233,7 @@ export default function MyTicketsScreen({ navigation }: Props) {
                 <View style={styles.ticketNotchLeft} />
                 <View style={styles.ticketNotchRight} />
                 <View style={[styles.ticketCard, isExpired && styles.expiredCard]}>
-                  
+
                   {/* Header du ticket (Date & Statut) */}
                   <View style={[styles.cardHeader, isExpired ? styles.expiredHeader : styles.activeHeader]}>
                     <View style={styles.headerRow}>
@@ -283,7 +285,7 @@ export default function MyTicketsScreen({ navigation }: Props) {
                         <Text style={styles.routeLabel}>Direct</Text>
                       </View>
 
-                      <View style={[styles.routeSegment, { alignItems: 'flex-end' }]}> 
+                      <View style={[styles.routeSegment, { alignItems: 'flex-end' }]}>
                         <Text style={styles.timeText}>{ticket.arrival.substring(0, 5)}</Text>
                         <Text style={styles.cityText} numberOfLines={1}>{ticket.to}</Text>
                       </View>
@@ -300,7 +302,7 @@ export default function MyTicketsScreen({ navigation }: Props) {
                     </View>
 
                     <View style={styles.actionsRow}>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={styles.mainActionButton}
                         onPress={() => navigation.navigate('Ticket' as any, { trip: ticket })}
                       >
@@ -329,7 +331,7 @@ export default function MyTicketsScreen({ navigation }: Props) {
                         <Ionicons name="sparkles" size={20} color={COLORS.primary} />
                       </TouchableOpacity>
 
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={styles.iconActionButton}
                         onPress={() => setHiddenTickets(prev => new Set(prev).add(ticket.id))}
                       >
@@ -350,32 +352,7 @@ export default function MyTicketsScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F1F5F9',
-  },
-  header: {
-    backgroundColor: COLORS.primary,
-    paddingTop: 60,
-    paddingBottom: 24,
-    paddingHorizontal: 24,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: COLORS.white,
-  },
-  
-  
-  headerSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 4,
+    backgroundColor: COLORS.canvas,
   },
   content: {
     flex: 1,
@@ -388,8 +365,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#94A3B8',
+    fontWeight: '700',
+    color: COLORS.textMuted,
     letterSpacing: 1.5,
     marginBottom: 15,
   },
@@ -420,7 +397,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.canvas,
     zIndex: 1,
   },
   ticketNotchRight: {
@@ -430,26 +407,15 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.canvas,
     zIndex: 1,
   },
   ticketCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 32,
+    borderRadius: 26,
     overflow: 'hidden',
   },
   expiredCard: { opacity: 0.75 },
-  aiActionButton: {
-    width: 46,
-    height: 46,
-    marginLeft: 10,
-    borderRadius: 16,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -467,7 +433,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 999,
   },
-  statusBadgeText: { color: COLORS.white, fontSize: 11, fontWeight: '800' },
+  statusBadgeText: { color: COLORS.white, fontSize: 11, fontWeight: '700' },
   perforationRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -478,14 +444,14 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.canvas,
     marginLeft: -11,
   },
   rightNotch: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.canvas,
     marginRight: -11,
   },
   dashedLine: {
@@ -498,24 +464,23 @@ const styles = StyleSheet.create({
   },
   cardBody: { padding: 20 },
   topInfo: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
-  label: { fontSize: 10, fontWeight: '700', color: '#94A3B8', marginBottom: 6 },
-  companyName: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
-  priceText: { fontSize: 16, fontWeight: '900', color: COLORS.primary },
+  label: { fontSize: 10, fontWeight: '700', color: COLORS.textMuted, marginBottom: 6 },
+  companyName: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  priceText: { fontSize: 16, fontWeight: '700', color: COLORS.primary },
   routeContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.canvas,
     padding: 14,
-    borderRadius: 18,
+    borderRadius: 26,
     marginBottom: 15,
   },
   routeSegment: {
     flex: 1,
     minWidth: 0,
   },
-  routeItem: { flex: 2, paddingHorizontal: 4 },
-  timeText: { fontSize: 20, fontWeight: '900', color: '#0F172A' },
+  timeText: { fontSize: 20, fontWeight: '700', color: COLORS.text },
   cityText: { fontSize: 11, fontWeight: '700', color: '#475569', marginTop: 4 },
   routeVisual: {
     flex: 1,
@@ -534,34 +499,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 11,
     fontWeight: '700',
-    color: '#64748B',
-  },
-  busIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginVertical: 2,
+    color: COLORS.textSecondary,
   },
   routeIconsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  segmentLine: {
-    width: 18,
-    height: 2,
-    backgroundColor: COLORS.primary,
-    opacity: 0.4,
-    marginHorizontal: 6,
-  },
-  routeIconText: {
-    fontSize: 12,
-    color: '#475569',
-    fontWeight: '700',
-    marginTop: 4,
   },
   bottomInfo: {
     flexDirection: 'row',
@@ -569,12 +512,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  seatText: { fontSize: 26, fontWeight: '900', color: '#0F172A' },
+  seatText: { fontSize: 26, fontWeight: '700', color: COLORS.text },
   qrPlaceholder: {
     width: 62,
     height: 62,
     borderRadius: 18,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.canvas,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -586,26 +529,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
-    borderRadius: 18,
+    borderRadius: 28,
     paddingHorizontal: 16,
   },
-  mainActionText: { color: COLORS.white, fontWeight: '800', fontSize: 15 },
+  mainActionText: { color: COLORS.white, fontWeight: '700', fontSize: 15 },
   iconActionButton: {
     width: 46,
     height: 46,
     marginLeft: 12,
-    borderRadius: 16,
-    backgroundColor: '#F8FAFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  deleteIconButton: {
-    width: 46,
-    height: 46,
-    marginLeft: 12,
-    borderRadius: 16,
+    borderRadius: 23,
     backgroundColor: '#F8FAFF',
     alignItems: 'center',
     justifyContent: 'center',
@@ -615,12 +547,12 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyCard: {
     backgroundColor: 'white',
-    borderRadius: 20,
+    borderRadius: 26,
     padding: 40,
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#F1F5F9',
     borderStyle: 'dashed',
   },
-  emptyText: { color: '#94A3B8', marginTop: 10, fontWeight: '600' },
+  emptyText: { color: COLORS.textMuted, marginTop: 10, fontWeight: '600' },
 });

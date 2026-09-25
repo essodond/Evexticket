@@ -3,6 +3,10 @@ export const COLORS = {
   primary: '#0A84FF',
   primaryDark: '#0066CC',
   primaryLight: '#4DA3FF',
+  action: '#0066CC',
+  canvas: '#F7F7F8',
+  surface: '#FFFFFF',
+  softBlue: '#E4EDF6',
   
   // Neutres
   white: '#FFFFFF',

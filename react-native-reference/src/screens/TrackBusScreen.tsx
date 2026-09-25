@@ -1,3 +1,8 @@
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useIsFocused } from '@react-navigation/native';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import * as Location from 'expo-location';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,17 +16,13 @@ import {
   View,
 } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
-import * as Location from 'expo-location';
-import * as Notifications from '../services/notifications';
-import { Ionicons } from '@expo/vector-icons';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import ScreenHeader from '../components/ScreenHeader';
+import * as Notifications from '../services/notifications';
 
+import IncidentReportModal from '../components/IncidentReportModal';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
-import IncidentReportModal from '../components/IncidentReportModal';
 import { getTripTracking, reportTripIncident } from '../services/api';
 import { RootStackParamList, SafetyIncidentReportPayload, TrackingSnapshot } from '../types';
 
@@ -288,9 +289,9 @@ export default function TrackBusScreen({ navigation, route }: Props) {
 
   const initialPoint = snapshot?.current_position
     ? {
-        latitude: snapshot.current_position.latitude,
-        longitude: snapshot.current_position.longitude,
-      }
+      latitude: snapshot.current_position.latitude,
+      longitude: snapshot.current_position.longitude,
+    }
     : routeCoordinates[0] ?? { latitude: 8.6195, longitude: 0.8248 };
 
   if (loading) {
@@ -331,11 +332,21 @@ export default function TrackBusScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.container}>
+      <ScreenHeader title="Suivre mon bus" subtitle={`${snapshot.route.departure_city} → ${snapshot.route.arrival_city}`} onBack={() => navigation.goBack()}>
+        <View style={[
+          styles.livePill,
+          snapshot.status !== 'live' && styles.offlinePill,
+          { marginTop: 12, alignSelf: 'flex-start' },
+        ]}>
+          <View style={[styles.liveDot, snapshot.status !== 'live' && styles.offlineDot]} />
+          <Text style={styles.liveText}>{trackingLabel(snapshot)}</Text>
+        </View>
+      </ScreenHeader>
       <ScrollView
         style={styles.pageScroll}
         contentContainerStyle={[
           styles.pageScrollContent,
-          { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 28 },
+          { paddingTop: 20, paddingBottom: insets.bottom + 28 },
         ]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => void loadTracking()} tintColor={COLORS.primary} />
@@ -343,201 +354,181 @@ export default function TrackBusScreen({ navigation, route }: Props) {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.pageContent}>
-      <View style={[styles.header, compactHeader && styles.headerCompact]}>
-        <View style={[styles.headerLeading, compactHeader && styles.headerLeadingCompact]}>
-          {renderBackButton()}
-          <View style={[styles.headerCopy, compactHeader && styles.headerCopyCompact]}>
-            <Text style={styles.title}>Suivre mon bus</Text>
-            <Text style={styles.subtitle}>
-              {snapshot.route.departure_city} → {snapshot.route.arrival_city}
-            </Text>
-          </View>
-        </View>
-        <View style={[
-          styles.livePill,
-          snapshot.status !== 'live' && styles.offlinePill,
-          compactHeader && styles.livePillCompact,
-        ]}>
-          <View style={[styles.liveDot, snapshot.status !== 'live' && styles.offlineDot]} />
-          <Text style={styles.liveText}>{trackingLabel(snapshot)}</Text>
-        </View>
-      </View>
-
-      {activeSafetyAlert && (
-        <View style={[
-          styles.safetyBanner,
-          activeSafetyAlert.severity === 'critical' ? styles.safetyBannerCritical : styles.safetyBannerWarning,
-        ]}>
-          <Ionicons
-            name="warning"
-            size={23}
-            color={activeSafetyAlert.severity === 'critical' ? '#991B1B' : '#92400E'}
-          />
-          <View style={styles.safetyBannerCopy}>
-            <Text style={[
-              styles.safetyBannerTitle,
-              activeSafetyAlert.severity === 'critical' ? styles.safetyTextCritical : styles.safetyTextWarning,
+          {activeSafetyAlert && (
+            <View style={[
+              styles.safetyBanner,
+              activeSafetyAlert.severity === 'critical' ? styles.safetyBannerCritical : styles.safetyBannerWarning,
             ]}>
-              Incident signalé · {activeSafetyAlert.incident_type_label}
-            </Text>
-            <Text style={[
-              styles.safetyBannerText,
-              activeSafetyAlert.severity === 'critical' ? styles.safetyTextCritical : styles.safetyTextWarning,
-            ]}>
-              {activeSafetyAlert.public_message}
-            </Text>
-          </View>
-        </View>
-      )}
-
-      <View style={[styles.mapContainer, { height: mapHeight }]}>
-        <MapView
-          ref={mapRef}
-          style={StyleSheet.absoluteFill}
-          mapType={mapType}
-          initialRegion={{ ...initialPoint, latitudeDelta: 0.7, longitudeDelta: 0.7 }}
-        >
-          {routeCoordinates.length > 1 && (
-            <Polyline coordinates={routeCoordinates} strokeColor={COLORS.primary} strokeWidth={4} />
-          )}
-          {snapshot.stops
-            .filter((stop) => stop.latitude !== null && stop.longitude !== null)
-            .map((stop) => (
-              <Marker
-                key={stop.id}
-                coordinate={{ latitude: stop.latitude!, longitude: stop.longitude! }}
-                title={stop.station_name}
-                description={stop.status === 'passed' ? 'Arrêt parcouru' : stop.status === 'next' ? 'Prochain arrêt' : 'À venir'}
-                pinColor={stop.status === 'passed' ? COLORS.success : stop.status === 'next' ? COLORS.warning : COLORS.primary}
+              <Ionicons
+                name="warning"
+                size={23}
+                color={activeSafetyAlert.severity === 'critical' ? '#991B1B' : '#92400E'}
               />
-            ))}
-          {snapshot.current_position && (
-            <Marker
-              coordinate={{
-                latitude: snapshot.current_position.latitude,
-                longitude: snapshot.current_position.longitude,
-              }}
-              title="Bus EVEX"
-              description={`Mis à jour à ${formatClock(snapshot.current_position.recorded_at)}`}
-              anchor={{ x: 0.5, y: 0.5 }}
-              rotation={snapshot.current_position.heading ?? 0}
-            >
-              <View style={styles.busMarker}>
-                <Ionicons name="bus" size={22} color={COLORS.white} />
-              </View>
-            </Marker>
-          )}
-        </MapView>
-        <TouchableOpacity
-          style={styles.mapTypeButton}
-          onPress={() => setMapType((value) => value === 'standard' ? 'satellite' : 'standard')}
-        >
-          <Ionicons name={mapType === 'standard' ? 'earth-outline' : 'map-outline'} size={19} color={COLORS.text} />
-          <Text style={styles.mapTypeText}>{mapType === 'standard' ? 'Satellite' : 'Plan'}</Text>
-        </TouchableOpacity>
-        {snapshot.is_stale && (
-          <View style={styles.staleBanner}>
-            <Ionicons name="warning-outline" size={17} color="#92400E" />
-            <Text style={styles.staleText}>Dernière position reçue il y a plus de 2 minutes</Text>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.infoContent}>
-        <TouchableOpacity
-          style={[styles.reportButton, !incidentReportable && styles.reportButtonDisabled]}
-          onPress={() => setIncidentModalVisible(true)}
-          disabled={!incidentReportable}
-          accessibilityRole="button"
-          accessibilityLabel="Signaler un incident pendant ce trajet"
-          accessibilityState={{ disabled: !incidentReportable }}
-        >
-          <View style={styles.reportIcon}>
-            <Ionicons name="warning" size={22} color="#B91C1C" />
-          </View>
-          <View style={styles.reportCopy}>
-            <Text style={styles.reportTitle}>
-              {incidentReportable ? 'Signaler un incident' : 'Signalement indisponible'}
-            </Text>
-            <Text style={styles.reportText}>
-              {incidentReportable
-                ? 'Accident, panne, crevaison ou problème à bord'
-                : 'Disponible uniquement pendant la fenêtre active du voyage'}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#B91C1C" />
-        </TouchableOpacity>
-
-        {snapshot.approach_alert.active && (
-          <View style={styles.approachCard}>
-            <Ionicons name="notifications" size={22} color="#8A4B00" />
-            <View style={styles.approachContent}>
-              <Text style={styles.approachTitle}>Le bus approche de votre arrêt</Text>
-              <Text style={styles.approachText}>
-                Environ {snapshot.approach_alert.distance_km} km avant {snapshot.approach_alert.stop_name}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        <View style={styles.metricsGrid}>
-          <View style={[styles.metricCard, singleColumnMetrics && styles.metricCardSingle]}>
-            <Text style={styles.metricLabel}>Arrivée estimée</Text>
-            <Text style={styles.metricValue}>{formatClock(snapshot.estimated_arrival_at)}</Text>
-          </View>
-          <View style={[styles.metricCard, singleColumnMetrics && styles.metricCardSingle]}>
-            <Text style={styles.metricLabel}>Vitesse actuelle</Text>
-            <Text style={styles.metricValue}>{Math.round(snapshot.current_position?.speed_kmh ?? 0)} km/h</Text>
-          </View>
-          <View style={[styles.metricCard, singleColumnMetrics && styles.metricCardSingle]}>
-            <Text style={styles.metricLabel}>Temps restant</Text>
-            <Text style={styles.metricValue}>{snapshot.eta_minutes ?? '--'} min</Text>
-          </View>
-          <View style={[styles.metricCard, singleColumnMetrics && styles.metricCardSingle]}>
-            <Text style={styles.metricLabel}>Distance restante</Text>
-            <Text style={styles.metricValue}>{snapshot.distance_remaining_km ?? '--'} km</Text>
-          </View>
-        </View>
-
-        <View style={[styles.delayCard, compactHeader && styles.delayCardCompact]}>
-          <Ionicons
-            name={snapshot.delay_minutes > 5 ? 'time-outline' : 'checkmark-circle-outline'}
-            size={21}
-            color={snapshot.delay_minutes > 5 ? COLORS.warning : COLORS.success}
-          />
-          <Text style={[styles.delayText, snapshot.delay_minutes > 5 && styles.delayedText]}>{delayText}</Text>
-          <Text style={[styles.lastUpdate, compactHeader && styles.lastUpdateCompact]}>GPS : {formatClock(snapshot.updated_at)}</Text>
-        </View>
-
-        <View style={styles.timelineCard}>
-          <Text style={styles.sectionTitle}>Progression des arrêts</Text>
-          {snapshot.stops.map((stop, index) => (
-            <View key={stop.id} style={styles.timelineItem}>
-              <View style={styles.timelineRail}>
-                <View style={[
-                  styles.timelineDot,
-                  stop.status === 'passed' && styles.timelineDotPassed,
-                  stop.status === 'next' && styles.timelineDotNext,
+              <View style={styles.safetyBannerCopy}>
+                <Text style={[
+                  styles.safetyBannerTitle,
+                  activeSafetyAlert.severity === 'critical' ? styles.safetyTextCritical : styles.safetyTextWarning,
                 ]}>
-                  {stop.status === 'passed' && <Ionicons name="checkmark" size={11} color={COLORS.white} />}
-                </View>
-                {index < snapshot.stops.length - 1 && (
-                  <View style={[styles.timelineLine, stop.status === 'passed' && styles.timelineLinePassed]} />
-                )}
-              </View>
-              <View style={styles.timelineCopy}>
-                <Text style={[styles.timelineTitle, stop.status === 'passed' && styles.timelineTitlePassed]}>
-                  {stop.city_name}
+                  Incident signalé · {activeSafetyAlert.incident_type_label}
                 </Text>
-                <Text style={styles.timelineStation}>{stop.station_name}</Text>
-                <Text style={styles.timelineStatus}>
-                  {stop.status === 'passed' ? 'Parcouru' : stop.status === 'next' ? 'Prochain arrêt' : 'À venir'}
+                <Text style={[
+                  styles.safetyBannerText,
+                  activeSafetyAlert.severity === 'critical' ? styles.safetyTextCritical : styles.safetyTextWarning,
+                ]}>
+                  {activeSafetyAlert.public_message}
                 </Text>
               </View>
             </View>
-          ))}
-        </View>
-      </View>
+          )}
+
+          <View style={[styles.mapContainer, { height: mapHeight }]}>
+            <MapView
+              ref={mapRef}
+              style={StyleSheet.absoluteFill}
+              mapType={mapType}
+              initialRegion={{ ...initialPoint, latitudeDelta: 0.7, longitudeDelta: 0.7 }}
+            >
+              {routeCoordinates.length > 1 && (
+                <Polyline coordinates={routeCoordinates} strokeColor={COLORS.primary} strokeWidth={4} />
+              )}
+              {snapshot.stops
+                .filter((stop) => stop.latitude !== null && stop.longitude !== null)
+                .map((stop) => (
+                  <Marker
+                    key={stop.id}
+                    coordinate={{ latitude: stop.latitude!, longitude: stop.longitude! }}
+                    title={stop.station_name}
+                    description={stop.status === 'passed' ? 'Arrêt parcouru' : stop.status === 'next' ? 'Prochain arrêt' : 'À venir'}
+                    pinColor={stop.status === 'passed' ? COLORS.success : stop.status === 'next' ? COLORS.warning : COLORS.primary}
+                  />
+                ))}
+              {snapshot.current_position && (
+                <Marker
+                  coordinate={{
+                    latitude: snapshot.current_position.latitude,
+                    longitude: snapshot.current_position.longitude,
+                  }}
+                  title="Bus EVEX"
+                  description={`Mis à jour à ${formatClock(snapshot.current_position.recorded_at)}`}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  rotation={snapshot.current_position.heading ?? 0}
+                >
+                  <View style={styles.busMarker}>
+                    <Ionicons name="bus" size={22} color={COLORS.white} />
+                  </View>
+                </Marker>
+              )}
+            </MapView>
+            <TouchableOpacity
+              style={styles.mapTypeButton}
+              onPress={() => setMapType((value) => value === 'standard' ? 'satellite' : 'standard')}
+            >
+              <Ionicons name={mapType === 'standard' ? 'earth-outline' : 'map-outline'} size={19} color={COLORS.text} />
+              <Text style={styles.mapTypeText}>{mapType === 'standard' ? 'Satellite' : 'Plan'}</Text>
+            </TouchableOpacity>
+            {snapshot.is_stale && (
+              <View style={styles.staleBanner}>
+                <Ionicons name="warning-outline" size={17} color="#92400E" />
+                <Text style={styles.staleText}>Dernière position reçue il y a plus de 2 minutes</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.infoContent}>
+            <TouchableOpacity
+              style={[styles.reportButton, !incidentReportable && styles.reportButtonDisabled]}
+              onPress={() => setIncidentModalVisible(true)}
+              disabled={!incidentReportable}
+              accessibilityRole="button"
+              accessibilityLabel="Signaler un incident pendant ce trajet"
+              accessibilityState={{ disabled: !incidentReportable }}
+            >
+              <View style={styles.reportIcon}>
+                <Ionicons name="warning" size={22} color="#B91C1C" />
+              </View>
+              <View style={styles.reportCopy}>
+                <Text style={styles.reportTitle}>
+                  {incidentReportable ? 'Signaler un incident' : 'Signalement indisponible'}
+                </Text>
+                <Text style={styles.reportText}>
+                  {incidentReportable
+                    ? 'Accident, panne, crevaison ou problème à bord'
+                    : 'Disponible uniquement pendant la fenêtre active du voyage'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#B91C1C" />
+            </TouchableOpacity>
+
+            {snapshot.approach_alert.active && (
+              <View style={styles.approachCard}>
+                <Ionicons name="notifications" size={22} color="#8A4B00" />
+                <View style={styles.approachContent}>
+                  <Text style={styles.approachTitle}>Le bus approche de votre arrêt</Text>
+                  <Text style={styles.approachText}>
+                    Environ {snapshot.approach_alert.distance_km} km avant {snapshot.approach_alert.stop_name}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <View style={styles.metricsGrid}>
+              <View style={[styles.metricCard, singleColumnMetrics && styles.metricCardSingle]}>
+                <Text style={styles.metricLabel}>Arrivée estimée</Text>
+                <Text style={styles.metricValue}>{formatClock(snapshot.estimated_arrival_at)}</Text>
+              </View>
+              <View style={[styles.metricCard, singleColumnMetrics && styles.metricCardSingle]}>
+                <Text style={styles.metricLabel}>Vitesse actuelle</Text>
+                <Text style={styles.metricValue}>{Math.round(snapshot.current_position?.speed_kmh ?? 0)} km/h</Text>
+              </View>
+              <View style={[styles.metricCard, singleColumnMetrics && styles.metricCardSingle]}>
+                <Text style={styles.metricLabel}>Temps restant</Text>
+                <Text style={styles.metricValue}>{snapshot.eta_minutes ?? '--'} min</Text>
+              </View>
+              <View style={[styles.metricCard, singleColumnMetrics && styles.metricCardSingle]}>
+                <Text style={styles.metricLabel}>Distance restante</Text>
+                <Text style={styles.metricValue}>{snapshot.distance_remaining_km ?? '--'} km</Text>
+              </View>
+            </View>
+
+            <View style={[styles.delayCard, compactHeader && styles.delayCardCompact]}>
+              <Ionicons
+                name={snapshot.delay_minutes > 5 ? 'time-outline' : 'checkmark-circle-outline'}
+                size={21}
+                color={snapshot.delay_minutes > 5 ? COLORS.warning : COLORS.success}
+              />
+              <Text style={[styles.delayText, snapshot.delay_minutes > 5 && styles.delayedText]}>{delayText}</Text>
+              <Text style={[styles.lastUpdate, compactHeader && styles.lastUpdateCompact]}>GPS : {formatClock(snapshot.updated_at)}</Text>
+            </View>
+
+            <View style={styles.timelineCard}>
+              <Text style={styles.sectionTitle}>Progression des arrêts</Text>
+              {snapshot.stops.map((stop, index) => (
+                <View key={stop.id} style={styles.timelineItem}>
+                  <View style={styles.timelineRail}>
+                    <View style={[
+                      styles.timelineDot,
+                      stop.status === 'passed' && styles.timelineDotPassed,
+                      stop.status === 'next' && styles.timelineDotNext,
+                    ]}>
+                      {stop.status === 'passed' && <Ionicons name="checkmark" size={11} color={COLORS.white} />}
+                    </View>
+                    {index < snapshot.stops.length - 1 && (
+                      <View style={[styles.timelineLine, stop.status === 'passed' && styles.timelineLinePassed]} />
+                    )}
+                  </View>
+                  <View style={styles.timelineCopy}>
+                    <Text style={[styles.timelineTitle, stop.status === 'passed' && styles.timelineTitlePassed]}>
+                      {stop.city_name}
+                    </Text>
+                    <Text style={styles.timelineStation}>{stop.station_name}</Text>
+                    <Text style={styles.timelineStatus}>
+                      {stop.status === 'passed' ? 'Parcouru' : stop.status === 'next' ? 'Prochain arrêt' : 'À venir'}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
         </View>
       </ScrollView>
       <IncidentReportModal
@@ -554,28 +545,19 @@ export default function TrackBusScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F1F5F9' },
+  container: { flex: 1, backgroundColor: COLORS.canvas },
   pageScroll: { flex: 1 },
   pageScrollContent: { flexGrow: 1 },
   pageContent: { width: '100%', maxWidth: 760, alignSelf: 'center' },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, backgroundColor: COLORS.background },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, backgroundColor: COLORS.canvas },
   loadingText: { marginTop: 14, color: COLORS.textSecondary },
   errorTitle: { marginTop: 14, fontSize: FONT_SIZES.xl, fontWeight: FONT_WEIGHTS.bold, color: COLORS.text },
   errorText: { marginTop: 8, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 21 },
-  retryButton: { marginTop: 20, backgroundColor: COLORS.primary, paddingHorizontal: 22, paddingVertical: 12, borderRadius: 12 },
+  retryButton: { marginTop: 20, backgroundColor: COLORS.action, paddingHorizontal: 22, paddingVertical: 12, borderRadius: 28 },
   retryText: { color: COLORS.white, fontWeight: FONT_WEIGHTS.bold },
   backButton: { width: 42, height: 42, flexShrink: 0, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#E2E8F0', marginRight: 10, shadowColor: COLORS.black, shadowOpacity: 0.08, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   floatingBackButton: { position: 'absolute', left: 16, zIndex: 10, marginRight: 0 },
-  header: { paddingTop: 4, paddingHorizontal: 20, paddingBottom: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerCompact: { flexDirection: 'column', alignItems: 'flex-start' },
-  headerLeading: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
-  headerLeadingCompact: { flex: 0, width: '100%' },
-  headerCopy: { flex: 1, minWidth: 0, paddingRight: 10 },
-  headerCopyCompact: { paddingRight: 0 },
-  title: { fontSize: FONT_SIZES['2xl'], fontWeight: FONT_WEIGHTS.bold, color: COLORS.text },
-  subtitle: { color: COLORS.textSecondary, marginTop: 4 },
   livePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#DCFCE7', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 7, maxWidth: 155 },
-  livePillCompact: { marginTop: 11, marginLeft: 52, alignSelf: 'flex-start' },
   offlinePill: { backgroundColor: '#FEF3C7' },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.success, marginRight: 6 },
   offlineDot: { backgroundColor: COLORS.warning },
@@ -589,34 +571,34 @@ const styles = StyleSheet.create({
   safetyTextCritical: { color: '#991B1B' },
   safetyTextWarning: { color: '#92400E' },
   mapContainer: { marginHorizontal: 16, borderRadius: 20, overflow: 'hidden', backgroundColor: COLORS.gray },
-  mapTypeButton: { position: 'absolute', top: 12, right: 12, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.94)', paddingHorizontal: 11, paddingVertical: 9, borderRadius: 12 },
+  mapTypeButton: { position: 'absolute', top: 12, right: 12, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.94)', paddingHorizontal: 11, paddingVertical: 9, borderRadius: 28 },
   mapTypeText: { marginLeft: 6, fontSize: FONT_SIZES.xs, fontWeight: FONT_WEIGHTS.semibold, color: COLORS.text },
   staleBanner: { position: 'absolute', left: 12, right: 12, bottom: 12, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', padding: 10, borderRadius: 12 },
   staleText: { marginLeft: 7, color: '#92400E', fontSize: FONT_SIZES.xs, flex: 1 },
   busMarker: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.primary, borderWidth: 3, borderColor: COLORS.white, alignItems: 'center', justifyContent: 'center', shadowColor: COLORS.black, shadowOpacity: 0.25, shadowRadius: 5, elevation: 5 },
   infoContent: { padding: 16, paddingBottom: 30 },
-  reportButton: { minHeight: 70, marginBottom: 14, padding: 13, borderRadius: 17, borderWidth: 1, borderColor: '#FCA5A5', backgroundColor: '#FEF2F2', flexDirection: 'row', alignItems: 'center' },
+  reportButton: { minHeight: 70, marginBottom: 14, padding: 13, borderRadius: 28, borderWidth: 1, borderColor: '#FCA5A5', backgroundColor: '#FEF2F2', flexDirection: 'row', alignItems: 'center' },
   reportButtonDisabled: { opacity: 0.55 },
   reportIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center' },
   reportCopy: { flex: 1, minWidth: 0, marginHorizontal: 11 },
   reportTitle: { color: '#991B1B', fontSize: FONT_SIZES.base, fontWeight: FONT_WEIGHTS.bold },
   reportText: { marginTop: 3, color: '#B91C1C', fontSize: FONT_SIZES.xs, lineHeight: 17 },
-  approachCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF7D6', borderColor: '#F4D86B', borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 14 },
+  approachCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF7D6', borderColor: '#F4D86B', borderWidth: 1, borderRadius: 26, padding: 14, marginBottom: 14 },
   approachContent: { marginLeft: 11, flex: 1 },
   approachTitle: { color: '#5F3A00', fontWeight: FONT_WEIGHTS.bold },
   approachText: { color: '#8A5B13', fontSize: FONT_SIZES.sm, marginTop: 3 },
   metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  metricCard: { width: '48%', backgroundColor: COLORS.white, borderRadius: 15, padding: 14, marginBottom: 12 },
+  metricCard: { width: '48%', backgroundColor: COLORS.white, borderRadius: 26, padding: 14, marginBottom: 12 },
   metricCardSingle: { width: '100%' },
   metricLabel: { fontSize: FONT_SIZES.xs, color: COLORS.textSecondary },
   metricValue: { marginTop: 7, fontSize: FONT_SIZES.lg, fontWeight: FONT_WEIGHTS.bold, color: COLORS.text },
-  delayCard: { backgroundColor: COLORS.white, borderRadius: 15, padding: 14, marginBottom: 12, flexDirection: 'row', alignItems: 'center' },
+  delayCard: { backgroundColor: COLORS.white, borderRadius: 26, padding: 14, marginBottom: 12, flexDirection: 'row', alignItems: 'center' },
   delayCardCompact: { flexWrap: 'wrap' },
   delayText: { color: COLORS.success, fontWeight: FONT_WEIGHTS.semibold, marginLeft: 8, flex: 1 },
   delayedText: { color: COLORS.warning },
   lastUpdate: { color: COLORS.textSecondary, fontSize: FONT_SIZES.xs },
   lastUpdateCompact: { flexBasis: '100%', marginTop: 9, paddingLeft: 29 },
-  timelineCard: { backgroundColor: COLORS.white, borderRadius: 16, padding: 16 },
+  timelineCard: { backgroundColor: COLORS.white, borderRadius: 26, padding: 16 },
   sectionTitle: { fontSize: FONT_SIZES.lg, fontWeight: FONT_WEIGHTS.bold, color: COLORS.text, marginBottom: 15 },
   timelineItem: { flexDirection: 'row', minHeight: 76 },
   timelineRail: { width: 26, alignItems: 'center' },

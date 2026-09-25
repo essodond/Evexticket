@@ -1,3 +1,5 @@
+import { Ionicons } from '@expo/vector-icons';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -10,29 +12,29 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
-import * as Notifications from '../services/notifications';
-import { RootStackParamList, PaymentMethod } from '../types';
-import { COLORS } from '../constants/colors';
-import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
-import { formatCurrency, formatTime } from '../utils/mockData';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Button from '../components/Button';
 import Input from '../components/Input';
+import ScreenHeader from '../components/ScreenHeader';
+import { COLORS } from '../constants/colors';
+import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
+import { useAuth } from '../contexts/AuthContext';
 import {
-  createBooking,
   ApiError,
+  createBooking,
   initiateQosPayment,
   MOBILE_PAYMENTS_ENABLED,
   verifyQosPayment,
 } from '../services/api';
-import { useAuth } from '../contexts/AuthContext';
+import * as Notifications from '../services/notifications';
+import { PaymentMethod, RootStackParamList } from '../types';
+import { formatCurrency, formatTime } from '../utils/mockData';
 import { notifyTicketsChanged } from '../utils/ticketEvents';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Payment'>;
 
-class PaymentPendingError extends Error {}
-class PaymentCancelledError extends Error {}
+class PaymentPendingError extends Error { }
+class PaymentCancelledError extends Error { }
 
 const paymentMethods = [
   { id: 'flooz' as PaymentMethod, name: 'Flooz', icon: 'wallet-outline', color: COLORS.flooz, image: 'https://th.bing.com/th/id/OIP._7XYS8QkoiudNZBiWMGWvwAAAA?w=184&h=180&c=7&r=0&o=7&cb=ucfimg2&dpr=1.5&pid=1.7&rm=3&ucfimg=1' },
@@ -40,6 +42,7 @@ const paymentMethods = [
 ];
 
 export default function PaymentScreen({ navigation, route }: Props) {
+  const insets = useSafeAreaInsets();
   const { trip, selectedSeat } = route.params;
   const { user } = useAuth();
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('flooz');
@@ -79,7 +82,7 @@ export default function PaymentScreen({ navigation, route }: Props) {
   };
 
   const waitForPaymentConfirmation = async (reference: string) => {
-    for (let attempt = 0; attempt < 24; attempt += 1) {
+    for (let attempt = 0;attempt < 24;attempt += 1) {
       ensureMounted();
       let verification;
       try {
@@ -255,19 +258,13 @@ export default function PaymentScreen({ navigation, route }: Props) {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.white} />
-        </TouchableOpacity>
-        <View style={styles.headerTitles}>
-          <Text style={styles.headerTitle}>{MOBILE_PAYMENTS_ENABLED ? 'Paiement QosPay' : 'Confirmer le billet'}</Text>
-          <Text style={styles.headerSubtitle}>
-            {MOBILE_PAYMENTS_ENABLED ? 'Sécurisé via QosPay, Flooz ou TMoney' : 'Mode test : aucun paiement ne sera demandé'}
-          </Text>
-        </View>
-      </View>
+      <ScreenHeader
+        title={MOBILE_PAYMENTS_ENABLED ? 'Paiement QosPay' : 'Confirmer le billet'}
+        subtitle={MOBILE_PAYMENTS_ENABLED ? 'Sécurisé via QosPay, Flooz ou TMoney' : 'Mode test : aucun paiement ne sera demandé'}
+        onBack={() => navigation.goBack()}
+      />
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={styles.contentContainer}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={[styles.contentContainer, { paddingBottom: 130 + insets.bottom }]}>
         {!MOBILE_PAYMENTS_ENABLED && (
           <View style={styles.testModeBanner}>
             <View style={styles.testModeIcon}><Ionicons name="flask" size={20} color={COLORS.primary} /></View>
@@ -353,7 +350,7 @@ export default function PaymentScreen({ navigation, route }: Props) {
         )}
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(16, insets.bottom) }]}>
         <Button
           title={
             processing
@@ -371,35 +368,15 @@ export default function PaymentScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.white },
-  header: {
-    backgroundColor: COLORS.primary,
-    paddingTop: 60,
-    paddingBottom: 24,
-    paddingHorizontal: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: { fontSize: FONT_SIZES['2xl'], fontWeight: FONT_WEIGHTS.semibold, color: COLORS.white },
+  container: { flex: 1, backgroundColor: COLORS.canvas },
   content: { flex: 1 },
-  contentContainer: { padding: 24, paddingBottom: 120 },
-  headerTitles: { flex: 1 },
-  headerSubtitle: { fontSize: FONT_SIZES.sm, color: 'rgba(255,255,255,0.85)', marginTop: 4 },
+  contentContainer: { padding: 20, paddingBottom: 120 },
   testModeBanner: { flexDirection: 'row', backgroundColor: '#EEF6FF', borderWidth: 1, borderColor: '#B8D8FF', borderRadius: 16, padding: 16, marginBottom: 20 },
   testModeIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   testModeContent: { flex: 1 },
   testModeTitle: { fontSize: FONT_SIZES.sm, fontWeight: FONT_WEIGHTS.semibold, color: COLORS.text },
   testModeText: { fontSize: FONT_SIZES.xs, color: COLORS.textSecondary, lineHeight: 18, marginTop: 4 },
-  summary: { backgroundColor: `${COLORS.gray}4D`, borderRadius: 16, padding: 20, marginBottom: 24 },
+  summary: { backgroundColor: COLORS.surface, borderRadius: 26, padding: 20, marginBottom: 24 },
   summaryTitle: { fontSize: FONT_SIZES.base, fontWeight: FONT_WEIGHTS.semibold, color: COLORS.text, marginBottom: 16 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, gap: 12 },
   summaryLabel: { fontSize: FONT_SIZES.base, color: COLORS.textSecondary },
@@ -412,7 +389,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: FONT_SIZES.base, fontWeight: FONT_WEIGHTS.semibold, color: COLORS.text, marginBottom: 16 },
   paymentHint: { fontSize: FONT_SIZES.sm, color: COLORS.textSecondary, marginBottom: 12 },
   paymentMethods: { gap: 12 },
-  paymentMethod: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderWidth: 2, borderColor: COLORS.border, borderRadius: 12, padding: 16 },
+  paymentMethod: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderWidth: 2, borderColor: COLORS.border, borderRadius: 26, padding: 16 },
   paymentMethod_selected: { borderColor: COLORS.primary, backgroundColor: `${COLORS.primary}0D` },
   paymentIcon: { width: 40, height: 40, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
   paymentMethodName: { flex: 1, fontSize: FONT_SIZES.base, fontWeight: FONT_WEIGHTS.semibold, color: COLORS.text },
@@ -422,6 +399,8 @@ const styles = StyleSheet.create({
   statusBox: { backgroundColor: `${COLORS.primary}14`, borderColor: COLORS.primary, borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 24 },
   statusText: { color: COLORS.primary, fontSize: FONT_SIZES.sm },
   footer: {
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
     position: 'absolute',
     bottom: 0,
     left: 0,
@@ -437,6 +416,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  payButton: { height: 56, borderRadius: 16 },
+  payButton: { height: 56, borderRadius: 28 },
   paymentImage: { width: '100%', height: '100%', resizeMode: 'contain', borderRadius: 8 },
 });

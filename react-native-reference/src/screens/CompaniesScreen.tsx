@@ -1,3 +1,5 @@
+import { Ionicons } from '@expo/vector-icons';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -10,9 +12,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ScreenHeader from '../components/ScreenHeader';
 import StarRating from '../components/StarRating';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
@@ -25,6 +26,7 @@ import { RootStackParamList } from '../types';
 type Props = NativeStackScreenProps<RootStackParamList, 'MainTabs'>;
 
 export default function CompaniesScreen({ navigation }: Props) {
+  const insets = useSafeAreaInsets();
   const [companies, setCompanies] = useState<PartnerCompany[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -64,12 +66,7 @@ export default function CompaniesScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={['#0A84FF', '#075FC4']} style={styles.header}>
-        <Text style={styles.eyebrow}>RÉSEAU EVEX</Text>
-        <Text style={styles.title}>Compagnies partenaires</Text>
-        <Text style={styles.subtitle}>
-          Consultez leurs gares, itinéraires et avis voyageurs.
-        </Text>
+      <ScreenHeader title="Compagnies partenaires" subtitle="Consultez leurs gares, itinéraires et avis voyageurs.">
         <View style={styles.searchBox}>
           <Ionicons name="search" size={20} color={COLORS.textSecondary} />
           <TextInput
@@ -85,7 +82,7 @@ export default function CompaniesScreen({ navigation }: Props) {
             </TouchableOpacity>
           )}
         </View>
-      </LinearGradient>
+      </ScreenHeader>
 
       {loading ? (
         <View style={styles.centered}>
@@ -96,7 +93,7 @@ export default function CompaniesScreen({ navigation }: Props) {
         <FlatList
           data={filtered}
           keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: 110 + insets.bottom }]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -202,37 +199,12 @@ export default function CompaniesScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F8FC' },
-  header: {
-    paddingTop: 56,
-    paddingHorizontal: 22,
-    paddingBottom: 24,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  eyebrow: {
-    color: 'rgba(255,255,255,0.72)',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1.4,
-  },
-  title: {
-    marginTop: 5,
-    color: COLORS.white,
-    fontSize: 27,
-    fontWeight: '800',
-  },
-  subtitle: {
-    marginTop: 6,
-    color: 'rgba(255,255,255,0.82)',
-    fontSize: FONT_SIZES.sm,
-    lineHeight: 20,
-  },
+  container: { flex: 1, backgroundColor: COLORS.canvas },
   searchBox: {
     marginTop: 18,
     height: 52,
     paddingHorizontal: 15,
-    borderRadius: 17,
+    borderRadius: 20,
     backgroundColor: COLORS.white,
     flexDirection: 'row',
     alignItems: 'center',
@@ -245,7 +217,7 @@ const styles = StyleSheet.create({
   },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 10, color: COLORS.textSecondary },
-  list: { padding: 18, paddingBottom: 110 },
+  list: { padding: 20, paddingBottom: 110 },
   countRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -265,15 +237,15 @@ const styles = StyleSheet.create({
   verifiedText: { color: '#15803D', fontSize: 10, fontWeight: '700' },
   card: {
     backgroundColor: COLORS.white,
-    borderRadius: 22,
+    borderRadius: 26,
     padding: 17,
     marginBottom: 14,
     borderWidth: 1,
     borderColor: '#E5EDF7',
     shadowColor: '#0F2747',
     shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.07,
-    shadowRadius: 13,
+    shadowOpacity: 0.05,
+    shadowRadius: 18,
     elevation: 3,
   },
   cardTop: { flexDirection: 'row', alignItems: 'center' },
@@ -314,13 +286,13 @@ const styles = StyleSheet.create({
     marginTop: 15,
     paddingVertical: 11,
     borderRadius: 15,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.canvas,
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
   },
   stat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  statValue: { color: COLORS.text, fontSize: FONT_SIZES.sm, fontWeight: '800' },
+  statValue: { color: COLORS.text, fontSize: FONT_SIZES.sm, fontWeight: '700' },
   statLabel: { color: COLORS.textMuted, fontSize: 10 },
   statDivider: { width: 1, height: 20, backgroundColor: '#E2E8F0' },
   citiesRow: {
@@ -342,7 +314,7 @@ const styles = StyleSheet.create({
     marginTop: 60,
     alignItems: 'center',
     padding: 28,
-    borderRadius: 22,
+    borderRadius: 26,
     backgroundColor: COLORS.white,
   },
   emptyTitle: {

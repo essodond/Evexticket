@@ -1,22 +1,24 @@
-import React, { useCallback, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
-import { LoyaltySummary, RootStackParamList } from '../types';
+import React, { useCallback, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Button from '../components/Button';
+import ScreenHeader from '../components/ScreenHeader';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
-import Button from '../components/Button';
 import { useAuth } from '../contexts/AuthContext';
 import { getLoyaltySummary } from '../services/api';
+import { LoyaltySummary, RootStackParamList } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MainTabs'>;
 
@@ -27,6 +29,7 @@ const menuItems = [
 ];
 
 export default function ProfileScreen({ navigation }: Props) {
+  const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
   const [loyalty, setLoyalty] = useState<LoyaltySummary | null>(user?.loyalty ?? null);
   const [loyaltyLoading, setLoyaltyLoading] = useState(!user?.loyalty);
@@ -73,24 +76,12 @@ export default function ProfileScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View style={styles.avatar}>
-            <Ionicons name="person" size={40} color={COLORS.white} />
-          </View>
-          <View style={styles.userInfo}>
-            <Text style={styles.userName}>{user?.first_name || ''} {user?.last_name || ''}</Text>
-            <Text style={styles.userMember}>
-              Membre depuis {user?.date_joined ? new Date(user.date_joined).getFullYear() : '...'}
-            </Text>
-          </View>
-        </View>
-      </View>
+      <ScreenHeader title={`${user?.first_name || ''} ${user?.last_name || ''}`.trim() || 'Mon profil'} subtitle={`Membre depuis ${user?.date_joined ? new Date(user.date_joined).getFullYear() : '…'}`} />
 
       <ScrollView
         style={styles.content}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: 110 + insets.bottom }]}
       >
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>EVEX XP</Text>
@@ -228,47 +219,13 @@ export default function ProfileScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
-  },
-  header: {
-    backgroundColor: COLORS.primary,
-    paddingTop: 60,
-    paddingBottom: 32,
-    paddingHorizontal: 24,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  userInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: FONT_SIZES.xl,
-    fontWeight: FONT_WEIGHTS.semibold,
-    color: COLORS.white,
-    marginBottom: 4,
-  },
-  userMember: {
-    fontSize: FONT_SIZES.base,
-    color: 'rgba(255,255,255,0.8)',
+    backgroundColor: COLORS.canvas,
   },
   content: {
     flex: 1,
   },
   contentContainer: {
-    padding: 24,
+    padding: 20,
   },
   section: {
     marginBottom: 24,
@@ -280,7 +237,7 @@ const styles = StyleSheet.create({
   },
   xpCard: {
     backgroundColor: '#FFF7D6',
-    borderRadius: 20,
+    borderRadius: 26,
     padding: 18,
     borderWidth: 1,
     borderColor: '#F4D86B',
@@ -365,8 +322,8 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   contactCard: {
-    backgroundColor: `${COLORS.gray}4D`,
-    borderRadius: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: 26,
     padding: 16,
   },
   contactItem: {
@@ -400,8 +357,8 @@ const styles = StyleSheet.create({
     marginVertical: 12,
   },
   menuCard: {
-    backgroundColor: `${COLORS.gray}4D`,
-    borderRadius: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: 26,
     overflow: 'hidden',
   },
   menuItem: {
@@ -428,8 +385,8 @@ const styles = StyleSheet.create({
     backgroundColor: `${COLORS.gray}4D`,
   },
   statsCard: {
-    backgroundColor: `${COLORS.gray}4D`,
-    borderRadius: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: 26,
     padding: 16,
   },
   statsTitle: {

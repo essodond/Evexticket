@@ -1,26 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Image,
   ActivityIndicator,
   Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { RootStackParamList, Trip } from '../types';
+import Button from '../components/Button';
+import ScreenHeader from '../components/ScreenHeader';
+import SeatSelection, { SeatStatus } from '../components/SeatSelection';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
-import { formatCurrency, calculateDuration, formatTime } from '../utils/mockData';
-import Button from '../components/Button';
-import SeatSelection from '../components/SeatSelection';
 import { getTripDetails } from '../services/api';
-import { SeatStatus } from '../components/SeatSelection'; // Import SeatStatus
+import { RootStackParamList, Trip } from '../types';
+import { calculateDuration, formatCurrency, formatTime } from '../utils/mockData';
 import { findDepartureStation } from '../utils/station';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TripDetails'>;
@@ -158,23 +156,7 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.imageContainer}>
-        <Image
-          source={{ uri: 'https://images.unsplash.com/photo-1624901713295-504bf074e0df?w=800' }}
-          style={styles.image}
-        />
-        <LinearGradient
-          colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0.3)', 'transparent']}
-          style={styles.gradient}
-        />
-        
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader title="Votre trajet" subtitle={trip.trip_info.company_name || 'Préparez votre voyage'} onBack={() => navigation.goBack()} />
 
       <ScrollView
         style={styles.content}
@@ -220,19 +202,19 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
 
         <View style={styles.infoSection}>
           <Text style={styles.sectionTitle}>Informations du trajet</Text>
-          
+
           <InfoCard
             icon="bus"
             label="Type de bus"
             value={trip.trip_info.bus_type || "Non spécifié"}
           />
-          
+
           <InfoCard
             icon="people"
             label="Places disponibles"
             value={`${seatsLeft} sièges restants`}
           />
-          
+
           <InfoCard
             icon="time"
             label="Durée du trajet"
@@ -356,41 +338,13 @@ export default function TripDetailsScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
-  },
-  imageContainer: {
-    height: 200,
-    position: 'relative',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  gradient: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  backButton: {
-    position: 'absolute',
-    top: 48,
-    left: 24,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
+    backgroundColor: COLORS.canvas,
   },
   content: {
     flex: 1,
   },
   contentContainer: {
-    padding: 24,
+    padding: 20,
     paddingBottom: 24,
   },
   header: {
@@ -415,8 +369,8 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   routeContainer: {
-    backgroundColor: `${COLORS.gray}4D`,
-    borderRadius: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: 26,
     padding: 20,
     marginBottom: 24,
   },
@@ -477,7 +431,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 12,
+    borderRadius: 26,
     padding: 16,
     marginBottom: 12,
   },
@@ -519,7 +473,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#CFE2FF',
     backgroundColor: '#F5F9FF',
-    borderRadius: 18,
+    borderRadius: 26,
     padding: 16,
     marginBottom: 18,
   },
@@ -560,8 +514,8 @@ const styles = StyleSheet.create({
   stationMapButton: {
     minHeight: 46,
     marginTop: 14,
-    borderRadius: 15,
-    backgroundColor: COLORS.primary,
+    borderRadius: 28,
+    backgroundColor: COLORS.action,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -573,6 +527,8 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHTS.bold,
   },
   footer: {
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
     backgroundColor: COLORS.white,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
@@ -626,7 +582,7 @@ const styles = StyleSheet.create({
     minHeight: 52,
     paddingVertical: 0,
     paddingHorizontal: 12,
-    borderRadius: 16,
+    borderRadius: 28,
   },
   bookButtonText: {
     lineHeight: 22,
@@ -637,7 +593,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.canvas,
   },
   loadingText: {
     marginTop: 10,
@@ -649,53 +605,5 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.base,
     color: COLORS.error,
     textAlign: 'center',
-  },
-  stopCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.41,
-    elevation: 2,
-  },
-  stopHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 5,
-  },
-  stopCity: {
-    fontSize: FONT_SIZES.medium,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    marginLeft: 5,
-  },
-  stopTimes: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 10,
-  },
-  stopTime: {
-    fontSize: FONT_SIZES.small,
-    color: COLORS.textSecondary,
-  },
-  boardingZonesContainer: {
-    marginTop: 5,
-    paddingLeft: 10,
-    borderLeftWidth: 2,
-    borderLeftColor: COLORS.lightGray,
-  },
-  boardingZonesTitle: {
-    fontSize: FONT_SIZES.small,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    marginBottom: 5,
-  },
-  boardingZoneText: {
-    fontSize: FONT_SIZES.small,
-    color: COLORS.textSecondary,
-    marginBottom: 2,
   },
 });

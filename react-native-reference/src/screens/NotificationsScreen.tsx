@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -7,12 +8,14 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ScreenHeader from '../components/ScreenHeader';
 
 import { COLORS } from '../constants/colors';
 import { getSmartNotifications, SmartNotification } from '../services/api';
 
 export default function NotificationsScreen() {
+  const insets = useSafeAreaInsets();
   const [items, setItems] = useState<SmartNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -36,17 +39,10 @@ export default function NotificationsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerIcon}>
-          <Ionicons name="notifications" size={24} color={COLORS.white} />
-        </View>
-        <View>
-          <Text style={styles.eyebrow}>ALERTES INTELLIGENTES</Text>
-          <Text style={styles.title}>Mon voyage</Text>
-        </View>
-      </View>
+      <ScreenHeader title="Mes alertes" subtitle="Les informations utiles pour vos voyages." />
+
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: 110 + insets.bottom }]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -98,32 +94,11 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F7FC' },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 24,
-    paddingHorizontal: 22,
-    backgroundColor: COLORS.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  headerIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  eyebrow: { color: 'rgba(255,255,255,0.72)', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
-  title: { color: COLORS.white, fontSize: 27, fontWeight: '800', marginTop: 2 },
+  container: { flex: 1, backgroundColor: COLORS.canvas },
   content: { padding: 20, paddingBottom: 40, gap: 13 },
   infoCard: {
     padding: 16,
-    borderRadius: 18,
+    borderRadius: 26,
     backgroundColor: '#E7F8F1',
     flexDirection: 'row',
     alignItems: 'center',
@@ -133,7 +108,7 @@ const styles = StyleSheet.create({
   infoText: { flex: 1, color: '#176146', fontSize: 13, lineHeight: 19, fontWeight: '600' },
   card: {
     backgroundColor: COLORS.white,
-    borderRadius: 22,
+    borderRadius: 26,
     padding: 17,
     flexDirection: 'row',
     gap: 13,
@@ -149,11 +124,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardContent: { flex: 1 },
-  cardTitle: { color: '#102847', fontSize: 16, fontWeight: '800' },
-  cardMessage: { color: '#52657D', fontSize: 14, lineHeight: 20, marginTop: 5 },
+  cardTitle: { color: COLORS.text, fontSize: 16, fontWeight: '700' },
+  cardMessage: { color: COLORS.textSecondary, fontSize: 14, lineHeight: 20, marginTop: 5 },
   cardDate: { color: COLORS.primary, fontSize: 12, fontWeight: '700', marginTop: 9 },
   empty: { alignItems: 'center', paddingVertical: 70 },
-  emptyTitle: { color: '#1E3653', fontSize: 19, fontWeight: '800', marginTop: 12 },
-  emptyText: { color: '#7C8DA4', fontSize: 14, marginTop: 5 },
+  emptyTitle: { color: COLORS.text, fontSize: 19, fontWeight: '700', marginTop: 12 },
+  emptyText: { color: COLORS.textSecondary, fontSize: 14, marginTop: 5 },
   error: { color: '#C53C3C', textAlign: 'center', paddingVertical: 25 },
 });

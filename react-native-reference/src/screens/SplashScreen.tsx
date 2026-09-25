@@ -1,12 +1,12 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
+import React, { useEffect } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
-  useSharedValue,
   useAnimatedStyle,
+  useSharedValue,
+  withDelay,
   withSpring,
   withTiming,
-  withDelay,
 } from 'react-native-reanimated';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
@@ -67,8 +67,8 @@ export default function SplashScreen() {
       </Animated.View>
 
       <Animated.View style={[styles.textContainer, textAnimatedStyle]}>
-        <Text style={styles.appName}>EVEX Ticket</Text>
-        <Text style={styles.subtitle}>Réservation simplifiée</Text>
+        <Text style={styles.appName}>EVEX</Text>
+        <Text style={styles.subtitle}>Votre prochain voyage commence ici.</Text>
       </Animated.View>
     </View>
   );
@@ -82,12 +82,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   videoContainer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: COLORS.white,
     overflow: 'hidden',
   },
   video: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: COLORS.white,
   },
   textContainer: {

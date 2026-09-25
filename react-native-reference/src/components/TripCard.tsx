@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Trip } from '../types';
 import { COLORS } from '../constants/colors';
-import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
 
 const formatTime = (time?: string) => {
   if (!time) return '00:00';
@@ -35,7 +34,7 @@ const formatPrice = (price: number) => {
   return `${new Intl.NumberFormat('fr-FR', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(price)} F CFA`;
+  }).format(price)} F`;
 };
 
 interface TripCardProps {
@@ -51,6 +50,7 @@ export default function TripCard({ trip, onPress }: TripCardProps) {
   const arrivalTime = trip.trip_info?.arrival_time || '00:00';
   const price = parseFloat(trip.trip_info?.price || '0') || 0;
   const availableSeats = trip.available_seats || 0;
+  const isFull = availableSeats <= 0;
 
   return (
     <TouchableOpacity
@@ -58,52 +58,42 @@ export default function TripCard({ trip, onPress }: TripCardProps) {
       onPress={onPress}
       activeOpacity={0.9}
     >
-      {/* SECTION HAUTE : COMPAGNIE & PRIX */}
       <View style={styles.topSection}>
-        <View style={styles.companyRow}>
-          <Ionicons name="bus" size={20} color="#1E293B" />
-          <Text style={styles.companyName}>{companyName}</Text>
+        <View style={styles.companyIcon}>
+          <Ionicons name="bus-outline" size={22} color="#0066CC" />
         </View>
-        <Text style={styles.priceText}>{formatPrice(price)}</Text>
-      </View>
-
-      {/* SECTION INFOS : DATE & PLACES */}
-      <View style={styles.infoRow}>
-        <View style={styles.dateBadge}>
-          <Ionicons name="calendar" size={14} color="#64748B" />
-          <Text style={styles.dateText}>{formatDate(trip.date)}</Text>
+        <View style={styles.companyCopy}>
+          <Text style={styles.companyName} numberOfLines={2}>{companyName}</Text>
+          <View style={styles.dateBadge}>
+            <Ionicons name="calendar-outline" size={12} color="#777777" />
+            <Text style={styles.dateText}>{formatDate(trip.date)}</Text>
+          </View>
         </View>
-        <Text style={styles.seatsText}>{availableSeats} places</Text>
-      </View>
-
-      {/* LIGNE DE SÉPARATION STYLE TICKET (PERFORATIONS) */}
-      <View style={styles.dividerContainer}>
-        <View style={styles.leftCutout} />
-        <View style={styles.dashedLine} />
-        <View style={styles.rightCutout} />
+        <View style={styles.priceColumn}>
+          <Text style={styles.priceText}>{formatPrice(price)}</Text>
+          <Text style={[styles.seatsText, isFull && styles.seatsTextFull]}>
+            {isFull ? 'Complet' : `${availableSeats} places`}
+          </Text>
+        </View>
       </View>
 
       {/* SECTION TRAJET */}
       <View style={styles.routeRow}>
-        <View style={styles.routePoint}>
-          <Text style={styles.cityLabel}>Départ</Text>
-          <Text style={styles.cityName}>{departureCityName}</Text>
-          <Text style={styles.timeText}>{formatTime(departureTime)}</Text>
-        </View>
+        <Text style={styles.timeText}>{formatTime(departureTime)}</Text>
 
         <View style={styles.visualContainer}>
           <View style={styles.line} />
           <View style={styles.busCircle}>
-            <Ionicons name="bus" size={14} color={COLORS.primary} />
+            <Ionicons name="bus-outline" size={14} color={COLORS.primary} />
           </View>
           <View style={styles.line} />
         </View>
 
-        <View style={[styles.routePoint, { alignItems: 'flex-end' }]}>
-          <Text style={styles.cityLabel}>Arrivée</Text>
-          <Text style={styles.cityName}>{arrivalCityName}</Text>
-          <Text style={styles.timeText}>{formatTime(arrivalTime)}</Text>
-        </View>
+        <Text style={styles.timeText}>{formatTime(arrivalTime)}</Text>
+      </View>
+      <View style={styles.citiesRow}>
+        <Text style={styles.cityName}>{departureCityName}</Text>
+        <Text style={[styles.cityName, { textAlign: 'right' }]}>{arrivalCityName}</Text>
       </View>
 
       {/* FOOTER : TYPE & BOUTON */}
@@ -111,8 +101,12 @@ export default function TripCard({ trip, onPress }: TripCardProps) {
         <View style={styles.typeTag}>
           <Text style={styles.typeTagText}>{trip.trip_info?.bus_type || 'Standard'}</Text>
         </View>
-        <TouchableOpacity style={styles.bookButton} onPress={onPress}>
-          <Text style={styles.bookButtonText}>Réserver</Text>
+        <TouchableOpacity
+          style={[styles.bookButton, isFull && styles.bookButtonFull]}
+          onPress={onPress}
+        >
+          <Text style={styles.bookButtonText}>{isFull ? "Liste d'attente" : 'Réserver'}</Text>
+          <Ionicons name="arrow-forward" size={15} color={COLORS.white} />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -121,162 +115,31 @@ export default function TripCard({ trip, onPress }: TripCardProps) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: COLORS.white,
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 16,
-    // Ombre douce iOS
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 3,
-    overflow: 'visible',
+    backgroundColor: COLORS.white, borderRadius: 28, padding: 21, marginBottom: 18,
+    shadowColor: '#20364C', shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.04, shadowRadius: 20, elevation: 2,
   },
-  topSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  companyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  companyName: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#1E293B',
-  },
-  priceText: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: COLORS.primary, // #007AFF
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  dateBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  dateText: {
-    fontSize: 14,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  seatsText: {
-    fontSize: 13,
-    color: '#94A3B8',
-    fontWeight: '600',
-  },
-  // Effet Ticket
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: -20, // Pour faire sortir les encoches
-    marginBottom: 20,
-    height: 20,
-  },
-  leftCutout: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#F8FAFC', // Couleur du fond de l'app
-    marginLeft: -10,
-  },
-  rightCutout: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#F8FAFC',
-    marginRight: -10,
-  },
-  dashedLine: {
-    flex: 1,
-    height: 1,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderStyle: 'dashed',
-    marginHorizontal: 10,
-  },
-  routeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  routePoint: {
-    flex: 1,
-  },
-  cityLabel: {
-    fontSize: 10,
-    color: '#94A3B8',
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  cityName: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#1E293B',
-    marginVertical: 2,
-  },
-  timeText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  visualContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: 80,
-    justifyContent: 'center',
-  },
-  line: {
-    flex: 1,
-    height: 2,
-    backgroundColor: '#F1F5F9',
-  },
-  busCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#F1F5F9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 4,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  typeTag: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  typeTagText: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '700',
-  },
-  bookButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 14,
-  },
-  bookButtonText: {
-    color: COLORS.white,
-    fontWeight: '800',
-    fontSize: 15,
-  },
+  topSection: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 23, gap: 10 },
+  companyIcon: { width: 38, height: 38, borderRadius: 14, backgroundColor: '#F7F7F8', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  companyCopy: { flex: 1, minWidth: 0 },
+  companyName: { fontSize: 17, fontWeight: '600', color: '#080808' },
+  dateBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
+  dateText: { fontSize: 12, color: '#777777', fontWeight: '500', flexShrink: 1 },
+  priceColumn: { alignItems: 'flex-end', flexShrink: 0 },
+  priceText: { fontSize: 21, fontWeight: '800', color: '#0066CC' },
+  seatsText: { fontSize: 12, color: '#999999', marginTop: 4, fontWeight: '500' },
+  seatsTextFull: { color: '#EF4444', fontWeight: '700' },
+  routeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  timeText: { fontSize: 21, fontWeight: '700', color: '#080808' },
+  visualContainer: { flexDirection: 'row', alignItems: 'center', flex: 1, marginHorizontal: 13, transform: [{ translateY: 8 }] },
+  line: { flex: 1, borderTopWidth: 1, borderStyle: 'dashed', borderColor: '#DEDEDE' },
+  busCircle: { width: 24, height: 24, justifyContent: 'center', alignItems: 'center' },
+  citiesRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 18 },
+  cityName: { fontSize: 13, fontWeight: '500', color: '#777777', flex: 1 },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  typeTag: { backgroundColor: '#F7F7F8', borderWidth: 1, borderColor: '#E8E8E8', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, flexShrink: 1 },
+  typeTagText: { fontSize: 12, color: '#777777', fontWeight: '500' },
+  bookButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#0066CC', paddingHorizontal: 21, minHeight: 42, borderRadius: 24 },
+  bookButtonFull: { backgroundColor: '#F59E0B' },
+  bookButtonText: { color: COLORS.white, fontWeight: '600', fontSize: 14 },
 });

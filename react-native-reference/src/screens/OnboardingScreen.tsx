@@ -1,24 +1,24 @@
-import React, { useState, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  Image,
-  Dimensions,
-  TouchableOpacity,
-} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
-import { RootStackParamList } from '../types';
+import React, { useRef, useState } from 'react';
+import {
+  FlatList,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Button from '../components/Button';
+import ScreenHeader from '../components/ScreenHeader';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
-import Button from '../components/Button';
+import { RootStackParamList } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Onboarding'>;
 
-const { width } = Dimensions.get('window');
 
 const slides = [
   {
@@ -42,6 +42,8 @@ const slides = [
 ];
 
 export default function OnboardingScreen({ navigation }: Props) {
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
 
@@ -66,19 +68,20 @@ export default function OnboardingScreen({ navigation }: Props) {
   }).current;
 
   const renderItem = ({ item }: any) => (
-    <View style={styles.slide}>
-      <View style={styles.imageContainer}>
+    <ScrollView style={{ width }} contentContainerStyle={styles.slide} showsVerticalScrollIndicator={false}>
+      <View style={[styles.imageContainer, { height: height * 0.24 }]}>
         <Image source={{ uri: item.image }} style={styles.image} />
       </View>
       <View style={styles.textContainer}>
         <Text style={styles.title}>{item.title}</Text>
         <Text style={styles.description}>{item.description}</Text>
       </View>
-    </View>
+    </ScrollView>
   );
 
   return (
     <View style={styles.container}>
+      <ScreenHeader title="Bienvenue à bord" subtitle="Tous vos voyages, au même endroit." />
       <FlatList
         ref={flatListRef}
         data={slides}
@@ -91,7 +94,7 @@ export default function OnboardingScreen({ navigation }: Props) {
         keyExtractor={(item) => item.id}
       />
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(20, insets.bottom) }]}>
         <View style={styles.pagination}>
           {slides.map((_, index) => (
             <View
@@ -127,30 +130,23 @@ export default function OnboardingScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.canvas,
   },
-  slide: {
-    width,
-    flex: 1,
-  },
-  imageContainer: {
-    flex: 1,
-    width: '100%',
-  },
+  slide: { paddingBottom: 20 },
+  imageContainer: { margin: 20, marginBottom: 0, borderRadius: 26, overflow: 'hidden' },
   image: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
   },
   textContainer: {
-    flex: 1,
-    paddingHorizontal: 32,
-    paddingTop: 48,
+    paddingHorizontal: 20,
+    paddingTop: 20,
     justifyContent: 'flex-start',
     alignItems: 'center',
   },
   title: {
-    fontSize: FONT_SIZES['3xl'],
+    fontSize: 23,
     fontWeight: FONT_WEIGHTS.semibold,
     color: COLORS.text,
     textAlign: 'center',
@@ -164,7 +160,7 @@ const styles = StyleSheet.create({
     maxWidth: 320,
   },
   footer: {
-    paddingHorizontal: 32,
+    paddingHorizontal: 20,
     paddingBottom: 48,
   },
   pagination: {

@@ -26,6 +26,8 @@ interface SelectProps {
   options: Option[];
   leftIcon?: React.ReactNode;
   containerStyle?: any;
+  /** Remplace le déclencheur par défaut (boîte avec bordure) par un rendu personnalisé. */
+  renderTrigger?: (params: { displayValue: string; openModal: () => void }) => React.ReactNode;
 }
 
 export default function Select({
@@ -36,23 +38,29 @@ export default function Select({
   options,
   leftIcon,
   containerStyle,
+  renderTrigger,
 }: SelectProps) {
   const [showModal, setShowModal] = useState(false);
   const selectedOption = options.find(option => option.name === value);
+  const displayValue = selectedOption?.name || placeholder;
 
   return (
     <View style={[styles.container, containerStyle]}>
       {label && <Text style={styles.label}>{label}</Text>}
-      <TouchableOpacity
-        style={styles.selectContainer}
-        onPress={() => setShowModal(true)}
-      >
-        {leftIcon && <View style={styles.leftIcon}>{leftIcon}</View>}
-        <Text style={[styles.selectText, !value && styles.placeholderText]}>
-          {selectedOption?.name || placeholder}
-        </Text>
-        <Ionicons name="chevron-down" size={20} color={COLORS.textSecondary} />
-      </TouchableOpacity>
+      {renderTrigger ? (
+        renderTrigger({ displayValue, openModal: () => setShowModal(true) })
+      ) : (
+        <TouchableOpacity
+          style={styles.selectContainer}
+          onPress={() => setShowModal(true)}
+        >
+          {leftIcon && <View style={styles.leftIcon}>{leftIcon}</View>}
+          <Text style={[styles.selectText, !value && styles.placeholderText]}>
+            {displayValue}
+          </Text>
+          <Ionicons name="chevron-down" size={20} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+      )}
 
       <Modal
         visible={showModal}
@@ -121,7 +129,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.white,
-    borderRadius: 16,
+    borderRadius: 20,
     height: 56,
     paddingHorizontal: 16,
     borderWidth: 1,

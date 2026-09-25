@@ -1,3 +1,6 @@
+import { Ionicons } from '@expo/vector-icons';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import * as Location from 'expo-location';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -12,11 +15,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import * as Location from 'expo-location';
 import MapView, { Marker, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ScreenHeader from '../components/ScreenHeader';
 import StarRating from '../components/StarRating';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
@@ -258,25 +259,16 @@ export default function CompanyDetailsScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={23} color={COLORS.text} />
-        </TouchableOpacity>
-        <Text style={styles.topTitle} numberOfLines={1}>{company.name}</Text>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            if (company.website) void Linking.openURL(company.website);
-          }}
-          disabled={!company.website}
-        >
-          <Ionicons
-            name="globe-outline"
-            size={21}
-            color={company.website ? COLORS.primary : '#CBD5E1'}
-          />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title={company.name}
+        subtitle="Gares, départs et avis voyageurs"
+        onBack={() => navigation.goBack()}
+        action={company.website ? (
+          <TouchableOpacity style={styles.websiteAction} onPress={() => void Linking.openURL(company.website!)} accessibilityLabel="Site de la compagnie">
+            <Ionicons name="globe-outline" size={23} color={COLORS.white} />
+          </TouchableOpacity>
+        ) : undefined}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -638,39 +630,15 @@ export default function CompanyDetailsScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F8FC' },
-  topBar: {
-    paddingHorizontal: 18,
-    paddingBottom: 12,
-    backgroundColor: COLORS.white,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E8EEF6',
-  },
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 15,
-    backgroundColor: '#F1F5F9',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  topTitle: {
-    flex: 1,
-    marginHorizontal: 12,
-    textAlign: 'center',
-    color: COLORS.text,
-    fontSize: FONT_SIZES.base,
-    fontWeight: FONT_WEIGHTS.bold,
-  },
-  content: { padding: 18, paddingBottom: 50 },
+  websiteAction: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.16)' },
+  container: { flex: 1, backgroundColor: COLORS.canvas },
+  content: { padding: 20, paddingBottom: 50 },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    backgroundColor: '#F5F8FC',
+    backgroundColor: COLORS.canvas,
   },
   loadingText: { marginTop: 10, color: COLORS.textSecondary },
   errorText: {
@@ -680,14 +648,14 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 16,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.action,
     paddingHorizontal: 20,
     paddingVertical: 11,
-    borderRadius: 14,
+    borderRadius: 28,
   },
   retryText: { color: COLORS.white, fontWeight: FONT_WEIGHTS.bold },
   hero: {
-    borderRadius: 24,
+    borderRadius: 26,
     padding: 18,
     backgroundColor: COLORS.white,
     borderWidth: 1,
@@ -713,14 +681,14 @@ const styles = StyleSheet.create({
   partnerLabel: {
     color: COLORS.primary,
     fontSize: 9,
-    fontWeight: '800',
+    fontWeight: '700',
     letterSpacing: 1,
   },
   companyName: {
     marginTop: 3,
     color: COLORS.text,
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   ratingRow: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
   reviewCount: { marginLeft: 6, color: COLORS.textMuted, fontSize: 10 },
@@ -734,7 +702,7 @@ const styles = StyleSheet.create({
   contactButton: {
     flex: 1,
     minHeight: 44,
-    borderRadius: 14,
+    borderRadius: 28,
     backgroundColor: '#EDF5FF',
     flexDirection: 'row',
     alignItems: 'center',
@@ -756,18 +724,18 @@ const styles = StyleSheet.create({
   sectionEyebrow: {
     color: COLORS.primary,
     fontSize: 9,
-    fontWeight: '800',
+    fontWeight: '700',
     letterSpacing: 1.1,
   },
   sectionTitle: {
     marginTop: 3,
     color: COLORS.text,
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   sectionCount: { color: COLORS.textMuted, fontSize: FONT_SIZES.sm },
   mapCard: {
-    borderRadius: 22,
+    borderRadius: 26,
     overflow: 'hidden',
     backgroundColor: COLORS.white,
     borderWidth: 1,
@@ -785,7 +753,7 @@ const styles = StyleSheet.create({
   mapLayerButton: {
     minHeight: 44,
     paddingHorizontal: 12,
-    borderRadius: 14,
+    borderRadius: 28,
     borderWidth: 1,
     borderColor: 'rgba(148,163,184,0.38)',
     backgroundColor: 'rgba(255,255,255,0.96)',
@@ -838,7 +806,7 @@ const styles = StyleSheet.create({
   noMapCard: {
     alignItems: 'center',
     padding: 24,
-    borderRadius: 22,
+    borderRadius: 26,
     backgroundColor: COLORS.white,
     borderWidth: 1,
     borderColor: '#E5EDF7',
@@ -858,7 +826,7 @@ const styles = StyleSheet.create({
   stationsList: { marginTop: 13, gap: 10 },
   stationCard: {
     padding: 13,
-    borderRadius: 18,
+    borderRadius: 26,
     backgroundColor: COLORS.white,
     borderWidth: 1,
     borderColor: '#E5EDF7',
@@ -873,7 +841,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  stationRankText: { color: COLORS.primary, fontWeight: '800' },
+  stationRankText: { color: COLORS.primary, fontWeight: '700' },
   stationContent: { flex: 1, marginHorizontal: 11 },
   stationHeading: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   stationName: {
@@ -888,7 +856,7 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     backgroundColor: '#EAF8EF',
   },
-  nearestText: { color: '#15803D', fontSize: 7, fontWeight: '900' },
+  nearestText: { color: '#15803D', fontSize: 7, fontWeight: '700' },
   stationCity: {
     marginTop: 3,
     color: COLORS.primary,
@@ -902,13 +870,13 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   stationMeta: { marginTop: 5, flexDirection: 'row', gap: 10 },
-  distanceText: { color: '#15803D', fontSize: 10, fontWeight: '800' },
+  distanceText: { color: '#15803D', fontSize: 10, fontWeight: '700' },
   phoneText: { color: COLORS.textMuted, fontSize: 10 },
   routeButton: {
     width: 42,
     height: 42,
-    borderRadius: 15,
-    backgroundColor: COLORS.primary,
+    borderRadius: 21,
+    backgroundColor: COLORS.action,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -916,13 +884,13 @@ const styles = StyleSheet.create({
   ratingSummary: {
     marginTop: 26,
     padding: 18,
-    borderRadius: 22,
+    borderRadius: 26,
     backgroundColor: '#102F58',
     flexDirection: 'row',
     alignItems: 'center',
   },
   ratingScore: { width: 100, alignItems: 'center' },
-  ratingNumber: { color: COLORS.white, fontSize: 35, fontWeight: '900' },
+  ratingNumber: { color: COLORS.white, fontSize: 35, fontWeight: '700' },
   ratingTotal: { marginTop: 5, color: '#AFC4E0', fontSize: 10 },
   ratingBars: { flex: 1, marginLeft: 17, gap: 5 },
   ratingBarRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
@@ -954,7 +922,7 @@ const styles = StyleSheet.create({
     width: 165,
     padding: 11,
     borderRadius: 14,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.canvas,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
@@ -962,7 +930,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
-  bookingReference: { color: COLORS.text, fontSize: 10, fontWeight: '800' },
+  bookingReference: { color: COLORS.text, fontSize: 10, fontWeight: '700' },
   bookingRoute: { color: COLORS.textSecondary, fontSize: 10, marginTop: 3 },
   bookingTextActive: { color: COLORS.white },
   starPicker: {
@@ -987,8 +955,8 @@ const styles = StyleSheet.create({
   submitButton: {
     marginTop: 12,
     minHeight: 50,
-    borderRadius: 16,
-    backgroundColor: COLORS.primary,
+    borderRadius: 28,
+    backgroundColor: COLORS.action,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1017,7 +985,7 @@ const styles = StyleSheet.create({
   reviewCard: {
     marginTop: 11,
     padding: 15,
-    borderRadius: 18,
+    borderRadius: 26,
     backgroundColor: COLORS.white,
     borderWidth: 1,
     borderColor: '#E5EDF7',
@@ -1031,9 +999,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { color: COLORS.primary, fontWeight: '900' },
+  avatarText: { color: COLORS.primary, fontWeight: '700' },
   reviewIdentity: { flex: 1, marginHorizontal: 10 },
-  reviewerName: { color: COLORS.text, fontSize: FONT_SIZES.sm, fontWeight: '800' },
+  reviewerName: { color: COLORS.text, fontSize: FONT_SIZES.sm, fontWeight: '700' },
   reviewRoute: { marginTop: 2, color: COLORS.textMuted, fontSize: 9 },
   reviewComment: {
     marginTop: 10,

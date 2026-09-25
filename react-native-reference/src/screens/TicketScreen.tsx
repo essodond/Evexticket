@@ -1,32 +1,35 @@
-import React, { useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  Platform,
-  ActivityIndicator,
-  Image,
-  useWindowDimensions,
-} from 'react-native';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import QRCode from 'react-native-qrcode-svg';
 import { Ionicons } from '@expo/vector-icons';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
-import ViewShot, { captureRef } from 'react-native-view-shot';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import * as Sharing from 'expo-sharing';
-import { RootStackParamList } from '../types';
+import React, { useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ViewShot, { captureRef } from 'react-native-view-shot';
+import Button from '../components/Button';
+import ScreenHeader from '../components/ScreenHeader';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
-import Button from '../components/Button';
+import { RootStackParamList } from '../types';
 import { findDepartureStation } from '../utils/station';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Ticket'>;
 
 export default function TicketScreen({ navigation, route }: Props) {
+  const insets = useSafeAreaInsets();
   const { trip } = route.params;
   const viewShotRef = useRef<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -176,20 +179,12 @@ export default function TicketScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.navigate('MainTabs')}
-        >
-          <Ionicons name="arrow-back" size={24} color={COLORS.white} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Mon Ticket</Text>
-      </View>
+      <ScreenHeader title="Mon ticket" subtitle="Votre billet et toutes les informations du voyage." onBack={() => navigation.navigate('MainTabs')} />
 
       <ScrollView
         style={styles.content}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: 28 + insets.bottom }]}
       >
         <View style={styles.successBanner}>
           <View style={styles.successIcon}>
@@ -206,69 +201,69 @@ export default function TicketScreen({ navigation, route }: Props) {
           options={{ format: 'png', quality: 1 }}
           style={{ backgroundColor: COLORS.white }}
         >
-        <View style={styles.ticket} collapsable={false}>
-          <LinearGradient
-            colors={[COLORS.primary, COLORS.primaryDark]}
-            style={styles.ticketHeader}
-          >
-            <View style={styles.companyBrandRow}>
-              <View style={styles.companyLogoShell}>
-                {companyLogo ? (
-                  <Image source={{ uri: companyLogo }} style={styles.companyLogo} resizeMode="contain" />
-                ) : (
-                  <Text style={styles.companyInitials}>{companyInitials}</Text>
-                )}
-              </View>
-              <View style={styles.companyBrandContent}>
-                <Text style={styles.companyEyebrow}>COMPAGNIE</Text>
-                <Text style={styles.companyBrandName} numberOfLines={1} adjustsFontSizeToFit>{companyName}</Text>
-              </View>
-            </View>
-
-            <View style={styles.ticketHeaderTop}>
-              <View style={styles.ticketReferenceBlock}>
-                <Text style={styles.ticketNumberLabel}>RÉFÉRENCE DU BILLET</Text>
-                <Text style={styles.ticketNumber} numberOfLines={1} adjustsFontSizeToFit>{ticketNumber}</Text>
-              </View>
-              <View style={styles.passengerBadge}>
-                <Ionicons name="bus-outline" size={14} color={COLORS.white} />
-                <Text style={styles.passengerBadgeText}>Confirmé</Text>
-              </View>
-            </View>
-
-            <View style={styles.passengerPanel}>
-              <View style={styles.passengerIcon}>
-                <Ionicons name="person" size={20} color={COLORS.primaryDark} />
-              </View>
-              <View style={styles.passengerContent}>
-                <Text style={styles.passengerLabel}>VOYAGEUR</Text>
-                <Text style={styles.passengerName} numberOfLines={1} adjustsFontSizeToFit>{passengerName}</Text>
-              </View>
-              <View style={styles.seatPill}>
-                <Text style={styles.seatPillLabel}>SIÈGE</Text>
-                <Text style={styles.seatPillValue}>{seatNumber}</Text>
-              </View>
-            </View>
-
-            <View style={styles.ticketRoute}>
-              <View style={styles.ticketRouteItem}>
-                <Text style={styles.ticketRouteLabel}>Départ</Text>
-                <Text style={styles.ticketRouteCity} numberOfLines={2}>{fromCity}</Text>
-                <Text style={styles.ticketRouteTime}>{departureTime}</Text>
+          <View style={styles.ticket} collapsable={false}>
+            <LinearGradient
+              colors={[COLORS.primary, COLORS.primaryDark]}
+              style={styles.ticketHeader}
+            >
+              <View style={styles.companyBrandRow}>
+                <View style={styles.companyLogoShell}>
+                  {companyLogo ? (
+                    <Image source={{ uri: companyLogo }} style={styles.companyLogo} resizeMode="contain" />
+                  ) : (
+                    <Text style={styles.companyInitials}>{companyInitials}</Text>
+                  )}
+                </View>
+                <View style={styles.companyBrandContent}>
+                  <Text style={styles.companyEyebrow}>COMPAGNIE</Text>
+                  <Text style={styles.companyBrandName} numberOfLines={1} adjustsFontSizeToFit>{companyName}</Text>
+                </View>
               </View>
 
-              <View style={styles.ticketRouteLine}>
-                <View style={styles.ticketRouteLineDot} />
-                <Ionicons name="location" size={20} color="rgba(255,255,255,0.9)" />
-                <View style={styles.ticketRouteLineDot} />
+              <View style={styles.ticketHeaderTop}>
+                <View style={styles.ticketReferenceBlock}>
+                  <Text style={styles.ticketNumberLabel}>RÉFÉRENCE DU BILLET</Text>
+                  <Text style={styles.ticketNumber} numberOfLines={1} adjustsFontSizeToFit>{ticketNumber}</Text>
+                </View>
+                <View style={styles.passengerBadge}>
+                  <Ionicons name="bus-outline" size={14} color={COLORS.white} />
+                  <Text style={styles.passengerBadgeText}>Confirmé</Text>
+                </View>
               </View>
 
-              <View style={[styles.ticketRouteItem, styles.ticketRouteItem_end]}>
-                <Text style={styles.ticketRouteLabel}>Arrivée</Text>
-                <Text style={styles.ticketRouteCity} numberOfLines={2}>{toCity}</Text>
-                <Text style={styles.ticketRouteTime}>{arrivalTime}</Text>
+              <View style={styles.passengerPanel}>
+                <View style={styles.passengerIcon}>
+                  <Ionicons name="person" size={20} color={COLORS.primaryDark} />
+                </View>
+                <View style={styles.passengerContent}>
+                  <Text style={styles.passengerLabel}>VOYAGEUR</Text>
+                  <Text style={styles.passengerName} numberOfLines={1} adjustsFontSizeToFit>{passengerName}</Text>
+                </View>
+                <View style={styles.seatPill}>
+                  <Text style={styles.seatPillLabel}>SIÈGE</Text>
+                  <Text style={styles.seatPillValue}>{seatNumber}</Text>
+                </View>
               </View>
-            </View>
+
+              <View style={styles.ticketRoute}>
+                <View style={styles.ticketRouteItem}>
+                  <Text style={styles.ticketRouteLabel}>Départ</Text>
+                  <Text style={styles.ticketRouteCity} numberOfLines={2}>{fromCity}</Text>
+                  <Text style={styles.ticketRouteTime}>{departureTime}</Text>
+                </View>
+
+                <View style={styles.ticketRouteLine}>
+                  <View style={styles.ticketRouteLineDot} />
+                  <Ionicons name="location" size={20} color="rgba(255,255,255,0.9)" />
+                  <View style={styles.ticketRouteLineDot} />
+                </View>
+
+                <View style={[styles.ticketRouteItem, styles.ticketRouteItem_end]}>
+                  <Text style={styles.ticketRouteLabel}>Arrivée</Text>
+                  <Text style={styles.ticketRouteCity} numberOfLines={2}>{toCity}</Text>
+                  <Text style={styles.ticketRouteTime}>{arrivalTime}</Text>
+                </View>
+              </View>
 
               <View style={styles.ticketHeaderBottom}>
                 <View>
@@ -280,30 +275,30 @@ export default function TicketScreen({ navigation, route }: Props) {
                   <Text style={styles.ticketInfoValue}>{seatNumber}</Text>
                 </View>
               </View>
-          </LinearGradient>
+            </LinearGradient>
 
-          <View style={styles.ticketDivider}>
-            <View style={styles.ticketNotchLeft} />
-            <View style={styles.ticketNotchRight} />
-            <View style={styles.ticketDividerLine} />
-          </View>
-
-          <View style={styles.ticketQR}>
-            <Text style={styles.qrLabel}>Scannez ce code à la gare</Text>
-            <View style={styles.qrCodeContainer}>
-              <QRCode
-                value={qrPayload}
-                size={qrSize}
-                backgroundColor={COLORS.white}
-                color={COLORS.black}
-              />
+            <View style={styles.ticketDivider}>
+              <View style={styles.ticketNotchLeft} />
+              <View style={styles.ticketNotchRight} />
+              <View style={styles.ticketDividerLine} />
             </View>
-            <Text style={styles.qrReference}>{ticketNumber}</Text>
-            <Text style={styles.qrNote}>
-              Présentez ce QR code au chauffeur ou à l'agent de la compagnie avant l'embarquement
-            </Text>
+
+            <View style={styles.ticketQR}>
+              <Text style={styles.qrLabel}>Scannez ce code à la gare</Text>
+              <View style={styles.qrCodeContainer}>
+                <QRCode
+                  value={qrPayload}
+                  size={qrSize}
+                  backgroundColor={COLORS.white}
+                  color={COLORS.black}
+                />
+              </View>
+              <Text style={styles.qrReference}>{ticketNumber}</Text>
+              <Text style={styles.qrNote}>
+                Présentez ce QR code au chauffeur ou à l'agent de la compagnie avant l'embarquement
+              </Text>
+            </View>
           </View>
-        </View>
         </ViewShot>
 
         {isProcessing && (
@@ -365,35 +360,13 @@ export default function TicketScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: `${COLORS.gray}33`,
-  },
-  header: {
-    backgroundColor: COLORS.primary,
-    paddingTop: 60,
-    paddingBottom: 24,
-    paddingHorizontal: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: FONT_SIZES['2xl'],
-    fontWeight: FONT_WEIGHTS.semibold,
-    color: COLORS.white,
+    backgroundColor: COLORS.canvas,
   },
   content: {
     flex: 1,
   },
   contentContainer: {
-    padding: 24,
+    padding: 20,
   },
   successBanner: {
     flexDirection: 'row',
@@ -429,13 +402,13 @@ const styles = StyleSheet.create({
   },
   ticket: {
     backgroundColor: COLORS.white,
-    borderRadius: 24,
+    borderRadius: 26,
     overflow: 'hidden',
     marginBottom: 24,
     shadowColor: COLORS.black,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
+    shadowOpacity: 0.05,
+    shadowRadius: 18,
     elevation: 8,
   },
   ticketHeader: {
@@ -712,7 +685,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 18,
     padding: 14,
-    borderRadius: 18,
+    borderRadius: 28,
     borderWidth: 1,
     borderColor: '#CFE2FF',
     backgroundColor: '#F4F8FF',
@@ -720,7 +693,7 @@ const styles = StyleSheet.create({
   stationButtonIcon: {
     width: 46,
     height: 46,
-    borderRadius: 15,
+    borderRadius: 23,
     backgroundColor: COLORS.white,
     alignItems: 'center',
     justifyContent: 'center',
@@ -753,7 +726,7 @@ const styles = StyleSheet.create({
   actionButton: {
     flex: 1,
     height: 56,
-    borderRadius: 16,
+    borderRadius: 28,
   },
   processingOverlay: {
     flexDirection: 'row',

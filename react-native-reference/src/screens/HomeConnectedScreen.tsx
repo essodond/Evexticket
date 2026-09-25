@@ -6,8 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   Platform,
-  RefreshControl, // Import RefreshControl
-  LayoutAnimation, // Import LayoutAnimation
+  RefreshControl,
+  useWindowDimensions,
   Modal,
   TouchableWithoutFeedback,
   FlatList,
@@ -15,19 +15,26 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { RootStackParamList, Trip } from '../types';
 import { COLORS } from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/fonts';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
+import { StatusBar } from 'expo-status-bar';
 import {
   getTrips,
   getCities,
   City,
-  getAIRecommendations,
   AISearchResponse,
 } from '../services/api';
 import TripCard from '../components/TripCard';
+import TravelHeaderArtwork from '../components/TravelHeaderArtwork';
+import SwipeToHideCard from '../components/SwipeToHideCard';
 import Select from '../components/Select';
-import FloatingTravelAssistant from '../components/FloatingTravelAssistant';
+import FloatingTravelAssistant, {
+  FloatingTravelAssistantHandle,
+} from '../components/FloatingTravelAssistant';
 import { useAuth } from '../contexts/AuthContext';
 import { detectCurrentDepartureCity } from '../services/location';
 
@@ -42,6 +49,10 @@ const formatLocalDate = (value: Date) => {
 
 export default function HomeConnectedScreen({ navigation }: Props) {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const [searchExpanded, setSearchExpanded] = useState(true);
+  const isFocused = useIsFocused();
   const canManageTracking = ['AGENT_GUICHET', 'ADMIN_COMPAGNIE', 'SUPER_ADMIN'].includes(
     user?.role ?? '',
   );
@@ -56,18 +67,20 @@ export default function HomeConnectedScreen({ navigation }: Props) {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false); // Nouvel état pour le rafraîchissement
-  const [isSearchCollapsed, setIsSearchCollapsed] = useState(true); // État pour la barre de recherche dépliable
   const [cities, setCities] = useState<City[]>([]);
   const [companies, setCompanies] = useState<{ id: string | number; name: string }[]>([]);
   const [loadingCities, setLoadingCities] = useState<boolean>(true);
   const [citiesError, setCitiesError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'departure' | 'price' | 'duration' | 'seats'>('departure');
   const [aiResultsActive, setAiResultsActive] = useState(false);
-  const [recommendations, setRecommendations] = useState<Trip[]>([]);
   const [currentCity, setCurrentCity] = useState<City | null>(null);
   const [locating, setLocating] = useState(false);
   const [locationNotice, setLocationNotice] = useState<string | null>(null);
   const locationRequestStarted = useRef(false);
+  const assistantRef = useRef<FloatingTravelAssistantHandle>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const tripsSectionY = useRef(0);
+  const dragStartY = useRef<number | null>(null);
 
   // Récupérer la liste des villes
   useEffect(() => {
@@ -77,7 +90,7 @@ export default function HomeConnectedScreen({ navigation }: Props) {
         const citiesData = await getCities();
         setCities(citiesData);
         setCitiesError(null);
-      } catch (e) {
+      } catch(e) {
         setCitiesError(e instanceof Error ? e.message : 'Erreur de chargement des villes');
         console.error('Erreur lors de la récupération des villes:', e);
       } finally {
@@ -88,41 +101,31 @@ export default function HomeConnectedScreen({ navigation }: Props) {
     fetchCities();
   }, []);
 
-  const loadNearbyRecommendations = useCallback(async () => {
-    if (!cities.length) return;
+  const locateDepartureCity = useCallback(async () => {
+    if(!cities.length) return;
     setLocating(true);
     setLocationNotice(null);
     try {
       const detected = await detectCurrentDepartureCity(cities);
       setCurrentCity(detected.city);
       setSearchFrom((current) => current || detected.city.name);
-      const nearbyTrips = await getAIRecommendations(detected.city.name);
-      setRecommendations(nearbyTrips);
-      setLocationNotice(
-        nearbyTrips.length
-          ? `Les suggestions partent uniquement de ${detected.city.name}.`
-          : `Aucun départ disponible depuis ${detected.city.name} pour le moment.`,
-      );
-    } catch (locationError) {
+    } catch(locationError) {
       setCurrentCity(null);
       setLocationNotice(
         locationError instanceof Error
           ? locationError.message
           : 'Impossible de déterminer votre ville actuelle.',
       );
-      getAIRecommendations()
-        .then(setRecommendations)
-        .catch(() => setRecommendations([]));
     } finally {
       setLocating(false);
     }
   }, [cities]);
 
   useEffect(() => {
-    if (!cities.length || locationRequestStarted.current) return;
+    if(!cities.length || locationRequestStarted.current) return;
     locationRequestStarted.current = true;
-    void loadNearbyRecommendations();
-  }, [cities, loadNearbyRecommendations]);
+    void locateDepartureCity();
+  }, [cities, locateDepartureCity]);
 
   const handleAIResults = useCallback((response: AISearchResponse) => {
     setTrips(response.trips);
@@ -130,8 +133,11 @@ export default function HomeConnectedScreen({ navigation }: Props) {
     setSearchTo(response.criteria.arrival_city || '');
     setSelectedCompany('');
     setAiResultsActive(true);
+    setSearchExpanded(false);
+    setShowDatePicker(false);
+    scrollViewRef.current?.scrollTo({ y: tripsSectionY.current, animated: true });
     setError(null);
-    if (response.criteria.travel_date) {
+    if(response.criteria.travel_date) {
       setDate(new Date(`${response.criteria.travel_date}T12:00:00`));
     }
   }, []);
@@ -161,16 +167,13 @@ export default function HomeConnectedScreen({ navigation }: Props) {
 
       const currentlyDisplayableTrips = fetchedTrips
         .filter((trip) => {
-          const hasAvailableSeats = trip.available_seats > 0;
+          // Un trajet complet reste visible et cherchable tant qu'il n'est pas parti :
+          // une annulation peut libérer une place que l'utilisateur pourra alors réserver.
           const tripDepartureDateTime = new Date(`${trip.date}T${trip.trip_info.departure_time}`);
-          let shouldDisplayBasedOnTime = true;
-
-          if (isDisplayDateToday) {
-            const threeHoursInMs = 3 * 60 * 60 * 1000;
-            shouldDisplayBasedOnTime = (tripDepartureDateTime.getTime() - now.getTime()) >= threeHoursInMs;
+          if(isDisplayDateToday) {
+            return tripDepartureDateTime.getTime() > now.getTime();
           }
-
-          return hasAvailableSeats && shouldDisplayBasedOnTime;
+          return true;
         })
         .sort((a, b) => {
           const aTime = new Date(`${a.date}T${a.trip_info.departure_time}`).getTime();
@@ -178,7 +181,7 @@ export default function HomeConnectedScreen({ navigation }: Props) {
           return aTime - bTime;
         });
 
-      if (isDisplayDateToday && currentlyDisplayableTrips.length === 0) {
+      if(isDisplayDateToday && currentlyDisplayableTrips.length === 0) {
         const nextDay = new Date(displayDate);
         nextDay.setDate(displayDate.getDate() + 1);
         setDate(nextDay);
@@ -186,7 +189,7 @@ export default function HomeConnectedScreen({ navigation }: Props) {
       } else {
         setTrips(currentlyDisplayableTrips);
       }
-    } catch (e) {
+    } catch(e) {
       setError(e instanceof Error ? e.message : 'Erreur de chargement des trajets');
     } finally {
       setLoading(false);
@@ -202,16 +205,27 @@ export default function HomeConnectedScreen({ navigation }: Props) {
     setAiResultsActive(false);
     setRefreshing(true);
     fetchAndFilterTrips();
-    void loadNearbyRecommendations();
-  }, [fetchAndFilterTrips, loadNearbyRecommendations]);
+  }, [fetchAndFilterTrips]);
 
   const onDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(Platform.OS === 'ios');
-    if (selectedDate) {
+    if(selectedDate) {
       setDate(selectedDate);
       setDisplayDate(selectedDate); // Mettre à jour displayDate aussi
     }
   };
+
+  const handleSwapCities = useCallback(() => {
+    setSearchFrom(searchTo);
+    setSearchTo(searchFrom);
+  }, [searchFrom, searchTo]);
+
+  const handleSearchPress = useCallback(() => {
+    setAiResultsActive(false);
+    setSearchExpanded(false);
+    setShowDatePicker(false);
+    scrollViewRef.current?.scrollTo({ y: tripsSectionY.current, animated: true });
+  }, []);
 
   const filteredTrips = (Array.isArray(trips) ? trips : [])
     .filter((trip) => {
@@ -251,7 +265,7 @@ export default function HomeConnectedScreen({ navigation }: Props) {
   const getSortedTrips = () => {
     const trips = [...filteredTrips];
 
-    switch (sortBy) {
+    switch(sortBy) {
       case 'price':
         return trips.sort((a, b) => {
           const priceA = parseFloat(a.trip_info?.price || '0') || 0;
@@ -268,8 +282,8 @@ export default function HomeConnectedScreen({ navigation }: Props) {
 
       case 'seats':
         return trips.sort((a, b) => {
-          const seatsA = a.trip_info?.available_seats || 0;
-          const seatsB = b.trip_info?.available_seats || 0;
+          const seatsA = a.available_seats || 0;
+          const seatsB = b.available_seats || 0;
           return seatsB - seatsA;
         });
 
@@ -287,103 +301,147 @@ export default function HomeConnectedScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View style={styles.greetingContainer}>
-            <Text style={styles.greeting}>Bonjour {user?.first_name || 'Utilisateur'} 👋</Text>
-            {isSearchCollapsed && (
-              <TouchableOpacity
-                style={styles.searchIconContainer}
-                onPress={() => {
-                  LayoutAnimation.easeInEaseOut();
-                  setIsSearchCollapsed(false);
-                }}
-              >
-                <Ionicons name="search" size={24} color={COLORS.white} />
-              </TouchableOpacity>
-            )}
-          </View>
-          <View style={styles.subtitleContainer}>
-            <Text style={styles.subtitle}>Où souhaitez-vous voyager ?</Text>
-            {!isSearchCollapsed && (
-              <TouchableOpacity onPress={() => {
-                LayoutAnimation.easeInEaseOut();
-                setIsSearchCollapsed(true);
-              }}>
-                <Ionicons name="close-circle-outline" size={24} color={COLORS.white} />
-              </TouchableOpacity>
-            )}
-          </View>
+      {isFocused && <StatusBar style="light" />}
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <View
+          style={[styles.headerArtwork, { top: insets.top + 8 }]}
+          pointerEvents="none"
+          accessible={false}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
+          <TravelHeaderArtwork />
         </View>
-
-        {!isSearchCollapsed ? (
-          <View style={styles.searchContainer}>
-            <Select
-              placeholder="Ville de départ"
-              value={searchFrom}
-              onValueChange={setSearchFrom}
-              options={cities}
-              leftIcon={
-                <Ionicons name="location-outline" size={20} color={COLORS.textSecondary} />
-              }
-              containerStyle={styles.searchInput}
-            />
-
-            <Select
-              placeholder="Ville d'arrivée"
-              value={searchTo}
-              onValueChange={setSearchTo}
-              options={cities}
-              leftIcon={
-                <Ionicons name="location-outline" size={20} color={COLORS.textSecondary} />
-              }
-              containerStyle={styles.searchInput}
-            />
-
-            <Select
-              placeholder="Compagnie (tous)"
-              value={selectedCompany}
-              onValueChange={setSelectedCompany}
-              options={companies}
-              leftIcon={
-                <Ionicons name="bus" size={20} color={COLORS.textSecondary} />
-              }
-              containerStyle={styles.searchInput}
-            />
-
-            <TouchableOpacity
-              style={styles.dateButton}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <Ionicons name="calendar-outline" size={20} color={COLORS.textSecondary} />
-              <Text style={styles.dateButtonText}>
-                {date.toLocaleDateString('fr-FR')}
-              </Text>
-            </TouchableOpacity>
-
-            {showDatePicker && (
-              <DateTimePicker
-                value={date}
-                mode="date"
-                display="default"
-                onChange={onDateChange}
-                minimumDate={new Date()}
-              />
-            )}
+        <View style={styles.brandRow}>
+          <View style={styles.brandCopy}>
+            <Text style={styles.brandTitle}>EVEX</Text>
+            {searchExpanded && <Text style={styles.brandSubtitle}>VOYAGES INTERURBAINS</Text>}
           </View>
-        ) : null}
-      </View>
+          <TouchableOpacity
+            style={styles.searchToggle}
+            onPress={() => {
+              setSearchExpanded((expanded) => !expanded);
+              setShowDatePicker(false);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={searchExpanded ? 'Replier la recherche' : 'Ouvrir la recherche'}
+            accessibilityState={{ expanded: searchExpanded }}
+          >
+            <Ionicons name="search-outline" size={24} color={COLORS.white} />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.greeting}>Bonjour,  {user?.first_name || 'Utilisateur'} 👋</Text>
+        <Text style={[styles.subtitle, !searchExpanded && styles.subtitleCollapsed]}>
+          Où souhaitez-vous voyager aujourd'hui ?
+        </Text>
+        {searchExpanded && (
+          <ScrollView
+            style={{ maxHeight: windowHeight * 0.46 }}
+            contentContainerStyle={styles.expandedSearchContent}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            overScrollMode="never"
+          >
+            <LinearGradient colors={['#E1F0FF', '#FAFCFF', '#FFFFFF']} locations={[0, 0.55, 1]} style={styles.searchCard}>
+              <View style={styles.searchRow}>
+                <Select
+                  placeholder="Ville de départ"
+                  value={searchFrom}
+                  onValueChange={setSearchFrom}
+                  options={cities}
+                  containerStyle={styles.searchFieldContainer}
+                  renderTrigger={({ displayValue, openModal }) => (
+                    <TouchableOpacity onPress={openModal} style={styles.searchField}>
+                      <Text style={styles.searchFieldLabel}>DÉPART</Text>
+                      <View style={styles.searchFieldValueRow}>
+                        <Ionicons name="location-outline" size={14} color={'#0066CC'} />
+                        <Text style={styles.searchFieldValue} numberOfLines={1}>
+                          {searchFrom ? displayValue : 'Ville de départ'}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                />
 
+                <TouchableOpacity style={styles.swapButton} onPress={handleSwapCities} accessibilityLabel="Inverser le départ et l’arrivée">
+                  <Ionicons name="swap-horizontal" size={20} color={'#0066CC'} />
+                </TouchableOpacity>
+
+                <Select
+                  placeholder="Ville d'arrivée"
+                  value={searchTo}
+                  onValueChange={setSearchTo}
+                  options={cities}
+                  containerStyle={styles.searchFieldContainer}
+                  renderTrigger={({ displayValue, openModal }) => (
+                    <TouchableOpacity onPress={openModal} style={[styles.searchField, styles.searchFieldEnd]}>
+                      <Text style={styles.searchFieldLabel}>ARRIVÉE</Text>
+                      <View style={[styles.searchFieldValueRow, styles.searchFieldValueRowEnd]}>
+                        <Text style={styles.searchFieldValue} numberOfLines={1}>
+                          {searchTo ? displayValue : "Ville d'arrivée"}
+                        </Text>
+                        <Ionicons name="location-outline" size={14} color={'#0066CC'} />
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                />
+              </View>
+
+              <View style={styles.searchDivider} />
+
+              <TouchableOpacity style={styles.dateRow} onPress={() => setShowDatePicker(true)}>
+                <Ionicons name="calendar-outline" size={18} color={COLORS.textSecondary} />
+                <Text style={styles.dateRowText}>
+                  {date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+
+              {showDatePicker && (
+                <DateTimePicker
+                  value={date}
+                  mode="date"
+                  display="default"
+                  onChange={onDateChange}
+                  minimumDate={new Date()}
+                />
+              )}
+
+              <TouchableOpacity style={styles.searchButton} onPress={handleSearchPress}>
+                <Ionicons name="search" size={18} color={COLORS.white} />
+                <Text style={styles.searchButtonText}>Rechercher des trajets</Text>
+              </TouchableOpacity>
+            </LinearGradient>
+
+          </ScrollView>
+        )}
+      </View>
       <ScrollView
+        ref={scrollViewRef}
         style={styles.content}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: 110 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.contentContainer}
-        refreshControl={ // Ajout du RefreshControl
+        contentInsetAdjustmentBehavior="never"
+        overScrollMode="never"
+        alwaysBounceVertical
+        scrollEventThrottle={16}
+        onScrollBeginDrag={(event) => { dragStartY.current = event.nativeEvent.contentOffset.y; }}
+        onScroll={(event) => {
+          // Collapse only on an upward user scroll, never during pull-to-refresh or a programmatic scroll.
+          if(searchExpanded && dragStartY.current !== null && event.nativeEvent.contentOffset.y > Math.max(0, dragStartY.current) + 12) {
+            dragStartY.current = null;
+            setSearchExpanded(false);
+            setShowDatePicker(false);
+          }
+        }}
+        onScrollEndDrag={() => { dragStartY.current = null; }}
+        refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[COLORS.primary]} // Couleur de l'indicateur de rafraîchissement
+            colors={[COLORS.primary]}
             tintColor={COLORS.primary}
+            progressBackgroundColor="#F7F7F8"
           />
         }
       >
@@ -405,101 +463,64 @@ export default function HomeConnectedScreen({ navigation }: Props) {
         )}
 
         {!aiResultsActive && (
-          <View style={styles.locationCard}>
-            <View style={styles.locationIcon}>
-              <Ionicons
-                name={currentCity ? 'navigate' : 'location-outline'}
-                size={22}
-                color={COLORS.primary}
-              />
-            </View>
-            <View style={styles.locationContent}>
-              <Text style={styles.locationEyebrow}>DÉPART AUTOUR DE MOI</Text>
-              <Text style={styles.locationTitle}>
-                {locating
-                  ? 'Localisation en cours…'
-                  : currentCity
-                    ? `Vous êtes à ${currentCity.name}`
-                    : 'Localisation non disponible'}
-              </Text>
-              {locationNotice && (
-                <Text style={styles.locationText}>{locationNotice}</Text>
-              )}
-            </View>
-            <TouchableOpacity
-              style={styles.locationRefresh}
-              onPress={() => void loadNearbyRecommendations()}
-              disabled={locating}
-              accessibilityLabel="Actualiser ma position"
-            >
-              <Ionicons
-                name="refresh"
-                size={19}
-                color={locating ? COLORS.textMuted : COLORS.primary}
-              />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {!aiResultsActive && recommendations.length > 0 && (
-          <View style={styles.recommendationSection}>
-            <View style={styles.recommendationHeader}>
-              <View>
-                <Text style={styles.recommendationEyebrow}>
-                  {currentCity ? `AU DÉPART DE ${currentCity.name.toUpperCase()}` : 'POUR VOUS'}
-                </Text>
-                <Text style={styles.recommendationTitle}>
-                  {currentCity ? 'Tickets proches de vous' : 'Voyages recommandés'}
-                </Text>
+          <SwipeToHideCard
+            key={user?.id ?? 'guest'}
+            storageKey={`evex:home:location-card:${user?.id ?? 'guest'}`}
+          >
+            <View style={styles.locationCard}>
+              <View style={styles.locationIcon}>
+                <Ionicons
+                  name="locate-outline"
+                  size={20}
+                  color="#66B0FF"
+                />
               </View>
-              <Ionicons name="sparkles-outline" size={22} color={COLORS.primary} />
+              <View style={styles.locationContent}>
+                <Text style={styles.locationEyebrow}>DÉPART À PROXIMITÉ</Text>
+                <Text style={styles.locationTitle}>
+                  {locating
+                    ? 'Localisation en cours…'
+                    : currentCity
+                      ? `Vous êtes à ${currentCity.name}`
+                      : 'Localisation non disponible'}
+                </Text>
+                {!currentCity && locationNotice && (
+                  <Text style={styles.locationText}>{locationNotice}</Text>
+                )}
+              </View>
+              <TouchableOpacity
+                style={styles.locationRefresh}
+                onPress={() => void locateDepartureCity()}
+                disabled={locating}
+                accessibilityLabel="Actualiser ma position"
+              >
+                {locating ? (
+                  <Ionicons name="refresh" size={15} color={COLORS.textMuted} />
+                ) : (
+                  <Text style={styles.locationRefreshText}>Changer</Text>
+                )}
+              </TouchableOpacity>
             </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.recommendationList}
-            >
-              {recommendations.slice(0, 5).map((trip) => (
-                <TouchableOpacity
-                  key={`recommendation-${trip.id}`}
-                  style={styles.recommendationCard}
-                  onPress={() => navigation.navigate('TripDetails', { trip })}
-                >
-                  <Text style={styles.recommendationCompany} numberOfLines={1}>
-                    {trip.trip_info?.company_name || 'Compagnie'}
-                  </Text>
-                  <Text style={styles.recommendationRoute} numberOfLines={1}>
-                    {trip.trip_info?.departure_city_name} → {trip.trip_info?.arrival_city_name}
-                  </Text>
-                  <View style={styles.recommendationMeta}>
-                    <Text style={styles.recommendationDate}>
-                      {new Date(`${trip.date}T00:00:00`).toLocaleDateString('fr-FR', {
-                        day: '2-digit',
-                        month: 'short',
-                      })}
-                    </Text>
-                    <Text style={styles.recommendationPrice}>
-                      {Number(trip.trip_info?.price || 0).toLocaleString('fr-FR')} F
-                    </Text>
-                  </View>
-                  <Text style={styles.recommendationReason} numberOfLines={2}>
-                    {(trip as any).ai_reason || 'Horaire et disponibilité intéressants'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
+          </SwipeToHideCard>
         )}
 
-        <View style={styles.tripsHeader}>
+        <View
+          style={styles.tripsHeader}
+          onLayout={(e) => { tripsSectionY.current = e.nativeEvent.layout.y; }}
+        >
           <Text style={styles.tripsTitle}>
             {aiResultsActive ? 'Résultats de l’assistant' : 'Trajets disponibles'}
           </Text>
-          <Text style={styles.tripsCount}>{filteredTrips.length} résultats</Text>
+          <Text style={styles.tripsCount}>{filteredTrips.length} résultat{filteredTrips.length > 1 ? 's' : ''}</Text>
         </View>
 
         {/* Boutons de tri */}
-        <View style={styles.sortContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.sortScroll}
+          contentContainerStyle={styles.sortContainer}
+        >
           <TouchableOpacity
             style={[
               styles.sortButton,
@@ -587,7 +608,7 @@ export default function HomeConnectedScreen({ navigation }: Props) {
               Sièges
             </Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
 
         {/* Bouton de sélection de compagnie */}
         <TouchableOpacity
@@ -595,7 +616,9 @@ export default function HomeConnectedScreen({ navigation }: Props) {
           onPress={() => setShowCompanyModal(true)}
         >
           <View style={styles.companyFilterContent}>
-            <Ionicons name="bus" size={20} color={COLORS.white} />
+            <View style={styles.companyFilterIcon}>
+              <Ionicons name="bus" size={18} color={'#0066CC'} />
+            </View>
             <View style={styles.companyFilterText}>
               <Text style={styles.companyFilterLabel}>Compagnie</Text>
               <Text style={styles.companyFilterValue}>
@@ -603,7 +626,7 @@ export default function HomeConnectedScreen({ navigation }: Props) {
               </Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={20} color={COLORS.white} />
+          <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
         </TouchableOpacity>
 
         {/* Modal de sélection de compagnie */}
@@ -639,7 +662,7 @@ export default function HomeConnectedScreen({ navigation }: Props) {
                       <Ionicons
                         name="apps"
                         size={20}
-                        color={!selectedCompany ? COLORS.primary : COLORS.textSecondary}
+                        color={!selectedCompany ? '#0066CC' : COLORS.textSecondary}
                       />
                       <Text
                         style={[
@@ -651,7 +674,7 @@ export default function HomeConnectedScreen({ navigation }: Props) {
                       </Text>
                     </View>
                     {!selectedCompany && (
-                      <Ionicons name="checkmark" size={20} color={COLORS.primary} />
+                      <Ionicons name="checkmark" size={20} color={'#0066CC'} />
                     )}
                   </TouchableOpacity>
 
@@ -659,7 +682,7 @@ export default function HomeConnectedScreen({ navigation }: Props) {
                   <FlatList
                     data={companies}
                     keyExtractor={(item) => item.id.toString()}
-                    scrollEnabled={false}
+                    showsVerticalScrollIndicator={false}
                     renderItem={({ item }) => (
                       <TouchableOpacity
                         style={[
@@ -677,7 +700,7 @@ export default function HomeConnectedScreen({ navigation }: Props) {
                             size={20}
                             color={
                               selectedCompany === item.name
-                                ? COLORS.primary
+                                ? '#0066CC'
                                 : COLORS.textSecondary
                             }
                           />
@@ -685,14 +708,14 @@ export default function HomeConnectedScreen({ navigation }: Props) {
                             style={[
                               styles.companyModalOptionText,
                               selectedCompany === item.name &&
-                                styles.companyModalOptionTextSelected,
+                              styles.companyModalOptionTextSelected,
                             ]}
                           >
                             {item.name}
                           </Text>
                         </View>
                         {selectedCompany === item.name && (
-                          <Ionicons name="checkmark" size={20} color={COLORS.primary} />
+                          <Ionicons name="checkmark" size={20} color={'#0066CC'} />
                         )}
                       </TouchableOpacity>
                     )}
@@ -703,6 +726,8 @@ export default function HomeConnectedScreen({ navigation }: Props) {
           </TouchableWithoutFeedback>
         </Modal>
 
+        {citiesError && <Text style={styles.errorText}>{citiesError}</Text>}
+        {loadingCities && <Text style={styles.loadingText}>Chargement des villes…</Text>}
         {loading && <Text style={styles.loadingText}>Chargement des trajets…</Text>}
         {error && <Text style={styles.errorText}>{error}</Text>}
         {filteredTrips.length > 0 ? (
@@ -718,83 +743,82 @@ export default function HomeConnectedScreen({ navigation }: Props) {
             <Text style={styles.noTripsText}>Aucun trajet disponible pour le moment.</Text>
           )
         )}
+
+        <TouchableOpacity
+          style={styles.assistantCard}
+          onPress={() => assistantRef.current?.open()}
+          activeOpacity={0.9}
+        >
+          <View style={styles.assistantIcon}>
+            <Ionicons name="sparkles" size={20} color={COLORS.white} />
+          </View>
+          <View style={styles.assistantCopy}>
+            <Text style={styles.assistantTitle}>Recherche assistée</Text>
+            <Text style={styles.assistantText}>L'IA trouve le meilleur trajet pour vous.</Text>
+          </View>
+          <View style={styles.assistantButton}>
+            <Text style={styles.assistantButtonText}>Essayer</Text>
+          </View>
+        </TouchableOpacity>
       </ScrollView>
-      <FloatingTravelAssistant cities={cities} onResults={handleAIResults} />
+      <FloatingTravelAssistant
+        ref={assistantRef}
+        hideTrigger
+        cities={cities}
+        onResults={handleAIResults}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  container: { flex: 1, backgroundColor: '#F7F7F8' },
+  header: { backgroundColor: COLORS.primary, paddingBottom: 20, borderBottomLeftRadius: 26, borderBottomRightRadius: 26, overflow: 'hidden' },
+  headerArtwork: { position: 'absolute', right: -30, width: 270, height: 170 },
+  brandRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, gap: 10 },
+  brandCopy: { flex: 1, minWidth: 0 },
+  searchToggle: { width: 46, height: 46, borderRadius: 23, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
+  expandedSearchContent: { paddingTop: 10, paddingBottom: 4 },
+  brandTitle: { fontSize: 23, fontWeight: '800', color: COLORS.white },
+  brandSubtitle: { fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.8)', letterSpacing: 0.5, marginTop: 4 },
+  greeting: { fontSize: 25, fontWeight: '700', color: COLORS.white, marginTop: 18, marginBottom: 4, marginHorizontal: 20 },
+  subtitle: { fontSize: 15, color: 'rgba(255,255,255,0.85)', lineHeight: 21, marginHorizontal: 20, marginBottom: 20 },
+  subtitleCollapsed: { fontSize: 13, lineHeight: 19, marginTop: 2, marginBottom: 0 },
+  searchCard: { marginHorizontal: 20, marginBottom: 12, borderRadius: 26, padding: 17, borderWidth: 1, borderColor: '#EEF2F8', shadowColor: '#193354', shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.14, shadowRadius: 22, elevation: 5 },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  searchFieldContainer: {
     flex: 1,
-    backgroundColor: COLORS.white,
-  },
-  header: {
-    backgroundColor: COLORS.primary,
-    paddingTop: 60,
-    paddingBottom: 24,
-    paddingHorizontal: 24,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  headerContent: {
-    marginBottom: 24,
-  },
-  greetingContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  greeting: {
-    fontSize: FONT_SIZES['2xl'],
-    fontWeight: FONT_WEIGHTS.semibold,
-    color: COLORS.white,
-    // marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: FONT_SIZES.base,
-    color: 'rgba(255, 255, 255, 0.8)',
-  },
-  subtitleContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  searchContainer: {
-    gap: 10,
-  },
-  searchIconContainer: {
-    padding: 0,
-  },
-  searchInput: {
+    minWidth: 0,
     marginBottom: 0,
   },
-  dateButton: {
+  searchField: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  searchFieldEnd: {
+    alignItems: 'flex-end',
+  },
+  searchFieldLabel: { fontSize: 12, fontWeight: '600', letterSpacing: 0.7, color: '#777777', marginBottom: 7 },
+  searchFieldValueRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
-    height: 56,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    gap: 12,
+    gap: 4,
   },
-  dateButtonText: {
-    flex: 1,
-    fontSize: FONT_SIZES.base,
-    color: COLORS.text,
-  },
+  searchFieldValueRowEnd: { flexDirection: 'row', justifyContent: 'flex-end' },
+  searchFieldValue: { fontSize: 19, fontWeight: '600', color: COLORS.text, flexShrink: 1 },
+  swapButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#E4E4E4', alignItems: 'center', justifyContent: 'center', marginHorizontal: 8 },
+  searchDivider: { height: 1, backgroundColor: '#DDE0E5', marginVertical: 18 },
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 18, minHeight: 20 },
+  dateRowText: { flex: 1, fontSize: 15, fontWeight: '600', color: COLORS.text },
+  searchButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, backgroundColor: '#0066CC', minHeight: 55, borderRadius: 32, paddingHorizontal: 10 },
+  searchButtonText: { color: COLORS.white, fontSize: 17, fontWeight: '600' },
   content: {
     flex: 1,
   },
-  contentContainer: {
-    padding: 24,
-  },
+  contentContainer: { paddingHorizontal: 20, paddingTop: 20, flexGrow: 1 },
   tripsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -826,26 +850,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 12,
   },
+  sortScroll: {
+    marginBottom: 16,
+  },
   sortContainer: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 16,
     paddingHorizontal: 0,
+    paddingBottom: 4,
   },
-  sortButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: COLORS.backgroundSecondary,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
+  sortButton: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 16, minHeight: 38, borderRadius: 22, backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#E4E4E4' },
   sortButtonActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+    backgroundColor: '#0066CC',
+    borderColor: '#0066CC',
   },
   sortButtonText: {
     fontSize: FONT_SIZES.sm,
@@ -862,8 +879,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 16,
-    borderRadius: 16,
-    backgroundColor: COLORS.primary,
+    borderRadius: 20,
+    backgroundColor: COLORS.white,
+    shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   companyFilterContent: {
     flexDirection: 'row',
@@ -871,18 +893,19 @@ const styles = StyleSheet.create({
     gap: 12,
     flex: 1,
   },
+  companyFilterIcon: { width: 36, height: 36, borderRadius: 13, backgroundColor: '#F7F7F8', alignItems: 'center', justifyContent: 'center' },
   companyFilterText: {
     flex: 1,
   },
   companyFilterLabel: {
     fontSize: FONT_SIZES.sm,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: COLORS.textSecondary,
     marginBottom: 2,
   },
   companyFilterValue: {
     fontSize: FONT_SIZES.base,
     fontWeight: FONT_WEIGHTS.semibold,
-    color: COLORS.white,
+    color: '#0066CC',
   },
   companyModalOverlay: {
     flex: 1,
@@ -934,10 +957,9 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHTS.medium,
   },
   companyModalOptionTextSelected: {
-    color: COLORS.primary,
+    color: '#0066CC',
     fontWeight: FONT_WEIGHTS.semibold,
   },
-  recommendationSection: { marginBottom: 22 },
   driverTrackingCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -972,75 +994,28 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.xs,
     marginTop: 3,
   },
-  locationCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#CFE2FF',
-    backgroundColor: '#F4F8FF',
-    padding: 14,
-    marginBottom: 20,
-  },
-  locationIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 15,
-    backgroundColor: COLORS.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  locationContent: { flex: 1, marginHorizontal: 12 },
-  locationEyebrow: {
-    color: COLORS.primary,
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  locationTitle: {
-    color: COLORS.text,
-    fontSize: FONT_SIZES.base,
-    fontWeight: FONT_WEIGHTS.bold,
-    marginTop: 2,
-  },
+  locationCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 25, backgroundColor: '#4B586F', padding: 17, borderWidth: 1, borderColor: '#788294', minHeight: 76 },
+  locationIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#657187', alignItems: 'center', justifyContent: 'center' },
+  locationContent: { flex: 1, marginHorizontal: 10 },
+  locationEyebrow: { color: '#B5BAC4', fontSize: 12, fontWeight: '700', letterSpacing: 0.3 },
+  locationTitle: { color: COLORS.white, fontSize: 15, fontWeight: '600', marginTop: 4 },
   locationText: {
-    color: COLORS.textSecondary,
+    color: 'rgba(255,255,255,0.7)',
     fontSize: 11,
     lineHeight: 16,
     marginTop: 3,
   },
-  locationRefresh: {
-    width: 38,
-    height: 38,
-    borderRadius: 13,
-    backgroundColor: COLORS.white,
-    alignItems: 'center',
-    justifyContent: 'center',
+  locationRefresh: { paddingHorizontal: 14, minHeight: 34, borderRadius: 20, borderWidth: 1, borderColor: '#8993A3', alignItems: 'center', justifyContent: 'center' },
+  locationRefreshText: { color: COLORS.white, fontSize: 12, fontWeight: '600' },
+  assistantCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 26, borderWidth: 1, borderColor: '#B5D6F5', backgroundColor: '#E4EDF6', padding: 17, marginTop: 2, minHeight: 86 },
+  assistantIcon: { width: 38, height: 38, borderRadius: 13, backgroundColor: '#0066CC', alignItems: 'center', justifyContent: 'center' },
+  assistantCopy: { flex: 1, marginHorizontal: 10 },
+  assistantTitle: { color: COLORS.text, fontSize: 15, fontWeight: '600' },
+  assistantText: { color: '#999999', fontSize: 13, lineHeight: 17, marginTop: 3 },
+  assistantButton: { paddingHorizontal: 14, minHeight: 34, borderRadius: 20, backgroundColor: '#0066CC', alignItems: 'center', justifyContent: 'center' },
+  assistantButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '700',
   },
-  recommendationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  recommendationEyebrow: { color: COLORS.primary, fontSize: 10, fontWeight: '800', letterSpacing: 1.3 },
-  recommendationTitle: { color: '#102846', fontSize: 19, fontWeight: '800', marginTop: 2 },
-  recommendationList: { gap: 12, paddingRight: 4 },
-  recommendationCard: {
-    width: 230,
-    borderRadius: 20,
-    padding: 16,
-    backgroundColor: '#102F58',
-  },
-  recommendationCompany: { color: '#AFCDF8', fontSize: 11, fontWeight: '700' },
-  recommendationRoute: { color: COLORS.white, fontSize: 17, fontWeight: '800', marginTop: 6 },
-  recommendationMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 12,
-  },
-  recommendationDate: { color: '#C6D7EE', fontSize: 12, fontWeight: '600' },
-  recommendationPrice: { color: '#7BE3BD', fontSize: 13, fontWeight: '800' },
-  recommendationReason: { color: '#9FB4D0', fontSize: 11, lineHeight: 16, marginTop: 11 },
 });

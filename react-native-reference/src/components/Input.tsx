@@ -61,11 +61,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.grayLight,
-    borderRadius: 16,
+    borderRadius: 20,
     height: 56,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: COLORS.borderLight,
   },
   inputContainer_error: {
     borderColor: COLORS.error,

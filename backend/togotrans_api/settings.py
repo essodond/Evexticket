@@ -15,21 +15,30 @@ import os
 import certifi
 import dj_database_url
 from decouple import Csv, config
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+_INSECURE_SECRET_KEY_DEFAULT = 'django-insecure-k+qv%zb*h@6^htx=s291hq*ra8!2)9pym7mvpbda@jnt&-l$5@'
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-k+qv%zb*h@6^htx=s291hq*ra8!2)9pym7mvpbda@jnt&-l$5@')
+SECRET_KEY = config('SECRET_KEY', default=_INSECURE_SECRET_KEY_DEFAULT)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=True, cast=bool)
+# Defaults to False: an unconfigured deployment must fail closed, not leak debug info.
+DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*', cast=Csv())
+# Defaults to localhost only: an unconfigured deployment must fail closed, not accept any Host header.
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
+
+if not DEBUG and SECRET_KEY == _INSECURE_SECRET_KEY_DEFAULT:
+    raise ImproperlyConfigured(
+        'SECRET_KEY doit etre defini via une variable d\'environnement en production.'
+    )
 
 for host in [
     '.evex-tg.local',
@@ -184,7 +193,7 @@ LOGGING = {
     'loggers': {
         '': {  # Logger par défaut
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': True,
         },
     },
@@ -276,6 +285,16 @@ LANGUAGE_CODE = 'fr-fr'
 TIME_ZONE = 'Africa/Lome'
 USE_I18N = True
 USE_TZ = True
+
+# Durcissement HTTPS/cookies en production (Render/Railway terminent le TLS en amont).
+SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=not DEBUG, cast=bool)
+SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=not DEBUG, cast=bool)
+CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=not DEBUG, cast=bool)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+if not DEBUG:
+    SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=60 * 60 * 24 * 7, cast=int)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 
 # QOS / Qosic
 QOS_API_KEY = config('QOS_API_KEY', default='')
